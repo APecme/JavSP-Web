@@ -28,7 +28,7 @@ lxml = {extras = ["html-clean"], version = "^5.2.1"}
 confz = "^2.0.1"
 pydantic-extra-types = "^2.9.0"
 pendulum = "^3.0.0"
-slimeface = "^2024.9.27"
+slimeface = "^2024.10.28"
 fastapi = "^0.110.0"
 uvicorn = "^0.29.0"
 
