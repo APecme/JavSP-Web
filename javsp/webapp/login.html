@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>JavSP-web 登录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f172a; color: #e5e7eb; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { background: #020617; border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 360px; box-shadow: 0 20px 40px rgba(15,23,42,.8); border: 1px solid #1f2937; }
+    .title { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #9ca3af; margin-bottom: 24px; }
+    label { display: block; font-size: 13px; margin-bottom: 6px; color: #d1d5db; }
+    input { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid #374151; background: #020617; color: #e5e7eb; font-size: 14px; }
+    input:focus { outline: 2px solid #3b82f6; outline-offset: 0; border-color: #3b82f6; }
+    .field { margin-bottom: 14px; }
+    button { width: 100%; border: none; border-radius: 999px; padding: 10px 14px; margin-top: 8px; font-size: 14px; font-weight: 500; cursor: pointer; background: linear-gradient(135deg,#3b82f6,#6366f1); color: #f9fafb; box-shadow: 0 12px 20px rgba(59,130,246,.45); }
+    button:disabled { opacity: .6; cursor: default; box-shadow: none; }
+    .error { margin-top: 8px; font-size: 13px; color: #fca5a5; min-height: 18px; }
+    .footer { margin-top: 18px; font-size: 11px; color: #6b7280; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">JavSP-web</div>
+    <div class="subtitle">登录以管理刮削任务和配置</div>
+    <form id="login-form">
+      <div class="field">
+        <label for="username">用户名</label>
+        <input id="username" name="username" autocomplete="username" value="admin" />
+      </div>
+      <div class="field">
+        <label for="password">密码</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" value="admin" />
+      </div>
+      <button id="submit-btn" type="submit">登录</button>
+      <div id="error" class="error"></div>
+    </form>
+    <div class="footer">默认账号密码均为 <strong>admin</strong>，登录后可在设置中修改。</div>
+  </div>
+
+  <script>
+    (function () {
+      const form = document.getElementById('login-form');
+      const errorBox = document.getElementById('error');
+      const submitBtn = document.getElementById('submit-btn');
+
+      async function checkSession() {
+        try {
+          const res = await fetch('/api/auth/me', { credentials: 'include' });
+          if (res.ok) {
+            window.location.href = '/';
+          }
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+
+      checkSession();
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        errorBox.textContent = '';
+        submitBtn.disabled = true;
+        submitBtn.textContent = '登录中...';
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ username, password })
+          });
+          if (!res.ok) {
+            if (res.status === 401) {
+              errorBox.textContent = '用户名或密码错误。';
+            } else {
+              errorBox.textContent = '登录失败，请稍后重试。';
+            }
+          } else {
+            window.location.href = '/';
+          }
+        } catch (err) {
+          console.error(err);
+          errorBox.textContent = '无法连接到服务器。';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '登录';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  javsp-web:
+    build: .
+    image: javsp-web:latest
+    container_name: javsp-web
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    # 映射工作数据与配置：/app/data 下包含 config.yml、缓存与日志
+    volumes:
+      - ./data:/app/data
+      # 视频目录，容器内使用 /video，与 Web 手动刮削默认路径保持一致
+      - ./video:/video
+    # 默认 Dockerfile 以 CLI 形式启动，这里改为启动 Web 服务器
+    entrypoint: ["/app/.venv/bin/server"]
