@@ -31,6 +31,7 @@ jobs:
       run: |
         VERSION=$(cat VERSION | tr -d '[:space:]')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
         echo "Read version: $VERSION"
         # 验证版本号格式（可选，例如：1.0.2）
         if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -65,18 +66,20 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Extract metadata (tags, labels) for Docker
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.IMAGE_NAME }}
-        tags: |
-          type=raw,value=${{ steps.version.outputs.version }}
-          type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}
-          type=raw,value=latest,enable={{is_default_branch}}
+    - name: Prepare Docker tags
+      id: tags
+      run: |
+        VERSION="${{ env.VERSION }}"
+        TAGS="${{ env.IMAGE_NAME }}:${VERSION}"
+        # 如果是默认分支，也添加 latest tag
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+          TAGS="${TAGS},${{ env.IMAGE_NAME }}:latest"
+        fi
+        # 添加分支名作为 tag
+        BRANCH_NAME="${{ github.ref_name }}"
+        TAGS="${TAGS},${{ env.IMAGE_NAME }}:${BRANCH_NAME}"
+        echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+        echo "Tags: ${TAGS}"
 
     - name: Build and push Docker image
       id: build
@@ -85,8 +88,7 @@ jobs:
         context: .
         file: ./Dockerfile
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ steps.tags.outputs.tags }}
         cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
         cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
 
