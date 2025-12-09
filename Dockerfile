@@ -6,7 +6,9 @@ ENV PATH=/root/.local/bin:$PATH
 RUN pip install pipx && \
     pipx ensurepath && \
     pipx install poetry
-RUN apt update && apt install -y git
+RUN apt update && \
+    apt install -y --no-install-recommends git build-essential cmake && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
