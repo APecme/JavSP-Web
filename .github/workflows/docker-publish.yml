@@ -95,8 +95,8 @@ jobs:
         file: ./Dockerfile
         push: true
         tags: ${{ steps.tags.outputs.tags }}
-        cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
-        cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+        cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:latest
+        cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:latest,mode=max
 
     - name: Image digest
       run: echo "Image pushed with digest ${{ steps.build.outputs.digest }}"
