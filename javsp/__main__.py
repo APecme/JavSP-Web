@@ -889,8 +889,16 @@ def entry():
     global actressAliasMap
     if Cfg().crawler.normalize_actress_name:
         actressAliasFilePath = resource_path("data/actress_alias.json")
-        with open(actressAliasFilePath, "r", encoding="utf-8") as file:
-            actressAliasMap = json.load(file)
+        # 确保目录存在
+        os.makedirs(os.path.dirname(actressAliasFilePath), exist_ok=True)
+        # 如果文件不存在，创建一个空的 JSON 对象
+        if not os.path.isfile(actressAliasFilePath):
+            with open(actressAliasFilePath, "w", encoding="utf-8") as file:
+                json.dump({}, file, ensure_ascii=False, indent=2)
+            actressAliasMap = {}
+        else:
+            with open(actressAliasFilePath, "r", encoding="utf-8") as file:
+                actressAliasMap = json.load(file)
 
     colorama.init(autoreset=True)
 

@@ -41,67 +41,6 @@ JavSP-Web 是基于 [JavSP](https://github.com/Yuukiy/JavSP) 开发的 Web 界�
 
 ### 使用 Docker Compose 部署
 
-#### 1. 克隆项目
-
-```bash
-git clone https://github.com/APecme/JavSP-Web.git
-cd JavSP-Web
-```
-
-#### 2. 创建必要的目录
-
-```bash
-mkdir -p data video
-```
-
-#### 3. 启动服务
-
-```bash
-# 启动服务（后台运行）
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
-```
-
-#### 4. 访问 Web 界面
-
-服务启动后，访问 **http://localhost:8090** 即可使用 Web 界面。
-
-**默认登录信息**：
-- 首次启动时会提示设置用户名和密码
-- 可在"账号与安全"页面修改登录信息
-
-#### 5. 更新服务
-
-```bash
-# 拉取最新代码
-git pull
-
-# 重新构建并启动
-docker-compose up -d --build
-```
-
-#### 6. 使用 Docker Hub 镜像（推荐）
-
-项目已配置 GitHub Actions 自动构建并推送镜像到 Docker Hub，您可以直接使用预构建的镜像：
-
-```bash
-# 修改 docker-compose.yml，使用 Docker Hub 镜像
-# 将 build: . 改为 image: your-dockerhub-username/javsp-web:latest
-
-# 然后直接启动
-docker-compose pull
-docker-compose up -d
-```
-
-**Docker Hub 镜像地址**：`your-dockerhub-username/javsp-web:latest`
-
-> **注意**：需要将 `your-dockerhub-username` 替换为您的 Docker Hub 用户名
-
 ### Docker Compose 配置说明
 
 `docker-compose.yml` 文件配置如下：
@@ -130,29 +69,6 @@ services:
     environment:
       - TZ=Asia/Shanghai
     ```
-
-## 目录结构
-
-```
-JavSP-Web/
-├── data/                  # 数据目录（配置、缓存、日志）
-│   ├── config.yml        # 主配置文件
-│   ├── tasks/            # 任务相关数据
-│   │   ├── manual.json   # 手动任务配置
-│   │   └── manual_rules.json  # 自定义规则
-│   └── history.jsonl     # 刮削历史记录
-├── video/                # 视频文件目录（示例）
-├── javsp/                # 核心代码
-│   ├── webapp/           # Web 应用
-│   │   ├── index.html    # 前端界面
-│   │   ├── tasks.py      # 任务管理
-│   │   └── ...
-│   ├── server.py         # Web 服务器入口
-│   └── ...
-├── docker-compose.yml    # Docker Compose 配置
-├── Dockerfile            # Docker 镜像构建文件
-└── README.md            # 本文件
-```
 
 ## 许可
 
