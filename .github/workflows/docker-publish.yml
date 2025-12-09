@@ -10,11 +10,15 @@ on:
   workflow_dispatch:  # 允许手动触发
 
 env:
-  DOCKER_HUB_REPO: javsp-web  # Docker Hub 仓库名称
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKER_HUB_USERNAME }}/javsp-web
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     
     steps:
     - name: Check out code
@@ -28,6 +32,7 @@ jobs:
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
+        registry: ${{ env.REGISTRY }}
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
@@ -35,7 +40,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_HUB_REPO }}
+        images: ${{ env.IMAGE_NAME }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -54,8 +59,8 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_HUB_REPO }}:buildcache
-        cache-to: type=registry,ref=${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_HUB_REPO }}:buildcache,mode=max
+        cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
+        cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
 
     - name: Image digest
       run: echo "Image pushed with digest ${{ steps.build.outputs.digest }}"
