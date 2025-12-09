@@ -82,6 +82,23 @@ git pull
 docker-compose up -d --build
 ```
 
+#### 6. 使用 Docker Hub 镜像（推荐）
+
+项目已配置 GitHub Actions 自动构建并推送镜像到 Docker Hub，您可以直接使用预构建的镜像：
+
+```bash
+# 修改 docker-compose.yml，使用 Docker Hub 镜像
+# 将 build: . 改为 image: your-dockerhub-username/javsp-web:latest
+
+# 然后直接启动
+docker-compose pull
+docker-compose up -d
+```
+
+**Docker Hub 镜像地址**：`your-dockerhub-username/javsp-web:latest`
+
+> **注意**：需要将 `your-dockerhub-username` 替换为您的 Docker Hub 用户名
+
 ### Docker Compose 配置说明
 
 `docker-compose.yml` 文件配置如下：
@@ -158,76 +175,6 @@ services:
 1. **首次运行**：首次启动时会自动创建默认配置文件 `data/config.yml`
 2. **修改配置**：可以通过 Web 界面的"全局规则"页面修改配置，或直接编辑 `data/config.yml` 文件
 
-### 主要配置项
-
-#### 扫描设置
-
-```yaml
-scanner:
-  # 扫描目录（留空时在 Web 界面中手动选择）
-  input_directory: null
-  # 视频文件扩展名
-  filename_extensions: [.mp4, .mkv, .avi, ...]
-  # 最小文件大小（小于此大小的文件将被忽略）
-  minimum_size: 232MiB
-```
-
-#### 网络设置
-
-```yaml
-network:
-  # 代理服务器（如需要）
-  proxy_server: null
-  # 重试次数
-  retry: 3
-  # 超时时间
-  timeout: PT10S
-```
-
-#### 爬虫设置
-
-```yaml
-crawler:
-  # 使用的爬虫列表
-  selection:
-    normal: [airav, avsox, javbus, javdb, javlib, ...]
-```
-
-#### 整理设置
-
-```yaml
-summarizer:
-  # 输出文件夹模式
-  path:
-    output_folder_pattern: "{number} {title}"
-  # NFO 文件名模式
-  nfo:
-    basename_pattern: "movie"
-  # 封面文件名
-  cover:
-    basename_pattern: "poster"
-  # 剧照设置
-  extra_fanarts:
-    enabled: yes
-```
-
-### 环境变量
-
-可以通过环境变量设置以下选项：
-
-- `TZ`：时区设置（默认：`Asia/Shanghai`）
-- `JAVSP_DATA_DIR`：数据目录路径（默认：`./data`）
-
-### Web 界面配置
-
-1. **登录账号**：
-   - 默认用户名和密码在首次启动时设置
-   - 可通过"账号与安全"页面修改
-
-2. **端口配置**：
-   - 默认端口：`8090`
-   - 修改 `javsp/server.py` 中的端口号可更改
-
 ## 使用方法
 
 ### 1. 手动刮削
@@ -295,55 +242,65 @@ JavSP-Web/
 └── README.md            # 本文件
 ```
 
-## 常见问题
+## CI/CD 自动化流程
 
-### Q: 如何修改默认端口？
+项目已配置 GitHub Actions，当您推送代码到 GitHub 时，会自动构建 Docker 镜像并推送到 Docker Hub。
 
-A: 编辑 `javsp/server.py` 文件，修改 `uvicorn.run(app, host="0.0.0.0", port=8090)` 中的端口号。
+### 配置 Docker Hub 认证
 
-### Q: 如何修改视频目录？
+在 GitHub 仓库中配置以下 Secrets（Settings → Secrets and variables → Actions）：
 
-A: 在 Docker Compose 中修改 `volumes` 配置，或在 Web 界面中手动选择路径。
+1. **DOCKER_HUB_USERNAME**：您的 Docker Hub 用户名
+2. **DOCKER_HUB_TOKEN**：您的 Docker Hub Access Token
+   - 创建方法：登录 Docker Hub → Account Settings → Security → New Access Token
+   - 权限选择：Read & Write
+   - 复制生成的 Token 并添加到 GitHub Secrets
 
-### Q: 忘记登录密码怎么办？
+### 工作流触发条件
 
-A: 删除 `data/web_settings.json` 文件，重新启动服务后使用默认账号登录。
+- **自动触发**：
+  - 推送到 `main` 或 `master` 分支
+  - 创建版本标签（如 `v1.0.0`）
+- **手动触发**：
+  - 在 GitHub Actions 页面点击 "Run workflow"
 
-### Q: 如何查看详细的执行日志？
+### 构建的镜像标签
 
-A: 在任务日志中展开对应的步骤，可以查看详细的执行信息。
+- `latest`：最新版本（main/master 分支）
+- `v1.0.0`：版本标签（如 `git tag v1.0.0 && git push --tags`）
+- `v1.0`：主版本号
+- `v1`：大版本号
+- `main-abc1234`：分支名 + commit SHA
 
-### Q: 支持哪些视频格式？
+### 使用预构建的镜像
 
-A: 默认支持 `.mp4`, `.mkv`, `.avi`, `.mov`, `.wmv` 等常见格式，可在配置文件中自定义。
+配置好 CI/CD 后，您可以直接使用 Docker Hub 上的预构建镜像：
 
-## 开发与贡献
-
-### 本地开发
-
-```bash
-# 克隆项目
-git clone git@github.com:APecme/JavSP-Web.git
-cd JavSP-Web
-
-# 安装开发依赖
-poetry install
-
-# 启动开发服务器
-poetry run python -m javsp.server
+```yaml
+# docker-compose.yml
+services:
+  javsp-web:
+    image: your-dockerhub-username/javsp-web:latest  # 替换为您的 Docker Hub 用户名
+    # build: .  # 注释掉本地构建
 ```
 
-### 提交代码
+然后运行：
+```bash
+docker-compose pull
+docker-compose up -d
+```
+
+### 提交代码和创建版本
 
 ```bash
-# 添加更改
+# 提交代码（会自动触发构建）
 git add .
-
-# 提交更改
 git commit -m "描述你的更改"
-
-# 推送到 GitHub
 git push origin main
+
+# 创建版本标签（会触发构建并推送带版本号的镜像）
+git tag v1.0.0
+git push --tags
 ```
 
 ## 许可
