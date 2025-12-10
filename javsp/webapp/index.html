@@ -195,6 +195,7 @@
               <option value="default">使用当前全局规则</option>
             </select>
           </div>
+          <button class="primary-btn" id="manual-rules-edit-btn" style="margin-top:24px;font-size:11px;display:none;">编辑规则</button>
           <button class="primary-btn" id="manual-rules-btn" style="margin-top:24px;font-size:11px;">添加自定义规则</button>
         </div>
 
@@ -557,7 +558,7 @@
                   </div>
                   <div class="field">
                     <label for="rules-path-output">整理输出路径模板</label>
-                    <input id="rules-path-output" placeholder="#整理完成/{actress}/[{num}] {title}" />
+                    <input id="rules-path-output" placeholder="/video/#整理完成/{actress}/[{num}] {title}" />
                   </div>
                 </div>
                 <div class="grid-two">
@@ -666,12 +667,6 @@
                   <div class="field checkbox-inline">
                     <label for="rules-cover-add-label">封面添加标签</label>
                     <input type="checkbox" id="rules-cover-add-label" />
-                  </div>
-                </div>
-                <div class="grid-two">
-                  <div class="field inline-edit">
-                    <label>AI 裁剪适用番号正则</label>
-                    <button class="ghost-btn" id="rules-cover-crop-open" type="button">编辑...</button>
                   </div>
                 </div>
                 <div class="grid-two">
@@ -957,22 +952,6 @@
           </div>
         </div>
       </div>
-      <div id="covercrop-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:40;align-items:center;justify-content:center;">
-        <div style="margin:0 auto;max-width:520px;width:100%;background:#020617;border-radius:12px;border:1px solid #1f2937;padding:16px 18px;box-shadow:0 20px 40px rgba(0,0,0,0.6);">
-          <div class="panel-title" style="margin-bottom:4px;">AI 裁剪适用番号正则</div>
-          <div class="panel-desc" style="margin-bottom:10px;">每行一个正则表达式。</div>
-          <div class="grid-two">
-            <div class="field">
-              <label for="rules-cover-crop-patterns" style="font-size:11px;">正则列表</label>
-              <textarea id="rules-cover-crop-patterns" rows="4" placeholder="每行一个正则"></textarea>
-            </div>
-          </div>
-          <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">
-            <button class="primary-btn" id="covercrop-modal-cancel" type="button" style="background:#111827;">取消</button>
-            <button class="primary-btn" id="covercrop-modal-save" type="button">关闭</button>
-          </div>
-        </div>
-      </div>
     </main>
   </div>
 
@@ -1123,8 +1102,19 @@
           if (data.success) {
             // 从内存中移除任务日志
             allTaskLogs.delete(taskId);
-            // 重新渲染日志列表
-            renderCollapsibleLogs();
+            // 从DOM中移除对应的log-task-group元素
+            const taskGroup = document.querySelector(`.log-task-group[data-task-id="${String(taskId).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"]`);
+            if (taskGroup) {
+              taskGroup.remove();
+            }
+            // 重新渲染日志列表（如果没有其他任务，显示占位符）
+            if (allTaskLogs.size === 0) {
+              if (manualLogContainer) {
+                manualLogContainer.innerHTML = '<div class="placeholder">暂无日志</div>';
+              }
+            } else {
+              renderCollapsibleLogs();
+            }
             window.showAlert('日志已删除');
           } else {
             throw new Error(data.error || '删除失败');
@@ -1210,7 +1200,6 @@
       const rulesCoverBasename = document.getElementById('rules-cover-basename');
       const rulesCoverHighres = document.getElementById('rules-cover-highres');
       const rulesCoverAddLabel = document.getElementById('rules-cover-add-label');
-      const rulesCoverCropPatterns = document.getElementById('rules-cover-crop-patterns');
 
       const rulesExtraFanartsEnabled = document.getElementById('rules-extra-fanarts-enabled');
       const rulesExtraFanartsInterval = document.getElementById('rules-extra-fanarts-interval');
@@ -1234,15 +1223,10 @@
       const nfoModalCancelBtn = document.getElementById('nfo-modal-cancel');
       const nfoModalSaveBtn = document.getElementById('nfo-modal-save');
 
-      const covercropModal = document.getElementById('covercrop-modal');
-      const covercropOpenBtn = document.getElementById('rules-cover-crop-open');
-      const covercropModalCancelBtn = document.getElementById('covercrop-modal-cancel');
-      const covercropModalSaveBtn = document.getElementById('covercrop-modal-save');
 
       // historyTbody 已移除，改用 history-container
       let proxyfreeSnapshot = null;
       let nfoSnapshot = null;
-      let covercropSnapshot = null;
       let manualLogTaskId = null;
       let manualLogTimer = null;
     let manualLogTerm = null;
@@ -1571,7 +1555,6 @@
           const titleCfg = summarizer.title || {};
           const nfoCfg = summarizer.nfo || {};
           const coverCfg = summarizer.cover || {};
-          const cropCfg = coverCfg.crop || {};
           const extraFanarts = summarizer.extra_fanarts || {};
           const translator = data.translator || {};
           const translateFields = translator.fields || {};
@@ -1709,9 +1692,6 @@
           if (rulesCoverBasename && coverCfg.basename_pattern != null) rulesCoverBasename.value = coverCfg.basename_pattern;
           if (rulesCoverHighres) rulesCoverHighres.checked = !!coverCfg.highres;
           if (rulesCoverAddLabel) rulesCoverAddLabel.checked = !!coverCfg.add_label;
-          if (rulesCoverCropPatterns && Array.isArray(cropCfg.on_id_pattern)) {
-            rulesCoverCropPatterns.value = cropCfg.on_id_pattern.join('\n');
-          }
 
           if (rulesExtraFanartsEnabled) {
             rulesExtraFanartsEnabled.checked = !!extraFanarts.enabled;
@@ -2911,35 +2891,6 @@
         });
       }
 
-      // cover crop modal
-      if (covercropOpenBtn && covercropModal) {
-        covercropOpenBtn.addEventListener('click', function () {
-          if (!covercropSnapshot) {
-            covercropSnapshot = {
-              patterns: rulesCoverCropPatterns ? rulesCoverCropPatterns.value : ''
-            };
-          }
-          covercropModal.style.display = 'flex';
-        });
-      }
-
-      if (covercropModalCancelBtn && covercropModal) {
-        covercropModalCancelBtn.addEventListener('click', function () {
-          if (covercropSnapshot && rulesCoverCropPatterns) {
-            rulesCoverCropPatterns.value = covercropSnapshot.patterns || '';
-          }
-          covercropModal.style.display = 'none';
-        });
-      }
-
-      if (covercropModalSaveBtn && covercropModal) {
-        covercropModalSaveBtn.addEventListener('click', function () {
-          covercropSnapshot = {
-            patterns: rulesCoverCropPatterns ? rulesCoverCropPatterns.value : ''
-          };
-          covercropModal.style.display = 'none';
-        });
-      }
 
       if (proxyfreeSaveBtn && proxyfreeModal) {
         proxyfreeSaveBtn.addEventListener('click', function () {
@@ -3259,16 +3210,6 @@
             payload.summarizer.cover = payload.summarizer.cover || {};
             payload.summarizer.cover.add_label = !!rulesCoverAddLabel.checked;
           }
-          if (rulesCoverCropPatterns) {
-            const lines = rulesCoverCropPatterns.value.split(/\n+/).map(s => s.trim()).filter(Boolean);
-            if (lines.length > 0) {
-              payload.summarizer = payload.summarizer || {};
-              payload.summarizer.cover = payload.summarizer.cover || {};
-              payload.summarizer.cover.crop = payload.summarizer.cover.crop || {};
-              payload.summarizer.cover.crop.on_id_pattern = lines;
-            }
-          }
-
           // summarizer.extra_fanarts
           if (rulesExtraFanartsEnabled || rulesExtraFanartsInterval) {
             const extra = {};
@@ -4137,8 +4078,136 @@
       }
       
       // 初始化时加载规则列表
+      const manualRulesEditBtn = document.getElementById('manual-rules-edit-btn');
       if (manualProfileSelect) {
         loadManualRulesToSelect();
+        // 监听规则选择变化，显示/隐藏编辑按钮
+        manualProfileSelect.addEventListener('change', function() {
+          if (manualRulesEditBtn) {
+            manualRulesEditBtn.style.display = this.value !== 'default' ? 'inline-block' : 'none';
+          }
+        });
+      }
+      
+      // 编辑规则按钮点击事件
+      if (manualRulesEditBtn) {
+        manualRulesEditBtn.addEventListener('click', async function() {
+          const selectedRule = manualProfileSelect.value;
+          if (!selectedRule || selectedRule === 'default') return;
+          
+          try {
+            // 加载选中的规则配置
+            const ruleConfig = await fetchJSON(`/api/tasks/manual/rules/${encodeURIComponent(selectedRule)}`);
+            const globalRules = await fetchJSON('/api/rules/global');
+            
+            // 克隆整个规则布局（包括侧边栏和主内容区）
+            const rulesLayout = document.querySelector('.rules-layout');
+            if (rulesLayout && manualRulesContent) {
+              const clonedLayout = rulesLayout.cloneNode(true);
+              clonedLayout.id = 'manual-rules-layout';
+              clonedLayout.style.display = 'flex';
+              
+              // 更新所有ID，添加manual-前缀避免冲突
+              const allElements = clonedLayout.querySelectorAll('[id]');
+              allElements.forEach(el => {
+                if (el.id && !el.id.startsWith('manual-')) {
+                  el.id = 'manual-' + el.id;
+                }
+              });
+              
+              // 更新所有chips容器的data-chips属性
+              const allChipsContainers = clonedLayout.querySelectorAll('[data-chips]');
+              allChipsContainers.forEach(container => {
+                const chipsAttr = container.getAttribute('data-chips');
+                if (chipsAttr && !chipsAttr.startsWith('manual-')) {
+                  container.setAttribute('data-chips', 'manual-' + chipsAttr);
+                }
+              });
+              
+              manualRulesContent.innerHTML = '';
+              manualRulesContent.appendChild(clonedLayout);
+              
+              // 为自定义规则窗口实现标签页切换逻辑
+              const manualRulesTabButtons = clonedLayout.querySelectorAll('.rules-tab-btn');
+              const manualRulesTabPanels = clonedLayout.querySelectorAll('.rules-tab-panel');
+              if (manualRulesTabButtons.length && manualRulesTabPanels.length) {
+                manualRulesTabButtons.forEach(btn => {
+                  btn.addEventListener('click', () => {
+                    const target = btn.getAttribute('data-rules-tab');
+                    if (!target) return;
+
+                    manualRulesTabButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    manualRulesTabPanels.forEach(panel => {
+                      if (panel.getAttribute('data-rules-panel') === target) {
+                        panel.classList.add('active');
+                      } else {
+                        panel.classList.remove('active');
+                      }
+                    });
+                  });
+                });
+              }
+              
+              // 为chips输入框添加事件处理
+              const manualChipsInputs = clonedLayout.querySelectorAll('.chips-input');
+              manualChipsInputs.forEach(input => {
+                input.addEventListener('keydown', function(e) {
+                  if (e.key === 'Enter' && this.value.trim()) {
+                    e.preventDefault();
+                    const container = this.closest('.chips-container');
+                    const list = container ? container.querySelector('.chips-list') : null;
+                    if (list) {
+                      const span = document.createElement('span');
+                      span.className = 'chip';
+                      span.textContent = this.value.trim();
+                      const btn = document.createElement('button');
+                      btn.type = 'button';
+                      btn.className = 'chip-remove';
+                      btn.textContent = '×';
+                      btn.addEventListener('click', () => {
+                        span.remove();
+                      });
+                      span.appendChild(btn);
+                      list.appendChild(span);
+                      this.value = '';
+                    }
+                  }
+                });
+              });
+              
+              // 加载规则配置到表单（优先使用规则配置，如果没有则使用全局规则作为默认值）
+              const clonedRulesMain = clonedLayout.querySelector('.rules-main');
+              if (clonedRulesMain) {
+                // 先加载全局规则作为基础
+                await loadRulesToForm(clonedRulesMain, globalRules, 'manual-');
+                // 再加载规则配置覆盖
+                await loadRulesToForm(clonedRulesMain, ruleConfig, 'manual-');
+              }
+              
+              // 设置规则名称输入框
+              const ruleNameInput = document.getElementById('manual-rule-name');
+              if (ruleNameInput) {
+                ruleNameInput.value = selectedRule;
+                ruleNameInput.readOnly = true;
+                ruleNameInput.style.backgroundColor = '#111827';
+                ruleNameInput.style.color = '#9ca3af';
+              }
+            }
+            
+            // 更新模态框标题
+            const modalTitle = manualRulesModal.querySelector('.panel-title');
+            if (modalTitle) {
+              modalTitle.textContent = '编辑自定义规则';
+            }
+            
+            manualRulesModal.style.display = 'flex';
+          } catch (e) {
+            console.error('加载规则失败:', e);
+            window.showAlert('加载规则失败，请稍后重试');
+          }
+        });
       }
       
       if (manualRulesBtn && manualRulesModal) {
@@ -4242,6 +4311,15 @@
               const ruleNameInput = document.getElementById('manual-rule-name');
               if (ruleNameInput) {
                 ruleNameInput.value = '';
+                ruleNameInput.readOnly = false;
+                ruleNameInput.style.backgroundColor = '';
+                ruleNameInput.style.color = '';
+              }
+              
+              // 更新模态框标题
+              const modalTitle = manualRulesModal.querySelector('.panel-title');
+              if (modalTitle) {
+                modalTitle.textContent = '添加自定义规则';
               }
             }
             
@@ -4413,10 +4491,6 @@
         if (coverHighres) coverHighres.checked = !!coverCfg.highres;
         const coverAddLabel = formElement.querySelector('#' + prefix + 'rules-cover-add-label');
         if (coverAddLabel) coverAddLabel.checked = !!coverCfg.add_label;
-        const coverCropPatterns = formElement.querySelector('#' + prefix + 'rules-cover-crop-patterns');
-        if (coverCropPatterns && Array.isArray(cropCfg.on_id_pattern)) {
-          coverCropPatterns.value = cropCfg.on_id_pattern.join('\n');
-        }
         const extraFanartsEnabled = formElement.querySelector('#' + prefix + 'rules-extra-fanarts-enabled');
         if (extraFanartsEnabled) extraFanartsEnabled.checked = !!extraFanarts.enabled;
         const extraFanartsInterval = formElement.querySelector('#' + prefix + 'rules-extra-fanarts-interval');
@@ -4498,6 +4572,14 @@
             
             manualRulesModal.style.display = 'none';
             await loadManualRulesToSelect();
+            // 如果编辑的是当前选中的规则，保持选中状态
+            if (manualProfileSelect.value === ruleName) {
+              manualProfileSelect.value = ruleName;
+            }
+            // 更新编辑按钮显示状态
+            if (manualRulesEditBtn) {
+              manualRulesEditBtn.style.display = manualProfileSelect.value !== 'default' ? 'inline-block' : 'none';
+            }
             window.showAlert(`规则"${ruleName}"已保存，可在"任务规则预设"中选择使用`);
           } catch (e) {
             console.error('保存手动规则失败:', e);
@@ -4840,17 +4922,6 @@
           payload.summarizer.cover = payload.summarizer.cover || {};
           payload.summarizer.cover.add_label = !!coverAddLabel.checked;
         }
-        const coverCropPatterns = formElement.querySelector('#' + prefix + 'rules-cover-crop-patterns');
-        if (coverCropPatterns) {
-          const lines = coverCropPatterns.value.split(/\n+/).map(s => s.trim()).filter(Boolean);
-          if (lines.length > 0) {
-            payload.summarizer = payload.summarizer || {};
-            payload.summarizer.cover = payload.summarizer.cover || {};
-            payload.summarizer.cover.crop = payload.summarizer.cover.crop || {};
-            payload.summarizer.cover.crop.on_id_pattern = lines;
-          }
-        }
-        
         // summarizer.extra_fanarts
         const extraFanartsEnabled = formElement.querySelector('#' + prefix + 'rules-extra-fanarts-enabled');
         const extraFanartsInterval = formElement.querySelector('#' + prefix + 'rules-extra-fanarts-interval');

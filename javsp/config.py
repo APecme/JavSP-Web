@@ -159,18 +159,10 @@ class ExtraFanartSummarize(BaseConfig):
     enabled: bool
     scrap_interval: Duration
 
-class SlimefaceEngine(BaseConfig):
-    name: Literal['slimeface']
-
-class CoverCrop(BaseConfig):
-  engine: SlimefaceEngine | None
-  on_id_pattern: list[str]
-
 class CoverSummarize(BaseConfig):
     basename_pattern: str
     highres: bool
     add_label: bool
-    crop: CoverCrop
 
 class FanartSummarize(BaseConfig):
     basename_pattern: str

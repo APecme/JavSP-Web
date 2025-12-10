@@ -181,17 +181,6 @@ summarizer:
     highres: {yes_to_true(cfg['Picture']['use_big_cover'])}
     # 在封面图上添加水印（标签），例如“字幕”
     add_label: false
-    crop:
-      # 要使用图像识别来裁剪的番号系列需要匹配的正则表达式
-      on_id_pattern:
-{'\n'.join([f"        - '{ai_crop_pat(r)}'" for r in cfg['Picture']['use_ai_crop_labels'].split(',')])}
-      # 要使用的图像识别引擎，详细配置见文档 https://github.com/Yuukiy/JavSP/wiki/AI-%7C-%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB
-      # NOTE: 此处无法直接对应，请参照注释手动填入
-      engine: null #null表示禁用图像剪裁
-      ## 使用Slimeface: {{{{{{
-      # engine: 
-      #   name: slimeface
-      ## }}}}}}
 
   fanart:
     # 横版封面文件的名称（不含拓展名），可以使用如`{{title}}`等字段
@@ -256,3 +245,4 @@ other:
 
 with open(args.output, mode ="w") as file:
     file.write(config_str)
+

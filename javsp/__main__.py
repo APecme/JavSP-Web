@@ -146,12 +146,15 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
     def wrapper(parser, info: MovieInfo, retry):
         """对抓取器函数进行包装，便于更新提示信息和自动重试"""
         crawler_name = threading.current_thread().name
+        crawler_short_name = crawler_name.replace('javsp.web.', '') if crawler_name.startswith('javsp.web.') else crawler_name
         # task_info = f'Crawler: {crawler_name}: {info.dvdid}'
+        last_error = None
         for cnt in range(retry):
             try:
                 parser(info)
                 # 成功后设置标记
                 setattr(info, 'success', True)
+                logger.info(f'[{crawler_short_name}] 抓取成功')
                 
                 # 成功时不更新描述，以免覆盖掉其他线程正在显示的错误信息，或者只显示简短的成功
                 # if isinstance(tqdm_bar, tqdm):
@@ -159,19 +162,27 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
                 break
             except MovieNotFoundError as e:
                 # 这种是正常业务流程，不是错误
+                logger.info(f'[{crawler_short_name}] 未找到影片: {e}')
+                last_error = f'未找到影片'
                 logger.debug(e)
                 break
             except MovieDuplicateError as e:
+                logger.info(f'[{crawler_short_name}] 影片重复: {e}')
+                last_error = f'影片重复'
                 logger.debug(e)
                 break
             except (SiteBlocked, SitePermissionError, CredentialError) as e:
                 # 站点屏蔽/权限错误：更新进度条提示
+                logger.info(f'[{crawler_short_name}] 访问被拒/需登录: {e}')
+                last_error = f'访问被拒/需登录'
                 if isinstance(tqdm_bar, tqdm):
                     tqdm_bar.set_description(f'{crawler_name}: 访问被拒/需登录')
                 logger.debug(e)
                 break
             except requests.exceptions.RequestException as e:
                 # 网络错误：仅更新进度条，不打印 Traceback
+                last_error = f'网络错误: {str(e)[:50]}'
+                logger.info(f'[{crawler_short_name}] 网络错误 ({cnt+1}/{retry}): {e}')
                 if isinstance(tqdm_bar, tqdm):
                     tqdm_bar.set_description(f'{crawler_name}: 网络错误, 重试中 ({cnt+1}/{retry})')
                 logger.debug(f'{crawler_name}: 网络错误: {e}')
@@ -186,6 +197,9 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
                 elif len(err_msg) > 20: 
                     err_msg = err_msg[:17] + '...' # 防止信息太长撑破布局
                 
+                last_error = err_msg
+                logger.info(f'[{crawler_short_name}] 发生异常 ({cnt+1}/{retry}): {err_msg}')
+                
                 # 2. 更新进度条描述
                 if isinstance(tqdm_bar, tqdm):
                     tqdm_bar.set_description(f'{crawler_name}: {err_msg} ({cnt+1}/{retry})')
@@ -193,6 +207,11 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
                 # 3. 详细堆栈只进 Debug 日志，不输出到控制台
                 logger.debug(f'{crawler_name}: 发生异常: {e}', exc_info=True)
                 # 注意：这里去掉了 logger.exception(e)，所以不会再刷屏 Traceback 了
+        
+        # 如果所有重试都失败，记录最终错误
+        if not hasattr(info, 'success') and last_error:
+            setattr(info, 'crawler_error', last_error)
+            logger.warning(f'[{crawler_short_name}] 抓取失败: {last_error}')
 
     # 根据影片的数据源获取对应的抓取器
     crawler_mods: List[CrawlerID] = Cfg().crawler.selection[movie.data_src]
@@ -243,6 +262,20 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
             movie.data_src = 'normal'
             movie.cid = None
             all_info = {k: v for k, v in all_info.items() if k not in Cfg().crawler.selection['cid']}
+    # 记录所有尝试的爬虫及其结果
+    attempted_crawlers = []
+    failed_crawlers = []
+    for mod_partial, info in all_info.items():
+        crawler_short_name = mod_partial
+        attempted_crawlers.append(crawler_short_name)
+        if hasattr(info, 'success'):
+            if not hasattr(info, 'crawler_error'):
+                logger.info(f'[{crawler_short_name}] 抓取成功')
+        else:
+            error_msg = getattr(info, 'crawler_error', '未知错误')
+            failed_crawlers.append(f'{crawler_short_name}({error_msg})')
+            logger.warning(f'[{crawler_short_name}] 抓取失败: {error_msg}')
+    
     # 删除抓取失败的站点对应的数据
     all_info = {k:v for k,v in all_info.items() if hasattr(v, 'success')}
     # 记录成功使用的爬虫名称（从 all_info 的键中提取，因为键名是 'javsp.web.xxx'）
@@ -260,8 +293,16 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
     # 输出使用的爬虫信息到日志
     if used_crawlers:
         logger.info(f'使用的爬虫: {", ".join(used_crawlers)}')
+    elif attempted_crawlers:
+        # 如果所有爬虫都失败，输出详细信息
+        logger.error(f'所有配置的{len(attempted_crawlers)}个抓取器均未获取到影片信息')
+        logger.error(f'尝试的抓取器: {", ".join(attempted_crawlers)}')
+        if failed_crawlers:
+            logger.error(f'失败详情: {"; ".join(failed_crawlers)}')
     # 将爬虫信息附加到返回的字典中（临时存储）
     all_info['_used_crawlers'] = used_crawlers
+    all_info['_attempted_crawlers'] = attempted_crawlers
+    all_info['_failed_crawlers'] = failed_crawlers
     return all_info
 
 
@@ -507,17 +548,7 @@ SUBTITLE_MARK_FILE = Image.open(os.path.abspath(resource_path('image/sub_mark.pn
 UNCENSORED_MARK_FILE = Image.open(os.path.abspath(resource_path('image/unc_mark.png')))
 
 def process_poster(movie: Movie):
-    def should_use_ai_crop_match(label):
-        for r in Cfg().summarizer.cover.crop.on_id_pattern:
-            if re.match(r, label):
-                return True
-        return False
-    crop_engine = None
-    if (movie.info.uncensored or
-       movie.data_src == 'fc2' or
-       should_use_ai_crop_match(movie.info.label.upper())):
-        crop_engine = Cfg().summarizer.cover.crop.engine
-    cropper = get_cropper(crop_engine)
+    cropper = get_cropper()
     fanart_image = Image.open(movie.fanart_file)
     fanart_cropped = cropper.crop(fanart_image)
 
