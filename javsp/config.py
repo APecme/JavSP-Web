@@ -1,6 +1,6 @@
 from argparse import ArgumentParser, RawTextHelpFormatter
 from enum import Enum
-from typing import Dict, List, Literal, TypeAlias, Union
+from typing import Dict, List, Literal, Optional, TypeAlias, Union
 from confz import BaseConfig, CLArgSource, EnvSource, FileSource
 from pydantic import ByteSize, Field, NonNegativeInt, PositiveInt
 from pydantic_extra_types.pendulum_dt import Duration
@@ -53,11 +53,19 @@ class CrawlerID(str, Enum):
     arzon = 'arzon'
     arzon_iv = 'arzon_iv'
 
+class CookieCloud(BaseConfig):
+    """CookieCloud配置"""
+    enabled: bool = False
+    server_url: Optional[str] = None  # CookieCloud服务器地址，例如: http://localhost:8088
+    uuid: Optional[str] = None  # CookieCloud的UUID
+    password: Optional[str] = None  # CookieCloud的密码
+
 class Network(BaseConfig):
     proxy_server: Url | None
     retry: NonNegativeInt = 3
     timeout: Duration
     proxy_free: Dict[CrawlerID, Url]
+    cookiecloud: CookieCloud = CookieCloud()
 
 class CrawlerSelect(BaseConfig):
     def items(self) -> List[tuple[str, list[CrawlerID]]]:

@@ -10,6 +10,7 @@ from javsp.avid import guess_av_type
 from javsp.config import Cfg, CrawlerID
 from javsp.datatype import MovieInfo, GenreMap
 from javsp.chromium import get_browsers_cookies
+from javsp.cookie_manager import get_cookie_manager
 
 
 # 初始化Request实例。使用scraper绕过CloudFlare后，需要指定网页语言，否则可能会返回其他语言网页，影响解析
@@ -32,26 +33,41 @@ def get_html_wrapper(url):
     if r.status_code == 200:
         # 发生重定向可能仅仅是域名重定向，因此还要检查url以判断是否被跳转到了登录页
         if r.history and '/login' in r.url:
-            # 仅在需要时去读取Cookies
-            if 'cookies_pool' not in globals():
-                try:
-                    cookies_pool = get_browsers_cookies()
-                except (PermissionError, OSError) as e:
-                    logger.warning(f"无法从浏览器Cookies文件获取JavDB的登录凭据({e})，可能是安全软件在保护浏览器Cookies文件", exc_info=True)
-                    cookies_pool = []
-                except Exception as e:
-                    logger.warning(f"获取JavDB的登录凭据时出错({e})，你可能使用的是国内定制版等非官方Chrome系浏览器", exc_info=True)
-                    cookies_pool = []
-            if len(cookies_pool) > 0:
-                item = cookies_pool.pop()
+            # 使用Cookie管理器获取cookies
+            cookie_manager = get_cookie_manager()
+            domain = 'javdb.com'
+            
+            # 优先尝试CookieCloud，然后尝试浏览器cookies
+            cookies = cookie_manager.get_cookies_for_domain(domain, prefer_cookiecloud=True)
+            
+            if cookies:
                 # 更换Cookies时需要创建新的request实例，否则cloudscraper会保留它内部第一次发起网络访问时获得的Cookies
                 request = Request(use_scraper=True)
-                request.cookies = item['cookies']
-                cookies_source = (item['profile'], item['site'])
-                logger.debug(f'未携带有效Cookies而发生重定向，尝试更换Cookies为: {cookies_source}')
+                request.headers['Accept-Language'] = 'zh-CN,zh;q=0.9,zh-TW;q=0.8,en-US;q=0.7,en;q=0.6,ja;q=0.5'
+                request.cookies = cookies
+                logger.debug(f'未携带有效Cookies而发生重定向，尝试使用CookieCloud或浏览器Cookies')
                 return get_html_wrapper(url)
             else:
-                raise CredentialError('JavDB: 所有浏览器Cookies均已过期')
+                # 如果CookieCloud和浏览器都没有，尝试使用旧的浏览器cookies池（向后兼容）
+                if 'cookies_pool' not in globals():
+                    try:
+                        cookies_pool = get_browsers_cookies()
+                    except (PermissionError, OSError) as e:
+                        logger.warning(f"无法从浏览器Cookies文件获取JavDB的登录凭据({e})，可能是安全软件在保护浏览器Cookies文件", exc_info=True)
+                        cookies_pool = []
+                    except Exception as e:
+                        logger.warning(f"获取JavDB的登录凭据时出错({e})，你可能使用的是国内定制版等非官方Chrome系浏览器", exc_info=True)
+                        cookies_pool = []
+                if len(cookies_pool) > 0:
+                    item = cookies_pool.pop()
+                    request = Request(use_scraper=True)
+                    request.headers['Accept-Language'] = 'zh-CN,zh;q=0.9,zh-TW;q=0.8,en-US;q=0.7,en;q=0.6,ja;q=0.5'
+                    request.cookies = item['cookies']
+                    cookies_source = (item['profile'], item['site'])
+                    logger.debug(f'未携带有效Cookies而发生重定向，尝试更换Cookies为: {cookies_source}')
+                    return get_html_wrapper(url)
+                else:
+                    raise CredentialError('JavDB: 所有Cookies均已过期或未配置（请检查CookieCloud配置或浏览器Cookies）')
         elif r.history and 'pay' in r.url.split('/')[-1]:
             raise SitePermissionError(f"JavDB: 此资源被限制为仅VIP可见: '{r.history[0].url}'")
         else:

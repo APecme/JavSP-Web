@@ -181,28 +181,44 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
                 break
             except requests.exceptions.RequestException as e:
                 # 网络错误：仅更新进度条，不打印 Traceback
-                last_error = f'网络错误: {str(e)[:50]}'
+                # 提取完整的错误信息，包括URL
+                error_str = str(e)
+                # 如果错误信息包含URL，保留完整URL
+                if 'for url:' in error_str:
+                    # 提取URL部分
+                    url_part = error_str.split('for url:')[-1].strip()
+                    last_error = f'网络错误: {error_str.split("for url:")[0].strip()} for url: {url_part}'
+                else:
+                    last_error = f'网络错误: {error_str}'
                 logger.info(f'[{crawler_short_name}] 网络错误 ({cnt+1}/{retry}): {e}')
                 if isinstance(tqdm_bar, tqdm):
                     tqdm_bar.set_description(f'{crawler_name}: 网络错误, 重试中 ({cnt+1}/{retry})')
                 logger.debug(f'{crawler_name}: 网络错误: {e}')
             except Exception as e:
                 # 其他严重错误 (如 WebsiteError, 页面结构异常)：
-                # 1. 截取简短错误信息
+                # 1. 提取错误信息，保留完整信息用于日志
                 err_msg = str(e)
-                if '页面结构异常' in err_msg:
-                    err_msg = '页面结构异常'
+                # 对于包含URL的错误，保留完整URL
+                if 'for url:' in err_msg.lower() or 'url:' in err_msg.lower():
+                    # 保留完整的错误信息，包括URL
+                    last_error = err_msg
+                elif '页面结构异常' in err_msg:
+                    last_error = '页面结构异常'
                 elif '反爬机制' in err_msg:
-                    err_msg = '触发反爬'
-                elif len(err_msg) > 20: 
-                    err_msg = err_msg[:17] + '...' # 防止信息太长撑破布局
+                    last_error = '触发反爬'
+                else:
+                    # 保留完整错误信息，不截断
+                    last_error = err_msg
                 
-                last_error = err_msg
+                # 日志中输出完整错误信息
                 logger.info(f'[{crawler_short_name}] 发生异常 ({cnt+1}/{retry}): {err_msg}')
                 
-                # 2. 更新进度条描述
+                # 2. 更新进度条描述（使用简短版本）
                 if isinstance(tqdm_bar, tqdm):
-                    tqdm_bar.set_description(f'{crawler_name}: {err_msg} ({cnt+1}/{retry})')
+                    display_msg = err_msg
+                    if len(display_msg) > 30:
+                        display_msg = display_msg[:27] + '...'
+                    tqdm_bar.set_description(f'{crawler_name}: {display_msg} ({cnt+1}/{retry})')
                 
                 # 3. 详细堆栈只进 Debug 日志，不输出到控制台
                 logger.debug(f'{crawler_name}: 发生异常: {e}', exc_info=True)
@@ -262,19 +278,27 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
             movie.data_src = 'normal'
             movie.cid = None
             all_info = {k: v for k, v in all_info.items() if k not in Cfg().crawler.selection['cid']}
-    # 记录所有尝试的爬虫及其结果
+    # 记录所有尝试的爬虫及其结果（在删除失败数据之前记录）
     attempted_crawlers = []
     failed_crawlers = []
+    successful_crawlers = []
     for mod_partial, info in all_info.items():
         crawler_short_name = mod_partial
         attempted_crawlers.append(crawler_short_name)
         if hasattr(info, 'success'):
             if not hasattr(info, 'crawler_error'):
+                successful_crawlers.append(crawler_short_name)
                 logger.info(f'[{crawler_short_name}] 抓取成功')
         else:
             error_msg = getattr(info, 'crawler_error', '未知错误')
             failed_crawlers.append(f'{crawler_short_name}({error_msg})')
             logger.warning(f'[{crawler_short_name}] 抓取失败: {error_msg}')
+    
+    # 输出所有爬虫的执行结果汇总
+    if successful_crawlers:
+        logger.info(f'成功抓取的爬虫 ({len(successful_crawlers)}/{len(attempted_crawlers)}): {", ".join(successful_crawlers)}')
+    if failed_crawlers:
+        logger.info(f'失败的爬虫 ({len(failed_crawlers)}/{len(attempted_crawlers)}): {", ".join([f"{c}" for c in failed_crawlers])}')
     
     # 删除抓取失败的站点对应的数据
     all_info = {k:v for k,v in all_info.items() if hasattr(v, 'success')}

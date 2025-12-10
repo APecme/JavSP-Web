@@ -2,11 +2,8 @@ name: Build and Push Docker image to Docker Hub
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
-      - 'v*' 
+      - 'v*.*.*'
   workflow_dispatch:  
 
 env:
@@ -57,4 +54,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64,linux/arm64
+          platforms: linux/amd64,linux/arm64
