@@ -1532,6 +1532,33 @@ def delete_task_logs(
             # 从内存中删除
             _task_logs.pop(task_id, None)
             _task_streams.pop(task_id, None)
+            _tasks.pop(task_id, None)
+        # 同步删除历史记录中的该任务
+        try:
+            updated_history = []
+            changed = False
+            with _history_lock:
+                for item in _history:
+                    if getattr(item, "task_id", None) == task_id:
+                        changed = True
+                        continue
+                    updated_history.append(item)
+                if changed:
+                    _history = updated_history
+                    # 重写历史文件
+                    try:
+                        _HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+                        with _HISTORY_FILE.open("w", encoding="utf-8") as f:
+                            for it in _history:
+                                try:
+                                    data = it.model_dump(mode="json")  # type: ignore[attr-defined]
+                                except AttributeError:
+                                    data = json.loads(it.json(ensure_ascii=False))
+                                f.write(json.dumps(data, ensure_ascii=False) + "\n")
+                    except OSError as e:
+                        log.warning("重写历史文件失败: %s", e)
+        except Exception as e:  # noqa: BLE001
+            log.warning("清理历史记录时出错: %s", e)
         
         # 删除日志文件
         try:

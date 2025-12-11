@@ -341,10 +341,15 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
     ########## 移除所有抓取器数据中，标题尾部的女优名 ##########
     if Cfg().summarizer.title.remove_trailing_actor_name:
         for name, data in all_info.items():
-            # 确保标题为字符串，若爬虫返回列表则取第一个元素
+            # 跳过非 MovieInfo（如内部标记字段）
+            if not hasattr(data, "title") or not hasattr(data, "actress"):
+                continue
             title_val = data.title
-            if isinstance(title_val, list) and title_val:
-                title_val = title_val[0]
+            # 若爬虫返回列表，取第一个元素；若为 None，则置为空串
+            if isinstance(title_val, list):
+                title_val = title_val[0] if title_val else ""
+            if title_val is None:
+                title_val = ""
             data.title = remove_trail_actor_in_title(title_val, data.actress)
     ########## 然后检查所有字段，如果某个字段还是默认值，则按照优先级选取数据 ##########
     # parser直接更新了all_info中的项目，而初始all_info是按照优先级生成的，已经符合配置的优先级顺序了
