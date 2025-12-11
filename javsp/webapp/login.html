@@ -44,6 +44,17 @@
       const form = document.getElementById('login-form');
       const errorBox = document.getElementById('error');
       const submitBtn = document.getElementById('submit-btn');
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+
+      // 仅记住账号，不记住密码
+      const savedUsername = localStorage.getItem('javsp_last_username');
+      if (savedUsername) {
+        usernameInput.value = savedUsername;
+      } else {
+        usernameInput.value = '';
+      }
+      passwordInput.value = '';
 
       async function checkSession() {
         try {
@@ -63,8 +74,8 @@
         errorBox.textContent = '';
         submitBtn.disabled = true;
         submitBtn.textContent = '登录中...';
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value;
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
         try {
           const res = await fetch('/api/auth/login', {
             method: 'POST',
@@ -79,6 +90,8 @@
               errorBox.textContent = '登录失败，请稍后重试。';
             }
           } else {
+            // 登录成功后仅保存账号
+            localStorage.setItem('javsp_last_username', username);
             window.location.href = '/';
           }
         } catch (err) {

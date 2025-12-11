@@ -358,8 +358,13 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
     covers, big_covers = [], []
     for name, data in all_info.items():
         absorbed = []
+        # 防御性处理：若 data 不是 MovieInfo 或缺少属性，则跳过
+        if not hasattr(data, "__dict__"):
+            continue
         # 遍历所有属性，如果某一属性当前值为空而爬取的数据中含有该属性，则采用爬虫的属性
         for attr in attrs:
+            if not hasattr(data, attr):
+                continue
             incoming = getattr(data, attr)
             current = getattr(final_info, attr)
             if attr == 'cover':
