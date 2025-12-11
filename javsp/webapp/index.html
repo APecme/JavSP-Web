@@ -373,28 +373,6 @@
                   </div>
                 </div>
               </div>
-              <div class="rules-card">
-                <div class="rules-card-title">CookieCloud 配置</div>
-                <div class="panel-desc" style="margin-bottom:12px;">配置CookieCloud以支持需要登录的站点（如JavDB、JavLib等）。CookieCloud是一个自托管服务，用于同步和管理浏览器Cookie。</div>
-                <div class="grid-two">
-                  <div class="field checkbox-inline">
-                    <label for="rules-cookiecloud-enabled">启用 CookieCloud</label>
-                    <input type="checkbox" id="rules-cookiecloud-enabled" />
-                  </div>
-                  <div class="field">
-                    <label for="rules-cookiecloud-server-url">CookieCloud 服务器地址</label>
-                    <input id="rules-cookiecloud-server-url" placeholder="例如 http://localhost:8088" />
-                  </div>
-                  <div class="field">
-                    <label for="rules-cookiecloud-uuid">UUID</label>
-                    <input id="rules-cookiecloud-uuid" placeholder="CookieCloud的UUID" />
-                  </div>
-                  <div class="field">
-                    <label for="rules-cookiecloud-password">密码</label>
-                    <input id="rules-cookiecloud-password" type="password" placeholder="CookieCloud的密码" />
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div class="rules-tab-panel" data-rules-panel="crawler">
@@ -896,6 +874,28 @@
         <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
           <button class="primary-btn" id="account-save">保存修改</button>
           <span id="account-error" class="error"></span>
+        </div>
+        <div class="panel" style="margin-top:14px;">
+          <div class="panel-title">CookieCloud 配置</div>
+          <div class="panel-desc" style="margin-bottom:12px;">配置 CookieCloud 以支持需要登录的站点（如 JavDB、JavLib 等）。</div>
+          <div class="grid-two">
+            <div class="field checkbox-inline">
+              <label for="rules-cookiecloud-enabled">启用 CookieCloud</label>
+              <input type="checkbox" id="rules-cookiecloud-enabled" />
+            </div>
+            <div class="field">
+              <label for="rules-cookiecloud-server-url">CookieCloud 服务器地址</label>
+              <input id="rules-cookiecloud-server-url" placeholder="例如 http://localhost:8088" />
+            </div>
+            <div class="field">
+              <label for="rules-cookiecloud-uuid">UUID</label>
+              <input id="rules-cookiecloud-uuid" placeholder="CookieCloud 的 UUID" />
+            </div>
+            <div class="field">
+              <label for="rules-cookiecloud-password">密码</label>
+              <input id="rules-cookiecloud-password" type="password" placeholder="CookieCloud 的密码" />
+            </div>
+          </div>
         </div>
       </section>
       <div id="proxyfree-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:40;align-items:center;justify-content:center;">

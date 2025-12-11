@@ -356,6 +356,11 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
     # 按照优先级取出各个爬虫获取到的信息
     attrs = [i for i in dir(final_info) if not i.startswith('_')]
     covers, big_covers = [], []
+    string_like_fields = {
+        'title', 'series', 'producer', 'publisher', 'studio', 'plot',
+        'url', 'big_cover', 'cover', 'num', 'release', 'director'
+    }
+
     for name, data in all_info.items():
         absorbed = []
         # 防御性处理：若 data 不是 MovieInfo 或缺少属性，则跳过
@@ -366,6 +371,10 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
             if not hasattr(data, attr):
                 continue
             incoming = getattr(data, attr)
+            # 若字符串型字段返回了列表，则取第一项防止崩溃
+            if attr in string_like_fields and isinstance(incoming, list):
+                incoming = incoming[0] if incoming else ""
+                setattr(data, attr, incoming)
             current = getattr(final_info, attr)
             if attr == 'cover':
                 if incoming and (incoming not in covers):
