@@ -8,8 +8,8 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #020617; color: #e5e7eb; }
-    .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-    .sidebar { background: #020617; border-right: 1px solid #1f2937; padding: 16px 14px; display: flex; flex-direction: column; gap: 16px; }
+    .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; height: 100vh; }
+    .sidebar { background: #020617; border-right: 1px solid #1f2937; padding: 16px 14px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; }
     .brand { font-weight: 600; font-size: 18px; }
     .version { font-size: 11px; color: #6b7280; margin-top: 2px; }
     .nav { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
@@ -25,7 +25,7 @@
     .logout-btn { border-radius: 999px; border: 1px solid #374151; padding: 6px 10px; background: transparent; color: #e5e7eb; font-size: 12px; cursor: pointer; align-self: flex-start; }
     .logout-btn:hover { background: #111827; }
 
-    .content { padding: 18px 20px; background: radial-gradient(circle at top left, rgba(59,130,246,.15), transparent 55%), #020617; }
+    .content { padding: 18px 20px; background: radial-gradient(circle at top left, rgba(59,130,246,.15), transparent 55%), #020617; height: 100vh; overflow-y: auto; }
     .content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .content-title { font-size: 20px; font-weight: 600; }
     .content-subtitle { font-size: 12px; color: #9ca3af; margin-top: 4px; }
@@ -142,8 +142,9 @@
     .log-body { margin: 0; max-height: 720px; overflow-y: auto; padding: 6px 8px; background: #020617; border-radius: 6px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; line-height: 1.4; }
 
     @media (max-width: 800px) {
-      .layout { grid-template-columns: 1fr; }
-      .sidebar { flex-direction: row; align-items: center; overflow-x: auto; }
+      .layout { grid-template-columns: 1fr; height: auto; }
+      .sidebar { position: static; height: auto; flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; }
+      .content { height: auto; overflow: visible; }
       .bottom { display: none; }
       .grid-two { grid-template-columns: 1fr; }
     }
@@ -165,6 +166,7 @@
         <div class="nav">
           <button class="nav-btn" data-view="rules">全局规则</button>
           <button class="nav-btn" data-view="history">刮削历史</button>
+          <button class="nav-btn" data-view="cookiecloud">CookieCloud</button>
           <button class="nav-btn" data-view="account">账号与安全</button>
         </div>
       </div>
@@ -234,7 +236,6 @@
           <div class="log-header">
             <span>任务日志</span>
             <div style="display:flex;align-items:center;gap:6px;">
-              <button id="manual-log-copy" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#9ca3af;font-size:10px;cursor:pointer;">复制日志</button>
               <span id="manual-log-status">尚未创建任务</span>
             </div>
           </div>
@@ -795,6 +796,33 @@
         </div>
       </section>
       
+      <section id="view-cookiecloud" class="panel" style="display:none;">
+        <div class="panel-title">CookieCloud 配置</div>
+        <div class="panel-desc">配置 CookieCloud 以支持需要登录的站点（如 JavDB、JavLib 等）。</div>
+        <div class="grid-two">
+          <div class="field checkbox-inline">
+            <label for="rules-cookiecloud-enabled">启用 CookieCloud</label>
+            <input type="checkbox" id="rules-cookiecloud-enabled" />
+          </div>
+          <div class="field">
+            <label for="rules-cookiecloud-server-url">CookieCloud 服务器地址</label>
+            <input id="rules-cookiecloud-server-url" placeholder="例如 http://localhost:8088" />
+          </div>
+          <div class="field">
+            <label for="rules-cookiecloud-uuid">UUID</label>
+            <input id="rules-cookiecloud-uuid" placeholder="CookieCloud 的 UUID" />
+          </div>
+          <div class="field">
+            <label for="rules-cookiecloud-password">密码</label>
+            <input id="rules-cookiecloud-password" type="password" placeholder="CookieCloud 的密码" />
+          </div>
+        </div>
+        <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
+          <button class="primary-btn" id="cookiecloud-save">保存 CookieCloud 配置</button>
+          <span id="cookiecloud-status" class="placeholder"></span>
+        </div>
+      </section>
+      
       <!-- 手动刮削规则设置浮动窗口 -->
       <div id="manual-rules-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.9);z-index:50;align-items:center;justify-content:center;overflow-y:auto;padding:20px;">
         <div style="max-width:95%;max-height:95%;width:1200px;background:#111827;border-radius:12px;border:1px solid #1f2937;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.6);display:flex;flex-direction:column;">
@@ -874,28 +902,6 @@
         <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
           <button class="primary-btn" id="account-save">保存修改</button>
           <span id="account-error" class="error"></span>
-        </div>
-        <div class="panel" style="margin-top:14px;">
-          <div class="panel-title">CookieCloud 配置</div>
-          <div class="panel-desc" style="margin-bottom:12px;">配置 CookieCloud 以支持需要登录的站点（如 JavDB、JavLib 等）。</div>
-          <div class="grid-two">
-            <div class="field checkbox-inline">
-              <label for="rules-cookiecloud-enabled">启用 CookieCloud</label>
-              <input type="checkbox" id="rules-cookiecloud-enabled" />
-            </div>
-            <div class="field">
-              <label for="rules-cookiecloud-server-url">CookieCloud 服务器地址</label>
-              <input id="rules-cookiecloud-server-url" placeholder="例如 http://localhost:8088" />
-            </div>
-            <div class="field">
-              <label for="rules-cookiecloud-uuid">UUID</label>
-              <input id="rules-cookiecloud-uuid" placeholder="CookieCloud 的 UUID" />
-            </div>
-            <div class="field">
-              <label for="rules-cookiecloud-password">密码</label>
-              <input id="rules-cookiecloud-password" type="password" placeholder="CookieCloud 的密码" />
-            </div>
-          </div>
         </div>
       </section>
       <div id="proxyfree-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:40;align-items:center;justify-content:center;">
@@ -1027,7 +1033,7 @@
         ]);
       };
       
-      const views = ['manual','watch','schedule','rules','history','account'];
+      const views = ['manual','watch','schedule','rules','history','cookiecloud','account'];
       const navButtons = document.querySelectorAll('.nav-btn');
       const titleMap = {
         manual: ['手动刮削', '从 /video 选择具体影片文件，按顺序触发手动刮削任务。'],
@@ -1035,6 +1041,7 @@
         schedule: ['定时刮削', '按计划定期触发刮削任务。'],
         rules: ['全局规则', '管理 JavSP 的全局配置规则。'],
         history: ['刮削历史', '查看历史任务与结果。'],
+        cookiecloud: ['CookieCloud', '配置 CookieCloud 以同步站点登录状态。'],
         account: ['账号与安全', '修改 Web 登录凭据。']
       };
 
@@ -1046,7 +1053,7 @@
       let manualLogContainer = document.getElementById('manual-log-container');
       const manualLogTermEl = null; // 不再使用xterm，改用可展开收起的结构
       const manualLogStatusEl = document.getElementById('manual-log-status');
-      const manualLogCopyBtn = document.getElementById('manual-log-copy');
+      const manualLogCopyBtn = null; // 按钮已移除，保持兼容性防止未定义
       
       // 复制任务日志函数 - 复制原始未过滤的日志
       window.copyTaskLog = async function(taskId) {
@@ -1067,19 +1074,19 @@
           }
           
           const fallbackCopy = () => {
-            const textArea = document.createElement('textarea');
+              const textArea = document.createElement('textarea');
             textArea.value = textToCopy;
-            textArea.style.position = 'fixed';
-            textArea.style.opacity = '0';
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-              document.execCommand('copy');
-              window.showAlert('原始日志已复制到剪贴板');
-            } catch (e) {
-              window.showAlert('复制失败，请手动复制');
-            }
-            document.body.removeChild(textArea);
+              textArea.style.position = 'fixed';
+              textArea.style.opacity = '0';
+              document.body.appendChild(textArea);
+              textArea.select();
+              try {
+                document.execCommand('copy');
+                window.showAlert('原始日志已复制到剪贴板');
+              } catch (e) {
+                window.showAlert('复制失败，请手动复制');
+              }
+              document.body.removeChild(textArea);
           };
 
           // 优先使用 Clipboard API，若不可用则回退
@@ -1145,7 +1152,7 @@
                 manualLogContainer.innerHTML = '<div class="placeholder">暂无日志</div>';
               }
             } else {
-              renderCollapsibleLogs();
+            renderCollapsibleLogs();
             }
             window.showAlert('日志已删除');
           } else {
@@ -1154,6 +1161,27 @@
         } catch (err) {
           console.error('删除日志失败:', err);
           window.showAlert('删除日志失败：' + (err.message || '请稍后重试'));
+        }
+      };
+
+      // 取消任务（排队或运行中）
+      window.cancelTask = async function(taskId) {
+        try {
+          const safeTaskId = encodeURIComponent(String(taskId));
+          const resp = await fetch(`/api/tasks/${safeTaskId}/cancel`, { method: 'POST' });
+          if (!resp.ok) throw new Error('取消失败');
+          const data = await resp.json();
+          window.showAlert(data.status === 'cancelled' ? '已从队列移除' : '已发送取消信号');
+          // 更新内存状态并重绘
+          const taskData = allTaskLogs.get(taskId);
+          if (taskData) {
+            taskData.status = 'FAILED';
+            allTaskLogs.set(taskId, taskData);
+            renderCollapsibleLogs();
+          }
+        } catch (err) {
+          console.error('取消任务失败:', err);
+          window.showAlert('取消任务失败：' + (err.message || '请稍后重试'));
         }
       };
       
@@ -1184,6 +1212,8 @@
       const rulesCookieCloudServerUrl = document.getElementById('rules-cookiecloud-server-url');
       const rulesCookieCloudUuid = document.getElementById('rules-cookiecloud-uuid');
       const rulesCookieCloudPassword = document.getElementById('rules-cookiecloud-password');
+      const cookiecloudSaveBtn = document.getElementById('cookiecloud-save');
+      const cookiecloudStatus = document.getElementById('cookiecloud-status');
       const proxyfreeModal = document.getElementById('proxyfree-modal');
       const proxyfreeOpenBtn = document.getElementById('rules-proxyfree-open');
       const proxyfreeCancelBtn = document.getElementById('proxyfree-cancel');
@@ -1293,7 +1323,7 @@
           contentSubtitle.textContent = t[1];
         }
 
-        if (view === 'rules' && !rulesLoaded) {
+        if ((view === 'rules' || view === 'cookiecloud') && !rulesLoaded) {
           loadGlobalRules();
         }
         if (view === 'history') {
@@ -1486,7 +1516,7 @@
 
           if (videodeRunHint) {
             videodeRunHint.style.color = '#9ca3af';
-            videodeRunHint.textContent = `共 ${files.length} 个文件，将按顺序依次创建手动刮削任务...`;
+            videodeRunHint.textContent = `共 ${files.length} 个文件，逐个创建任务（允许排队执行）...`;
           }
           videodeRunBtn.disabled = true;
 
@@ -1550,27 +1580,20 @@
               
               if (videodeRunHint) {
                 videodeRunHint.style.color = '#9ca3af';
-                videodeRunHint.textContent = `(${idx}/${files.length}) 任务 ${decodedPath} 已创建，等待完成...`;
+                videodeRunHint.textContent = `(${idx}/${files.length}) 任务 ${decodedPath} 已创建，已加入队列等待执行，可在下方日志查看/取消。`;
               }
               // 不清空之前的日志，保留所有任务的日志
               startManualLogStreaming(task.id, false);
-              const status = await waitTaskFinished(task.id);
-              if (videodeRunHint) {
-                videodeRunHint.style.color = status === 'SUCCEEDED' ? '#bbf7d0' : '#fca5a5';
-                videodeRunHint.textContent = `(${idx}/${files.length}) 任务 ${decodedPath} ${status === 'SUCCEEDED' ? '已完成' : '已失败'}。`;
-              }
-              // 任务完成后刷新文件列表
-              loadVideode(videodeCurrentPath || '/video');
             } catch (e) {
               console.warn(e);
               if (videodeRunHint) {
                 videodeRunHint.style.color = '#fca5a5';
-                videodeRunHint.textContent = `(${idx}/${files.length}) 创建或等待任务时出错，已中止队列。`;
+                videodeRunHint.textContent = `(${idx}/${files.length}) 创建任务时出错：${e.message || e}`;
               }
               break;
             }
           }
-
+          
           videodeRunBtn.disabled = false;
         });
       }
@@ -3325,6 +3348,49 @@
         });
       }
 
+      if (cookiecloudSaveBtn) {
+        cookiecloudSaveBtn.addEventListener('click', async function () {
+          if (!cookiecloudStatus) return;
+          cookiecloudStatus.style.color = '#9ca3af';
+          cookiecloudStatus.textContent = '正在保存配置...';
+          const payload = {
+            network: {
+              cookiecloud: {
+                enabled: !!(rulesCookieCloudEnabled && rulesCookieCloudEnabled.checked),
+                server_url: rulesCookieCloudServerUrl ? rulesCookieCloudServerUrl.value.trim() || null : null,
+                uuid: rulesCookieCloudUuid ? rulesCookieCloudUuid.value.trim() || null : null,
+                password: rulesCookieCloudPassword ? rulesCookieCloudPassword.value.trim() || null : null
+              }
+            }
+          };
+          try {
+            await fetchJSON('/api/rules/global', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            cookiecloudStatus.style.color = '#bbf7d0';
+            cookiecloudStatus.textContent = '保存成功。';
+          } catch (res) {
+            cookiecloudStatus.style.color = '#fca5a5';
+            if (res && res.status === 400) {
+              let message = '保存失败：配置内容不符合 schema，请检查后重试。';
+              try {
+                const data = await res.json();
+                if (data && data.detail) {
+                  message = '保存失败：' + String(data.detail);
+                }
+              } catch (e) {}
+              cookiecloudStatus.textContent = message;
+            } else if (res && res.status === 401) {
+              window.location.href = '/login';
+            } else {
+              cookiecloudStatus.textContent = '保存失败，请稍后重试。';
+            }
+          }
+        });
+      }
+
       function renderManualProgress() {
         if (!manualProgressBox || !manualProgressMovieEl || !manualProgressStepEl) return;
         const hasMovie = !!manualMovieProgress;
@@ -3485,8 +3551,8 @@
             taskTimeFormatted = `${datePart} ${timePart}`;
           }
           const status = taskData.status || 'RUNNING';
-          const statusColor = status === 'SUCCEEDED' ? '#22c55e' : status === 'FAILED' ? '#ef4444' : '#3b82f6';
-          const statusText = status === 'SUCCEEDED' ? '完成' : status === 'FAILED' ? '失败' : '进行中';
+          const statusColor = status === 'SUCCEEDED' ? '#22c55e' : status === 'FAILED' ? '#ef4444' : status === 'PENDING' ? '#f59e0b' : '#3b82f6';
+          const statusText = status === 'SUCCEEDED' ? '完成' : status === 'FAILED' ? '失败' : status === 'PENDING' ? '队列中' : '进行中';
           const isTaskExpanded = expandedTasks.has(String(taskId));
           const safeTaskId = String(taskId).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
           
@@ -3500,6 +3566,7 @@
             stepsHtml = `<div style="font-size:10px;color:#9ca3af;margin-top:4px;">${stepsList}</div>`;
           }
           
+          const showCancel = status !== 'SUCCEEDED' && status !== 'FAILED';
           html.push(`
             <div class="log-task-group" data-task-id="${safeTaskId}" style="border:1px solid #1f2937;border-radius:8px;margin-bottom:8px;overflow:hidden;background:#020617;">
               <div class="log-task-header" style="padding:10px 12px;background:#111827;display:flex;justify-content:space-between;align-items:center;">
@@ -3510,6 +3577,7 @@
                   ${taskTimeFormatted ? `<span style="font-size:11px;color:#9ca3af;">时间：${taskTimeFormatted}</span>` : ''}
                 </div>
                 <div style="display:flex;gap:4px;">
+                  ${showCancel ? `<button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#f59e0b;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();cancelTask('${safeTaskId}')">取消</button>` : ''}
                   <button class="copy-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#9ca3af;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();copyTaskLog('${safeTaskId}')">复制日志</button>
                   <button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#ef4444;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();deleteTaskLog('${safeTaskId}')">删除日志</button>
                 </div>
@@ -3936,9 +4004,12 @@
                 }
               }
               
-              // 如果还是没有key，使用默认key
+              // 如果还是没有key，使用默认key，并确保默认影片存在
               if (!key) {
                 key = '__DEFAULT__';
+              }
+              if (taskData && !taskData.movies.has(key)) {
+                taskData.movies.set(key, { steps: new Map(), errors: [], saveDir: '' });
               }
               
               const prev = manualMovieStates[key] || {};
@@ -3974,6 +4045,29 @@
                   // 更新 prev 以便后续使用
                   prev.stepIndex = stepNum;
                   prev.stepTotal = 7;
+                  // 若当前影片未定位，尝试将该步骤日志同步到所有已存在的影片（用于页面刷新后的日志还原）
+                  if (!manualCurrentMovieKey && taskData && taskData.movies.size > 0) {
+                    taskData.movies.forEach((mv) => {
+                      if (!mv.steps.has(stepNum)) mv.steps.set(stepNum, { desc: prev.stepDesc || '', logs: [] });
+                      mv.steps.get(stepNum).logs.push(line);
+                    });
+                  }
+                } else if (line.indexOf('[队列]') !== -1) {
+                  // 排队相关日志强制归类到步骤1
+                  currentStepIndex = 1;
+                  manualMovieStates[key] = Object.assign({}, prev, {
+                    stepIndex: 1,
+                    stepTotal: 7,
+                    stepDesc: '启动并发任务'
+                  });
+                } else if (/任务 #.*已启动/.test(line) || /启动 JavSP 子进程执行手动刮削任务/.test(line)) {
+                  // 任务启动相关日志也归类到步骤1
+                  currentStepIndex = 1;
+                  manualMovieStates[key] = Object.assign({}, prev, {
+                    stepIndex: 1,
+                    stepTotal: 7,
+                    stepDesc: '启动并发任务'
+                  });
                 } else if (prev.stepIndex && prev.stepTotal) {
                   // 如果没有从日志中提取到，使用之前记录的步骤信息
                   currentStepIndex = prev.stepIndex;

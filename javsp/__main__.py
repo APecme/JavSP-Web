@@ -398,14 +398,23 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
     if Cfg().crawler.respect_site_avid:
         id_weight = {}
         for name, data in all_info.items():
-            if data.title:
-                if movie.dvdid:
-                    id_weight.setdefault(data.dvdid, []).append(name)
-                else:
-                    id_weight.setdefault(data.cid, []).append(name)
+            # 防御：忽略非对象或缺少字段的值
+            if not hasattr(data, '__dict__'):
+                continue
+            title_val = getattr(data, 'title', None)
+            if isinstance(title_val, list):
+                title_val = title_val[0] if title_val else None
+            if not title_val:
+                continue
+            if movie.dvdid:
+                id_val = getattr(data, 'dvdid', None)
+            else:
+                id_val = getattr(data, 'cid', None)
+            if id_val:
+                id_weight.setdefault(id_val, []).append(name)
         # 根据权重选择最终番号
         if id_weight:
-            id_weight = {k:v for k, v in sorted(id_weight.items(), key=lambda x:len(x[1]), reverse=True)}
+            id_weight = {k: v for k, v in sorted(id_weight.items(), key=lambda x: len(x[1]), reverse=True)}
             final_id = list(id_weight.keys())[0]
             if movie.dvdid:
                 final_info.dvdid = final_id
@@ -627,6 +636,15 @@ def _download_extrafanart_pic(idx, pic_url, extrafanartdir):
 def RunNormalMode(all_movies):
     """普通整理模式"""
 
+    def step_log(msg: str, idx: int, total: int):
+        """将日志归属到当前步骤，避免被默认步骤折叠收纳。"""
+        try:
+            line = f"[步骤 {idx}/{total}] {msg}"
+            inner_bar.write(line)
+            logger.info(line)
+        except Exception:
+            logger.debug("step_log failed", exc_info=True)
+
     def check_step(result, msg='步骤错误'):
         """检查一个整理步骤的结果，并负责更新tqdm的进度"""
         if result:
@@ -690,6 +708,30 @@ def RunNormalMode(all_movies):
             })
             has_required_keys = info_summary(movie, all_info)
             check_step(has_required_keys)
+            # 汇总结果输出，便于前端展示
+            try:
+                summary_parts = []
+                if movie.info:
+                    title = getattr(movie.info, 'title', '') or ''
+                    if title:
+                        summary_parts.append(f"标题: {title}")
+                    pid = getattr(movie.info, 'producer', '') or ''
+                    if pid:
+                        summary_parts.append(f"片商: {pid}")
+                    pub = getattr(movie.info, 'publish_date', '') or ''
+                    if pub:
+                        summary_parts.append(f"发行日: {pub}")
+                    cover_ct = len(getattr(movie.info, 'covers', []) or [])
+                    summary_parts.append(f"封面数量: {cover_ct}")
+                    preview_ct = len(getattr(movie.info, 'preview_pics', []) or [])
+                    if Cfg().summarizer.extra_fanarts.enabled:
+                        summary_parts.append(f"剧照数量: {preview_ct}")
+                if used_crawlers:
+                    summary_parts.append("抓取器: " + ', '.join(used_crawlers))
+                if summary_parts:
+                    step_log("汇总完成 -> " + ' | '.join(summary_parts), step_index, total_step)
+            except Exception:
+                logger.debug("输出汇总信息时出错", exc_info=True)
 
             if Cfg().translator.engine:
                 step_index += 1
@@ -712,6 +754,13 @@ def RunNormalMode(all_movies):
             check_step(movie.save_dir, '无法按命名规则生成目标文件夹')
             if not os.path.exists(movie.save_dir):
                 os.makedirs(movie.save_dir)
+            try:
+                step_log(f"生成文件名 -> 目标目录: {movie.save_dir}", step_index, total_step)
+                step_log(f"NFO: {movie.nfo_file}", step_index, total_step)
+                step_log(f"封面: {movie.poster_file}", step_index, total_step)
+                step_log(f"Fanart: {movie.fanart_file}", step_index, total_step)
+            except Exception:
+                logger.debug("输出生成文件名信息时出错", exc_info=True)
 
             step_index += 1
             inner_bar.set_description('下载封面图片')
@@ -749,7 +798,7 @@ def RunNormalMode(all_movies):
                     check_step(True)
                     cover_download_success = True
                     # 使用inner_bar.write确保日志不被进度条覆盖
-                    inner_bar.write('封面下载成功')
+                    step_log(f'封面下载成功', step_index, total_step)
                     logger.info('封面下载成功')
 
                 cover, pic_path = cover_dl
@@ -800,12 +849,12 @@ def RunNormalMode(all_movies):
                         fanart_download_failed_count = len([x for x in results if not x])
                         if fanart_download_failed_count > 0:
                             # 使用inner_bar.write确保日志不被进度条覆盖
-                            inner_bar.write(f'下载剧照失败 {fanart_download_failed_count} 张，成功 {fanart_download_count} 张，将跳过失败的剧照')
+                            step_log(f'下载剧照失败 {fanart_download_failed_count} 张，成功 {fanart_download_count} 张，将跳过失败的剧照', step_index, total_step)
                             logger.error(f'下载剧照失败 {fanart_download_failed_count} 张，成功 {fanart_download_count} 张，将跳过失败的剧照')
                             fanart_download_success = False
                         else:
                             # 使用inner_bar.write确保日志不被进度条覆盖
-                            inner_bar.write(f'剧照下载成功，共 {fanart_download_count} 张')
+                            step_log(f'剧照下载成功，共 {fanart_download_count} 张', step_index, total_step)
                             logger.info(f'剧照下载成功，共 {fanart_download_count} 张')
                             fanart_download_success = True
                     else:

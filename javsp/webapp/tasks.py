@@ -6,6 +6,7 @@ import re
 import shutil
 import sys
 import threading
+from collections import deque
 import time
 import subprocess
 import pty
@@ -73,6 +74,7 @@ class TaskModel(BaseModel):
     finished_at: Optional[datetime] = None
     movie_count: Optional[int] = None
     message: Optional[str] = None
+    config_path: Optional[str] = None  # 每个任务独立的配置文件，避免被后续任务覆盖
 
 
 class TaskLogResponse(BaseModel):
@@ -125,6 +127,9 @@ _task_logs: Dict[str, List[str]] = {}
 _task_streams: Dict[str, str] = {}
 _task_lock = threading.Lock()
 _task_procs: Dict[str, subprocess.Popen] = {}
+_pending_queue: deque[str] = deque()
+_worker_thread: threading.Thread | None = None
+_worker_lock = threading.Lock()
 _history: List[HistoryItem] = []
 _history_lock = threading.Lock()
 _history_id_seq = 0
@@ -136,6 +141,80 @@ _TASK_LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ANSI 转义序列（颜色、光标控制等），用于清理子进程输出中的控制码，便于后续基于文本做匹配
 _ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+_task_cancel_flags: set[str] = set()
+
+
+class TaskCancelled(Exception):
+    """任务被用户取消（排队阶段）"""
+    pass
+
+
+def _clean_log_line(line: str) -> str:
+    """移除 ANSI 控制码和多余的回车，返回净化后的日志行。"""
+    if not line:
+        return ""
+    cleaned = _ANSI_RE.sub("", line)
+    cleaned = cleaned.replace("\r", "")
+    return cleaned.strip()
+
+
+def _start_worker():
+    """启动单个后台 worker，串行执行队列中的任务，避免 logger 串写。"""
+    global _worker_thread
+    with _worker_lock:
+        if _worker_thread and _worker_thread.is_alive():
+            return
+        _worker_thread = threading.Thread(target=_task_worker, daemon=True)
+        _worker_thread.start()
+
+
+def _task_worker():
+    while True:
+        task_id = None
+        directory = None
+        with _task_lock:
+            if _pending_queue:
+                task_id = _pending_queue.popleft()
+                task = _tasks.get(task_id)
+                if task:
+                    directory = getattr(task, "input_directory", None)
+        if not task_id:
+            time.sleep(0.5)
+            continue
+
+        # 队列阶段被取消
+        with _task_lock:
+            if task_id in _task_cancel_flags:
+                task = _tasks.get(task_id)
+                if task:
+                    task.status = TaskStatus.failed
+                    task.finished_at = datetime.now(timezone.utc)
+                    task.message = "任务已在队列阶段被取消"
+                    _tasks[task_id] = task
+                buf = _task_logs.setdefault(task_id, [])
+                line = f"[队列] 任务 #{task_id} 已取消"
+                buf.append(line)
+                stream = _task_streams.get(task_id, "")
+                _task_streams[task_id] = stream + line + "\n"
+                _task_cancel_flags.discard(task_id)
+                continue
+
+        if not directory:
+            continue
+
+        # 串行执行实际任务
+        try:
+            _run_manual_task(task_id, directory)
+        except TaskCancelled:
+            continue
+        except Exception as e:  # noqa: BLE001
+            log = logging.getLogger(__name__)
+            log.exception("手动刮削任务 #%s 执行失败（worker）：%s", task_id, e)
+
+
+def _wait_in_queue(task_id: str) -> None:
+    """保留占位（兼容旧调用），实际调度由单 worker 负责。"""
+    return
 
 
 def set_winsize(fd: int, row: int, col: int, xpix: int = 0, ypix: int = 0) -> None:
@@ -227,7 +306,12 @@ def _load_task_logs() -> None:
                 # 读取日志文件
                 stream = log_file.read_text(encoding="utf-8")
                 # 按行分割并过滤空行
-                lines = [line.rstrip() for line in stream.splitlines() if line.strip()]
+                cleaned_lines = []
+                for line in stream.splitlines():
+                    cleaned = _clean_log_line(line)
+                    if cleaned:
+                        cleaned_lines.append(cleaned)
+                lines = cleaned_lines
                 with _task_lock:
                     _task_logs[task_id] = lines
                     _task_streams[task_id] = stream
@@ -370,6 +454,9 @@ def _run_manual_task(task_id: str, directory: str) -> None:
             task = _tasks.get(task_id)
             if not task:
                 return
+            # 排队期间如果被取消，直接退出
+            if task_id in _task_cancel_flags:
+                raise TaskCancelled()
             task.status = TaskStatus.running
             task.started_at = datetime.now(timezone.utc)
             _tasks[task_id] = task
@@ -382,9 +469,9 @@ def _run_manual_task(task_id: str, directory: str) -> None:
             stream0 = _task_streams.get(task_id, "")
             _task_streams[task_id] = stream0 + line0 + "\n"
 
-        # 为当前任务构造配置文件路径（JSON），供子进程使用
-        # 手动刮削任务统一使用固定的配置文件名，便于作为“当前手动规则预设”复用
-        task_cfg_path = Path(resource_path("data/tasks/manual.json"))
+            # 为当前任务构造配置文件路径（JSON），供子进程使用
+            # 每个任务使用独立配置文件，避免被后续任务覆盖
+            task_cfg_path = Path(task.config_path) if getattr(task, "config_path", None) else Path(resource_path("data/tasks/manual.json"))
 
         log = logging.getLogger(__name__)
         log.info("启动 JavSP 子进程执行手动刮削任务 #%s，配置文件：%s", task_id, task_cfg_path)
@@ -689,9 +776,7 @@ def _run_manual_task(task_id: str, directory: str) -> None:
                                 if msg:
                                     with _task_lock:
                                         buf = _task_logs.setdefault(task_id, [])
-                                        # 如果是步骤消息，先移除之前的步骤消息
-                                        if evt_kind == "step":
-                                            buf[:] = [line for line in buf if not line.startswith("[步骤")]
+                                        # 保留所有步骤日志，避免覆盖由运行流程输出的详细步骤信息
                                         buf.append(msg)
                                         if len(buf) > 2000:
                                             del buf[:-1000]
@@ -920,6 +1005,20 @@ def _run_manual_task(task_id: str, directory: str) -> None:
             except Exception:
                 log = logging.getLogger(__name__)
                 log.debug("兜底补写刮削历史失败", exc_info=True)
+    except TaskCancelled:
+        with _task_lock:
+            task = _tasks.get(task_id)
+            if task:
+                task.status = TaskStatus.failed
+                task.finished_at = datetime.now(timezone.utc)
+                task.message = "任务已在队列阶段被取消"
+                _tasks[task_id] = task
+            buf = _task_logs.setdefault(task_id, [])
+            line = f"[队列] 任务 #{task_id} 已取消"
+            buf.append(line)
+            stream = _task_streams.get(task_id, "")
+            _task_streams[task_id] = stream + line + "\n"
+        return
     except Exception as e:  # noqa: BLE001
         # 记录异常到任务日志
         log = logging.getLogger(__name__)
@@ -949,6 +1048,7 @@ def _run_manual_task(task_id: str, directory: str) -> None:
         # 任务结束时清理子进程记录
         with _task_lock:
             _task_procs.pop(task_id, None)
+            _task_cancel_flags.discard(task_id)
 
         # 恢复 main / javsp logger 的原有 handler / 配置
         for lg, level, propagate, handlers in logger_states:
@@ -969,6 +1069,24 @@ def cancel_task(task_id: str, user: UserInfo = Depends(get_current_user)) -> Dic
         task = _tasks.get(task_id)
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+        # 如果任务尚未开始（排队中），标记取消并返回
+        if task.status == TaskStatus.pending:
+            try:
+                _pending_queue.remove(task_id)
+            except ValueError:
+                pass
+            _task_cancel_flags.add(task_id)
+            task.status = TaskStatus.failed
+            task.finished_at = datetime.now(timezone.utc)
+            task.message = "任务已在队列阶段被取消"
+            _tasks[task_id] = task
+            buf = _task_logs.setdefault(task_id, [])
+            line = f"[队列] 收到取消请求，任务 #{task_id} 已从队列移除"
+            buf.append(line)
+            stream = _task_streams.get(task_id, "")
+            _task_streams[task_id] = stream + line + "\n"
+            return {"status": "cancelled"}
 
         proc = _task_procs.get(task_id)
         # 记录一条停止请求日志
@@ -1056,8 +1174,8 @@ def create_manual_task(
     scanner_cfg["manual"] = False
     merged["scanner"] = scanner_cfg
 
-    # 手动刮削统一使用固定文件名 manual.json，便于作为当前手动规则预设复用
-    task_cfg_path = Path(resource_path("data/tasks/manual.json"))
+    # 为本任务创建独立的配置文件，避免被后续任务覆盖
+    task_cfg_path = Path(resource_path(f"data/tasks/manual_{task_id}.json"))
     try:
         task_cfg_path.parent.mkdir(parents=True, exist_ok=True)
         task_cfg_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -1071,12 +1189,21 @@ def create_manual_task(
         input_directory=directory,
         profile=payload.profile or "default",
         created_at=datetime.now(timezone.utc),
+        config_path=str(task_cfg_path),
     )
     with _task_lock:
         _tasks[task_id] = task
+        _task_logs.setdefault(task_id, [])
+        _task_streams.setdefault(task_id, "")
+        # 入队并记录日志
+        _pending_queue.append(task_id)
+        buf = _task_logs.setdefault(task_id, [])
+        line = f"[队列] 任务 #{task_id} 已加入队列，等待执行"
+        buf.append(line)
+        stream0 = _task_streams.get(task_id, "")
+        _task_streams[task_id] = stream0 + line + "\n"
 
-    t = threading.Thread(target=_run_manual_task, args=(task_id, directory), daemon=True)
-    t.start()
+    _start_worker()
 
     return task
 
@@ -1393,8 +1520,13 @@ def get_task_logs(
                 log_file = _TASK_LOGS_DIR / f"task_{task_id}.log"
                 if log_file.exists():
                     stream = log_file.read_text(encoding="utf-8")
+                    cleaned_lines = []
+                    for line in stream.splitlines():
+                        cleaned = _clean_log_line(line)
+                        if cleaned:
+                            cleaned_lines.append(cleaned)
                     # 按行分割并过滤空行
-                    lines = [line.rstrip() for line in stream.splitlines() if line.strip()]
+                    lines = cleaned_lines
                     # 加载到内存以便后续访问
                     _task_logs[task_id] = lines
                     # 同时加载到stream缓存
@@ -1493,9 +1625,14 @@ def list_tasks(user: UserInfo = Depends(get_current_user)) -> List[TaskModel]:  
                         status = TaskStatus.succeeded
                         input_directory = ""
                         try:
-                            log_content = log_file.read_text(encoding="utf-8")
-                            if "失败" in log_content or "error" in log_content.lower():
+                            raw_log_content = log_file.read_text(encoding="utf-8")
+                            log_content = _clean_log_line(raw_log_content)
+                            fail_marker = f"手动刮削任务 #{task_id} 失败"
+                            success_marker = f"手动刮削任务 #{task_id} 完成"
+                            if fail_marker in log_content:
                                 status = TaskStatus.failed
+                            elif success_marker in log_content:
+                                status = TaskStatus.succeeded
                             # 尝试从日志中提取输入目录
                             m = re.search(r"任务 #.*? 已启动，目录[：:]\s*(.+)", log_content)
                             if m:
