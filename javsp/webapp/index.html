@@ -376,6 +376,27 @@
               <span id="manual-log-status">尚未创建任务</span>
             </div>
           </div>
+          <!-- 任务日志筛选控件 -->
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+            <div style="display:flex;gap:6px;align-items:center;">
+              <label style="font-size:12px;color:#9ca3af;">状态:</label>
+              <select id="manual-log-filter-status" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;">
+                <option value="">全部</option>
+                <option value="PENDING">队列中</option>
+                <option value="RUNNING">进行中</option>
+                <option value="SUCCEEDED">完成</option>
+                <option value="FAILED">失败</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <label style="font-size:12px;color:#9ca3af;">路径:</label>
+              <select id="manual-log-filter-path" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:200px;">
+                <option value="">全部路径</option>
+              </select>
+            </div>
+            <button class="ghost-btn" id="manual-log-filter-apply" style="font-size:11px;">应用筛选</button>
+            <button class="ghost-btn" id="manual-log-filter-clear" style="font-size:11px;">清除</button>
+          </div>
           <div id="manual-progress" style="font-size:11px;color:#9ca3af;margin:2px 0 4px;display:none;">
             <div id="manual-progress-movie"></div>
             <div id="manual-progress-step"></div>
@@ -929,20 +950,16 @@
         <!-- 筛选和分页控件 -->
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
           <div style="display:flex;gap:6px;align-items:center;">
-            <label style="font-size:12px;color:#9ca3af;">状态:</label>
-            <select id="history-filter-status" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;">
-              <option value="">全部</option>
-              <option value="success">成功</option>
-              <option value="failed">失败</option>
+            <label style="font-size:12px;color:#9ca3af;">路径:</label>
+            <select id="history-filter-path" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:200px;">
+              <option value="">全部路径</option>
             </select>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
-            <label style="font-size:12px;color:#9ca3af;">路径:</label>
-            <input type="text" id="history-filter-path" placeholder="包含路径" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:200px;" />
-          </div>
-          <div style="display:flex;gap:6px;align-items:center;">
             <label style="font-size:12px;color:#9ca3af;">规则:</label>
-            <input type="text" id="history-filter-profile" placeholder="使用规则" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:150px;" />
+            <select id="history-filter-profile" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:150px;">
+              <option value="">全部规则</option>
+            </select>
           </div>
           <button class="ghost-btn" id="history-filter-apply" style="font-size:11px;">应用筛选</button>
           <button class="ghost-btn" id="history-filter-clear" style="font-size:11px;">清除</button>
@@ -2049,9 +2066,14 @@
       let historyAllItems = [];
       let historyFilteredItems = [];
       let historyFilters = {
-        status: '',
         path: '',
         profile: ''
+      };
+      
+      // 任务日志筛选状态
+      let manualLogFilters = {
+        status: '',
+        path: ''
       };
       
       async function loadHistory() {
@@ -2082,32 +2104,48 @@
         const historyPlaceholder = document.getElementById('history-placeholder');
         if (!historyContainer) return;
         
+        // 更新路径下拉框选项
+        const pathSelect = document.getElementById('history-filter-path');
+        if (pathSelect) {
+          const currentValue = pathSelect.value;
+          const uniquePaths = new Set();
+          historyAllItems.forEach(item => {
+            if (item.save_dir) {
+              uniquePaths.add(item.save_dir);
+            }
+            if (item.source_files && Array.isArray(item.source_files)) {
+              item.source_files.forEach(file => {
+                if (file) {
+                  // 提取目录路径
+                  const dirPath = file.substring(0, file.lastIndexOf('/') || file.lastIndexOf('\\'));
+                  if (dirPath) uniquePaths.add(dirPath);
+                }
+              });
+            }
+          });
+          const sortedPaths = Array.from(uniquePaths).sort();
+          pathSelect.innerHTML = '<option value="">全部路径</option>' + sortedPaths.map(path => 
+            `<option value="${path.replace(/"/g, '&quot;')}">${path}</option>`
+          ).join('');
+          if (currentValue) pathSelect.value = currentValue;
+        }
+        
         // 应用筛选
         historyFilteredItems = historyAllItems.filter(item => {
-          // 状态筛选
-          if (historyFilters.status) {
-            if (historyFilters.status === 'success') {
-              // 成功：有保存目录且不为空
-              if (!item.save_dir || !item.save_dir.trim()) return false;
-            } else if (historyFilters.status === 'failed') {
-              // 失败：没有保存目录或为空
-              if (item.save_dir && item.save_dir.trim()) return false;
-            }
-          }
-          
-          // 路径筛选
+          // 路径筛选（精确匹配）
           if (historyFilters.path) {
-            const pathLower = historyFilters.path.toLowerCase();
-            const saveDir = (item.save_dir || '').toLowerCase();
-            const sourceFiles = (item.source_files || []).join(' ').toLowerCase();
-            if (!saveDir.includes(pathLower) && !sourceFiles.includes(pathLower)) {
-              return false;
-            }
+            const saveDir = item.save_dir || '';
+            const sourceFiles = item.source_files || [];
+            const matchesPath = saveDir === historyFilters.path || 
+              sourceFiles.some(file => {
+                const dirPath = file.substring(0, file.lastIndexOf('/') || file.lastIndexOf('\\'));
+                return dirPath === historyFilters.path;
+              });
+            if (!matchesPath) return false;
           }
           
           // 规则筛选（从task_id中提取，或使用profile字段）
           if (historyFilters.profile) {
-            const profileLower = historyFilters.profile.toLowerCase();
             // 目前历史记录中没有profile字段，可以从task_id或其他字段推断
             // 暂时跳过此筛选，或根据实际需求实现
           }
@@ -2522,8 +2560,7 @@
         });
       }
       
-      // 筛选功能
-      const historyFilterStatus = document.getElementById('history-filter-status');
+      // 历史记录筛选功能
       const historyFilterPath = document.getElementById('history-filter-path');
       const historyFilterProfile = document.getElementById('history-filter-profile');
       const historyFilterApply = document.getElementById('history-filter-apply');
@@ -2531,36 +2568,255 @@
       
       if (historyFilterApply) {
         historyFilterApply.addEventListener('click', () => {
-          historyFilters.status = historyFilterStatus ? historyFilterStatus.value : '';
-          historyFilters.path = historyFilterPath ? historyFilterPath.value.trim() : '';
-          historyFilters.profile = historyFilterProfile ? historyFilterProfile.value.trim() : '';
+          historyFilters.path = historyFilterPath ? historyFilterPath.value : '';
+          historyFilters.profile = historyFilterProfile ? historyFilterProfile.value : '';
           applyHistoryFilters();
         });
       }
       
       if (historyFilterClear) {
         historyFilterClear.addEventListener('click', () => {
-          if (historyFilterStatus) historyFilterStatus.value = '';
           if (historyFilterPath) historyFilterPath.value = '';
           if (historyFilterProfile) historyFilterProfile.value = '';
-          historyFilters = { status: '', path: '', profile: '' };
+          historyFilters = { path: '', profile: '' };
           applyHistoryFilters();
         });
       }
       
-      // 支持回车键应用筛选
-      if (historyFilterPath) {
-        historyFilterPath.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter' && historyFilterApply) {
-            historyFilterApply.click();
+      // 任务日志筛选功能
+      const manualLogFilterStatus = document.getElementById('manual-log-filter-status');
+      const manualLogFilterPath = document.getElementById('manual-log-filter-path');
+      const manualLogFilterApply = document.getElementById('manual-log-filter-apply');
+      const manualLogFilterClear = document.getElementById('manual-log-filter-clear');
+      
+      // 更新任务日志路径下拉框
+      function updateManualLogPathFilter() {
+        if (!manualLogFilterPath) return;
+        const currentValue = manualLogFilterPath.value;
+        const uniquePaths = new Set();
+        allTaskLogs.forEach((taskData, taskId) => {
+          const decodedPath = (() => {
+            try {
+              const parts = String(taskId).split('_');
+              if (parts.length >= 2) {
+                let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
+                while (pathEncoded.length % 4 !== 0) {
+                  pathEncoded += '=';
+                }
+                return atob(pathEncoded);
+              }
+            } catch (e) {
+              return null;
+            }
+            return null;
+          })();
+          if (decodedPath) {
+            const dirPath = decodedPath.substring(0, decodedPath.lastIndexOf('/') || decodedPath.lastIndexOf('\\'));
+            if (dirPath) uniquePaths.add(dirPath);
+          }
+          if (taskData.inputPath) {
+            const dirPath = taskData.inputPath.substring(0, taskData.inputPath.lastIndexOf('/') || taskData.inputPath.lastIndexOf('\\'));
+            if (dirPath) uniquePaths.add(dirPath);
           }
         });
+        const sortedPaths = Array.from(uniquePaths).sort();
+        manualLogFilterPath.innerHTML = '<option value="">全部路径</option>' + sortedPaths.map(path => 
+          `<option value="${path.replace(/"/g, '&quot;')}">${path}</option>`
+        ).join('');
+        if (currentValue) manualLogFilterPath.value = currentValue;
       }
-      if (historyFilterProfile) {
-        historyFilterProfile.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter' && historyFilterApply) {
-            historyFilterApply.click();
+      
+      // 应用任务日志筛选并重新渲染
+      function applyManualLogFilters() {
+        if (!manualLogContainer) return;
+        updateManualLogPathFilter();
+        
+        // 获取所有任务并应用筛选
+        const allTasks = Array.from(allTaskLogs.entries());
+        const filteredTasks = allTasks.filter(([taskId, taskData]) => {
+          // 状态筛选
+          if (manualLogFilters.status) {
+            const status = taskData.status || 'RUNNING';
+            if (status !== manualLogFilters.status) return false;
           }
+          
+          // 路径筛选
+          if (manualLogFilters.path) {
+            const decodedPath = (() => {
+              try {
+                const parts = String(taskId).split('_');
+                if (parts.length >= 2) {
+                  let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
+                  while (pathEncoded.length % 4 !== 0) {
+                    pathEncoded += '=';
+                  }
+                  return atob(pathEncoded);
+                }
+              } catch (e) {
+                return null;
+              }
+              return null;
+            })();
+            const taskPath = decodedPath || taskData.inputPath || '';
+            const dirPath = taskPath.substring(0, Math.max(taskPath.lastIndexOf('/'), taskPath.lastIndexOf('\\')));
+            if (dirPath !== manualLogFilters.path) return false;
+          }
+          
+          return true;
+        });
+        
+        // 重新渲染任务日志（调用现有的渲染逻辑）
+        if (manualLogContainer) {
+          const html = [];
+          const sortedTasks = filteredTasks.sort((a, b) => {
+            const timeA = a[0].split('_').slice(1).join('_');
+            const timeB = b[0].split('_').slice(1).join('_');
+            return timeB.localeCompare(timeA);
+          });
+          
+          // 解码base64路径的函数
+          const decodeTaskPath = (taskId) => {
+            try {
+              const parts = String(taskId).split('_');
+              if (parts.length >= 2) {
+                let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
+                while (pathEncoded.length % 4 !== 0) {
+                  pathEncoded += '=';
+                }
+                return atob(pathEncoded);
+              }
+            } catch (e) {
+              console.warn('解码任务路径失败:', e);
+            }
+            return null;
+          };
+          
+          sortedTasks.forEach(([taskId, taskData]) => {
+            const decodedPath = decodeTaskPath(taskId);
+            const displayPath = decodedPath || taskData.inputPath || '';
+            const parts = String(taskId).split('_');
+            let taskTimeFormatted = '';
+            if (parts.length >= 3) {
+              const datePart = parts[1];
+              const timePart = parts[2];
+              taskTimeFormatted = `${datePart} ${timePart}`;
+            }
+            const status = taskData.status || 'RUNNING';
+            const statusColor = status === 'SUCCEEDED' ? '#22c55e' : status === 'FAILED' ? '#ef4444' : status === 'PENDING' ? '#f59e0b' : '#3b82f6';
+            const statusText = status === 'SUCCEEDED' ? '完成' : status === 'FAILED' ? '失败' : status === 'PENDING' ? '队列中' : '进行中';
+            const isTaskExpanded = expandedTasks.has(String(taskId));
+            const safeTaskId = String(taskId).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            
+            let stepsHtml = '';
+            if (taskData.steps && taskData.steps.length > 0) {
+              const stepsList = taskData.steps.map((step, idx) => {
+                const stepNum = idx + 1;
+                return `步骤${stepNum}: ${step.desc || ''}`;
+              }).join(', ');
+              stepsHtml = `<div style="font-size:10px;color:#9ca3af;margin-top:4px;">${stepsList}</div>`;
+            }
+            
+            const showCancel = status !== 'SUCCEEDED' && status !== 'FAILED';
+            html.push(`
+              <div class="log-task-group" data-task-id="${safeTaskId}" style="border:1px solid #1f2937;border-radius:8px;margin-bottom:8px;overflow:hidden;background:#020617;">
+                <div class="log-task-header" style="padding:10px 12px;background:#111827;display:flex;justify-content:space-between;align-items:center;">
+                  <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;" onclick="toggleTaskLog('${safeTaskId}')">
+                    <span class="task-arrow-${safeTaskId.replace(/[^a-zA-Z0-9]/g, '_')}" style="color:#9ca3af;font-size:12px;font-family:ui-monospace;">${isTaskExpanded ? '[-]' : '[+]'}</span>
+                    <span style="font-size:12px;font-weight:600;color:#e5e7eb;">任务 ${displayPath || taskId}</span>
+                    <span style="font-size:11px;color:${statusColor};">[${statusText}]</span>
+                    ${taskTimeFormatted ? `<span style="font-size:11px;color:#9ca3af;">时间：${taskTimeFormatted}</span>` : ''}
+                  </div>
+                  <div style="display:flex;gap:4px;">
+                    ${showCancel ? `<button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#f59e0b;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();cancelTask('${safeTaskId}')">取消</button>` : ''}
+                    <button class="copy-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#9ca3af;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();copyTaskLog('${safeTaskId}')">复制日志</button>
+                    <button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#ef4444;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();deleteTaskLog('${safeTaskId}')">删除日志</button>
+                  </div>
+                </div>
+                <div class="log-task-body" id="task-log-${safeTaskId.replace(/[^a-zA-Z0-9]/g, '_')}" style="display:${isTaskExpanded ? 'block' : 'none'};padding:8px 12px;">
+                  ${taskData.movies && taskData.movies.size > 0 ? Array.from(taskData.movies.entries()).map(([movieKey, movieData]) => {
+                    const movieId = String(movieKey).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    const safeKey = String(movieKey).replace(/[^a-zA-Z0-9]/g, '_');
+                    const hasErrors = movieData.errors && movieData.errors.length > 0;
+                    
+                    const stepNames = ['启动并发任务', '汇总数据', '生成文件名', '下载封面图片', '下载剧照', '写入NFO', '移动影片文件'];
+                    let stepsHtml = '';
+                    stepNames.forEach((stepName, idx) => {
+                      const stepIndex = idx + 1;
+                      const stepKey = taskId + '-' + safeKey + '-' + stepIndex;
+                      const isStepExpanded = expandedSteps.has(stepKey);
+                      const stepData = movieData.steps && movieData.steps.get(stepIndex);
+                      const stepLogs = stepData ? stepData.logs : [];
+                      
+                      stepsHtml += '<div style="margin-left:20px;margin-bottom:4px;">' +
+                        '<div style="padding:6px 8px;background:#111827;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="toggleStepLog(\'' + stepKey + '\')">' +
+                        '<span class="step-arrow-' + stepKey + '" style="color:#9ca3af;font-size:11px;font-family:ui-monospace;">' + (isStepExpanded ? '[-]' : '[+]') + '</span>' +
+                        '<span style="font-size:11px;color:#e5e7eb;">[步骤 ' + stepIndex + '/7] ' + stepName + '</span>' +
+                        '</div>' +
+                        '<div class="step-body" id="step-log-' + stepKey + '" style="display:' + (isStepExpanded ? 'block' : 'none') + ';margin-left:20px;padding:6px 8px;background:#020617;">' +
+                        '<div style="font-size:10px;color:#e5e7eb;font-family:ui-monospace,monospace;line-height:1.4;white-space:pre-wrap;word-break:break-all;overflow-wrap:break-word;">' +
+                        (stepLogs.length > 0 ? stepLogs.map(log => String(log).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('\n') : '无日志') +
+                        '</div>' +
+                        '</div>' +
+                        '</div>';
+                    });
+                    
+                    let saveDirHtml = '';
+                    if (movieData.saveDir) {
+                      saveDirHtml = '<div style="margin-left:20px;margin-top:8px;padding:6px 8px;background:#111827;font-size:11px;color:#9ca3af;">整理完成，相关文件已保存到: ' + movieData.saveDir.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+                    }
+                    
+                    let errorHtml = '';
+                    if (hasErrors) {
+                      errorHtml = '<div style="margin-left:20px;margin-top:8px;">' +
+                        '<div style="padding:6px 8px;background:#111827;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="toggleErrorLog(\'' + taskId + '-' + safeKey + '\')">' +
+                        '<span class="error-arrow-' + taskId + '-' + safeKey + '" style="color:#ef4444;font-size:11px;font-family:ui-monospace;">[+]</span>' +
+                        '<span style="font-size:11px;color:#ef4444;">错误日志</span>' +
+                        '</div>' +
+                        '<div class="error-body" id="error-log-' + taskId + '-' + safeKey + '" style="display:none;margin-left:20px;padding:6px 8px;background:#020617;">' +
+                        '<div style="font-size:10px;color:#ef4444;font-family:ui-monospace,monospace;line-height:1.4;white-space:pre-wrap;word-break:break-all;overflow-wrap:break-word;">' +
+                        movieData.errors.map(err => String(err).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('\n') +
+                        '</div>' +
+                        '</div>' +
+                        '</div>';
+                    }
+                    
+                    return '<div style="margin-left:20px;margin-bottom:8px;padding:8px;background:#111827;border-radius:6px;">' +
+                      '<div style="font-size:11px;font-weight:600;color:#e5e7eb;margin-bottom:4px;">影片: ' + movieId + '</div>' +
+                      stepsHtml +
+                      saveDirHtml +
+                      errorHtml +
+                      '</div>';
+                  }).join('') : '<div style="font-size:11px;color:#9ca3af;padding:8px;">暂无影片数据</div>'}
+                </div>
+              </div>
+            `);
+          });
+          
+          // 应用筛选后再渲染
+        if (manualLogFilters.status || manualLogFilters.path) {
+          applyManualLogFilters();
+        } else {
+          manualLogContainer.innerHTML = html.join('');
+          // 更新路径筛选下拉框
+          updateManualLogPathFilter();
+        }
+        }
+      }
+      
+      if (manualLogFilterApply) {
+        manualLogFilterApply.addEventListener('click', () => {
+          manualLogFilters.status = manualLogFilterStatus ? manualLogFilterStatus.value : '';
+          manualLogFilters.path = manualLogFilterPath ? manualLogFilterPath.value : '';
+          applyManualLogFilters();
+        });
+      }
+      
+      if (manualLogFilterClear) {
+        manualLogFilterClear.addEventListener('click', () => {
+          if (manualLogFilterStatus) manualLogFilterStatus.value = '';
+          if (manualLogFilterPath) manualLogFilterPath.value = '';
+          manualLogFilters = { status: '', path: '' };
+          applyManualLogFilters();
         });
       }
       
@@ -4016,7 +4272,14 @@
           `);
         });
         
-        manualLogContainer.innerHTML = html.join('');
+        // 应用筛选后再渲染
+        if (manualLogFilters.status || manualLogFilters.path) {
+          applyManualLogFilters();
+        } else {
+          manualLogContainer.innerHTML = html.join('');
+          // 更新路径筛选下拉框
+          updateManualLogPathFilter();
+        }
         
         // 使用事件委托来处理步骤和错误日志的展开/收起
         // 只在第一次设置事件监听器
