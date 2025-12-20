@@ -697,7 +697,15 @@ def RunNormalMode(all_movies):
             # 提取使用的爬虫信息
             used_crawlers = all_info.pop('_used_crawlers', [])
             msg = f'为其配置的{len(Cfg().crawler.selection[movie.data_src])}个抓取器均未获取到影片信息'
-            check_step(all_info, msg)
+            try:
+                check_step(all_info, msg)
+            except Exception as e:
+                # 所有抓取器都失败时，记录错误并跳过该影片
+                logger.error(f"整理失败: {msg}")
+                step_log(f"整理失败: {msg}", step_index, total_step)
+                inner_bar.write(f"整理失败: {msg}")
+                inner_bar.close()
+                continue
 
             step_index += 1
             inner_bar.set_description('汇总数据')
@@ -707,7 +715,15 @@ def RunNormalMode(all_movies):
                 'desc': '汇总数据',
             })
             has_required_keys = info_summary(movie, all_info)
-            check_step(has_required_keys)
+            try:
+                check_step(has_required_keys)
+            except Exception as e:
+                # 汇总数据失败时，记录错误并跳过该影片
+                logger.error(f"汇总数据失败: 缺少必需字段")
+                step_log(f"汇总数据失败: 缺少必需字段", step_index, total_step)
+                inner_bar.write(f"汇总数据失败: 缺少必需字段")
+                inner_bar.close()
+                continue
             # 汇总结果输出，便于前端展示
             try:
                 summary_parts = []

@@ -1629,14 +1629,37 @@ def list_tasks(user: UserInfo = Depends(get_current_user)) -> List[TaskModel]:  
                             log_content = _clean_log_line(raw_log_content)
                             fail_marker = f"手动刮削任务 #{task_id} 失败"
                             success_marker = f"手动刮削任务 #{task_id} 完成"
+                            queue_marker = f"任务 #{task_id} 已加入队列"
                             if fail_marker in log_content:
                                 status = TaskStatus.failed
                             elif success_marker in log_content:
                                 status = TaskStatus.succeeded
+                            elif queue_marker in log_content:
+                                # 如果日志中有队列标记但没有完成/失败标记，说明任务还在队列中
+                                # 检查任务是否在队列中
+                                if task_id in _pending_queue:
+                                    status = TaskStatus.pending
+                                else:
+                                    # 不在队列中但也没有完成标记，可能是服务重启导致队列丢失
+                                    # 标记为失败，避免显示为成功
+                                    status = TaskStatus.failed
                             # 尝试从日志中提取输入目录
                             m = re.search(r"任务 #.*? 已启动，目录[：:]\s*(.+)", log_content)
                             if m:
                                 input_directory = m.group(1).strip()
+                            # 如果日志中有"已加入队列"但没有"已启动"，尝试从任务ID中解码路径
+                            if not input_directory and queue_marker in log_content and "已启动" not in log_content:
+                                try:
+                                    parts = task_id.split('_')
+                                    if parts:
+                                        path_encoded = parts[0].replace('_', '/').replace('-', '+')
+                                        while len(path_encoded) % 4 != 0:
+                                            path_encoded += '='
+                                        input_directory = base64.urlsafe_b64decode(path_encoded).decode('utf-8')
+                                except Exception:
+                                    pass
+                                if task_id in _pending_queue:
+                                    status = TaskStatus.pending
                         except OSError:
                             pass
                         

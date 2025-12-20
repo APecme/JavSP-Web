@@ -143,8 +143,7 @@
 
     @media (max-width: 800px) {
       .layout { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
-      .sidebar { position: fixed; top: 0; left: -100%; width: 220px; height: 100vh; z-index: 1000; transition: left 0.3s ease; flex-direction: column; overflow-y: auto; }
-      .sidebar.open { left: 0; }
+      .sidebar { display: none; }
       .content { padding: 12px; width: 100%; }
       .content-header { flex-direction: column; align-items: flex-start; gap: 8px; }
       .bottom { display: flex; }
@@ -165,6 +164,37 @@
       .log-task-group { margin-bottom: 6px; }
       .log-task-header { padding: 8px 10px; flex-wrap: wrap; gap: 4px; }
       .log-task-body { padding: 6px 10px; }
+      /* 移动端筛选控件 */
+      #history-filter-status, #history-filter-path, #history-filter-profile {
+        font-size: 11px;
+        padding: 4px 6px;
+      }
+      #history-pagination {
+        font-size: 11px;
+      }
+    }
+    
+    /* 移动端顶部抽屉 */
+    .mobile-drawer {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #020617;
+      border-bottom: 1px solid #1f2937;
+      z-index: 1001;
+      max-height: 80vh;
+      overflow-y: auto;
+      transform: translateY(-100%);
+      transition: transform 0.3s ease;
+    }
+    .mobile-drawer.open {
+      transform: translateY(0);
+    }
+    @media (max-width: 800px) {
+      .mobile-drawer { display: block; }
+      .content { margin-top: 0; }
     }
     
     /* 移动端菜单按钮 */
@@ -173,7 +203,7 @@
       position: fixed;
       top: 12px;
       left: 12px;
-      z-index: 1001;
+      z-index: 1002;
       border-radius: 8px;
       border: 1px solid #374151;
       padding: 8px;
@@ -184,7 +214,7 @@
     }
     @media (max-width: 800px) {
       .mobile-menu-btn { display: block; }
-      .content { margin-top: 48px; }
+      .content { padding-top: 60px; }
     }
     
     /* 移动端遮罩层 */
@@ -196,16 +226,68 @@
       right: 0;
       bottom: 0;
       background: rgba(0, 0, 0, 0.5);
-      z-index: 999;
+      z-index: 1000;
     }
     @media (max-width: 800px) {
       .mobile-overlay.show { display: block; }
     }
+    
+    /* 分页样式 */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .pagination-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .pagination-btn:hover:not(:disabled) {
+      background: #111827;
+    }
+    .pagination-info {
+      font-size: 12px;
+      color: #9ca3af;
+    }
   </style>
 </head>
 <body>
-  <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
-  <div class="mobile-overlay" id="mobile-overlay" onclick="toggleMobileMenu()"></div>
+  <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileDrawer()">☰</button>
+  <div class="mobile-overlay" id="mobile-overlay" onclick="toggleMobileDrawer()"></div>
+  <div class="mobile-drawer" id="mobile-drawer">
+    <div style="padding: 16px 14px;">
+      <div class="brand" style="margin-bottom: 16px;">JavSP-web</div>
+      <div class="version" id="mobile-version" style="font-size: 11px; color: #6b7280; margin-bottom: 16px;">版本加载中...</div>
+      <div class="nav-section-title">任务</div>
+      <div class="nav">
+        <button class="nav-btn" data-view="manual" onclick="toggleMobileDrawer();switchView('manual')">手动刮削</button>
+        <button class="nav-btn" data-view="watch" onclick="toggleMobileDrawer();switchView('watch')">监控刮削</button>
+        <button class="nav-btn" data-view="schedule" onclick="toggleMobileDrawer();switchView('schedule')">定时刮削</button>
+      </div>
+      <div class="nav-section-title" style="margin-top: 16px;">系统</div>
+      <div class="nav">
+        <button class="nav-btn" data-view="rules" onclick="toggleMobileDrawer();switchView('rules')">全局规则</button>
+        <button class="nav-btn" data-view="history" onclick="toggleMobileDrawer();switchView('history')">刮削历史</button>
+        <button class="nav-btn" data-view="cookiecloud" onclick="toggleMobileDrawer();switchView('cookiecloud')">CookieCloud</button>
+        <button class="nav-btn" data-view="account" onclick="toggleMobileDrawer();switchView('account')">账号与安全</button>
+      </div>
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #1f2937;">
+        <button class="logout-btn" id="mobile-logout-btn" style="width: 100%;">退出登录</button>
+      </div>
+    </div>
+  </div>
   <div class="layout">
     <aside class="sidebar" id="sidebar">
       <div>
@@ -844,10 +926,37 @@
           </div>
         </div>
         <div class="panel-desc">按整理完成的影片文件展示历史记录。</div>
+        <!-- 筛选和分页控件 -->
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <label style="font-size:12px;color:#9ca3af;">状态:</label>
+            <select id="history-filter-status" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;">
+              <option value="">全部</option>
+              <option value="success">成功</option>
+              <option value="failed">失败</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <label style="font-size:12px;color:#9ca3af;">路径:</label>
+            <input type="text" id="history-filter-path" placeholder="包含路径" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:200px;" />
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <label style="font-size:12px;color:#9ca3af;">规则:</label>
+            <input type="text" id="history-filter-profile" placeholder="使用规则" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:150px;" />
+          </div>
+          <button class="ghost-btn" id="history-filter-apply" style="font-size:11px;">应用筛选</button>
+          <button class="ghost-btn" id="history-filter-clear" style="font-size:11px;">清除</button>
+        </div>
         <div id="history-container" style="display:flex;flex-direction:column;gap:12px;">
           <div class="placeholder" id="history-placeholder">暂无记录</div>
         </div>
         <div id="history-gallery" style="display:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-top:16px;">
+        </div>
+        <!-- 分页控件 -->
+        <div id="history-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px;flex-wrap:wrap;">
+          <button class="ghost-btn" id="history-prev-page" style="font-size:11px;" disabled>上一页</button>
+          <span id="history-page-info" style="font-size:12px;color:#9ca3af;">第 1 页，共 1 页</span>
+          <button class="ghost-btn" id="history-next-page" style="font-size:11px;" disabled>下一页</button>
         </div>
       </section>
       
@@ -1934,6 +2043,17 @@
         return String(taskId);
       }
       
+      // 历史记录分页和筛选状态
+      let historyPage = 1;
+      let historyPageSize = 11;
+      let historyAllItems = [];
+      let historyFilteredItems = [];
+      let historyFilters = {
+        status: '',
+        path: '',
+        profile: ''
+      };
+      
       async function loadHistory() {
         const historyContainer = document.getElementById('history-container');
         const historyPlaceholder = document.getElementById('history-placeholder');
@@ -1942,20 +2062,98 @@
           historyPlaceholder.textContent = '正在加载...';
         }
         try {
-          const items = await fetchJSON('/api/tasks/history?limit=100');
-          if (!items || items.length === 0) {
-            if (historyPlaceholder) {
-              historyPlaceholder.textContent = '暂无记录';
-              historyPlaceholder.style.display = 'block';
-            }
-            historyContainer.innerHTML = '';
-            return;
-          }
+          // 加载所有历史记录（不限制数量，用于前端筛选和分页）
+          const items = await fetchJSON('/api/tasks/history?limit=10000');
+          historyAllItems = items || [];
+          applyHistoryFilters();
+        } catch (err) {
+          console.error('加载历史记录失败:', err);
           if (historyPlaceholder) {
-            historyPlaceholder.style.display = 'none';
+            historyPlaceholder.textContent = '加载失败，请稍后重试';
+            historyPlaceholder.style.display = 'block';
+          }
+          historyContainer.innerHTML = '';
+          return;
+        }
+      }
+      
+      function applyHistoryFilters() {
+        const historyContainer = document.getElementById('history-container');
+        const historyPlaceholder = document.getElementById('history-placeholder');
+        if (!historyContainer) return;
+        
+        // 应用筛选
+        historyFilteredItems = historyAllItems.filter(item => {
+          // 状态筛选
+          if (historyFilters.status) {
+            if (historyFilters.status === 'success') {
+              // 成功：有保存目录且不为空
+              if (!item.save_dir || !item.save_dir.trim()) return false;
+            } else if (historyFilters.status === 'failed') {
+              // 失败：没有保存目录或为空
+              if (item.save_dir && item.save_dir.trim()) return false;
+            }
           }
           
-          const cards = await Promise.all(items.map(async (item, index) => {
+          // 路径筛选
+          if (historyFilters.path) {
+            const pathLower = historyFilters.path.toLowerCase();
+            const saveDir = (item.save_dir || '').toLowerCase();
+            const sourceFiles = (item.source_files || []).join(' ').toLowerCase();
+            if (!saveDir.includes(pathLower) && !sourceFiles.includes(pathLower)) {
+              return false;
+            }
+          }
+          
+          // 规则筛选（从task_id中提取，或使用profile字段）
+          if (historyFilters.profile) {
+            const profileLower = historyFilters.profile.toLowerCase();
+            // 目前历史记录中没有profile字段，可以从task_id或其他字段推断
+            // 暂时跳过此筛选，或根据实际需求实现
+          }
+          
+          return true;
+        });
+        
+        // 排序
+        historyFilteredItems.sort((a, b) => {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return timeB - timeA;
+        });
+        
+        // 重置到第一页
+        historyPage = 1;
+        renderHistoryPage();
+      }
+      
+      function renderHistoryPage() {
+        const historyContainer = document.getElementById('history-container');
+        const historyPlaceholder = document.getElementById('history-placeholder');
+        if (!historyContainer) return;
+        
+        if (!historyFilteredItems || historyFilteredItems.length === 0) {
+          if (historyPlaceholder) {
+            historyPlaceholder.textContent = '暂无记录';
+            historyPlaceholder.style.display = 'block';
+          }
+          historyContainer.innerHTML = '';
+          updateHistoryPagination();
+          return;
+        }
+        
+        if (historyPlaceholder) {
+          historyPlaceholder.style.display = 'none';
+        }
+        
+        // 计算分页
+        const totalPages = Math.ceil(historyFilteredItems.length / historyPageSize);
+        const startIndex = (historyPage - 1) * historyPageSize;
+        const endIndex = startIndex + historyPageSize;
+        const pageItems = historyFilteredItems.slice(startIndex, endIndex);
+        
+        // 渲染当前页
+        const cards = await Promise.all(pageItems.map(async (item, index) => {
             const created = item.created_at ? new Date(item.created_at) : null;
             const timeText = created ? created.toLocaleString() : '-';
             // 格式化任务ID（新格式：pathhash_YYYYMMDD_HHMMSS）
@@ -2165,7 +2363,7 @@
             // 封面墙模式
             historyContainer.style.display = 'none';
             historyGallery.style.display = 'grid';
-            const galleryItems = items.map((item) => {
+            const galleryItems = pageItems.map((item) => {
               // 封面图片路径
               let posterPath = null;
               if (item.poster_file) {
@@ -2267,17 +2465,102 @@
             historyContainer.style.display = 'flex';
             historyContainer.innerHTML = cards.join('');
           }
+          
+          // 更新分页控件
+          updateHistoryPagination();
         } catch (res) {
           if (res && res.status === 401) {
             window.location.href = '/login';
             return;
           }
-          historyPlaceholder.textContent = '加载历史失败，请稍后重试。';
-          historyPlaceholder.style.display = 'block';
+          if (historyPlaceholder) {
+            historyPlaceholder.textContent = '加载历史失败，请稍后重试。';
+            historyPlaceholder.style.display = 'block';
+          }
           historyContainer.innerHTML = '';
           const historyGallery = document.getElementById('history-gallery');
           if (historyGallery) historyGallery.innerHTML = '';
         }
+      }
+      
+      function updateHistoryPagination() {
+        const totalPages = Math.ceil(historyFilteredItems.length / historyPageSize);
+        const pageInfo = document.getElementById('history-page-info');
+        const prevBtn = document.getElementById('history-prev-page');
+        const nextBtn = document.getElementById('history-next-page');
+        
+        if (pageInfo) {
+          pageInfo.textContent = `第 ${historyPage} 页，共 ${totalPages || 1} 页（共 ${historyFilteredItems.length} 条）`;
+        }
+        if (prevBtn) {
+          prevBtn.disabled = historyPage <= 1;
+        }
+        if (nextBtn) {
+          nextBtn.disabled = historyPage >= totalPages || totalPages === 0;
+        }
+      }
+      
+      // 分页按钮事件
+      const historyPrevBtn = document.getElementById('history-prev-page');
+      const historyNextBtn = document.getElementById('history-next-page');
+      if (historyPrevBtn) {
+        historyPrevBtn.addEventListener('click', () => {
+          if (historyPage > 1) {
+            historyPage--;
+            renderHistoryPage();
+          }
+        });
+      }
+      if (historyNextBtn) {
+        historyNextBtn.addEventListener('click', () => {
+          const totalPages = Math.ceil(historyFilteredItems.length / historyPageSize);
+          if (historyPage < totalPages) {
+            historyPage++;
+            renderHistoryPage();
+          }
+        });
+      }
+      
+      // 筛选功能
+      const historyFilterStatus = document.getElementById('history-filter-status');
+      const historyFilterPath = document.getElementById('history-filter-path');
+      const historyFilterProfile = document.getElementById('history-filter-profile');
+      const historyFilterApply = document.getElementById('history-filter-apply');
+      const historyFilterClear = document.getElementById('history-filter-clear');
+      
+      if (historyFilterApply) {
+        historyFilterApply.addEventListener('click', () => {
+          historyFilters.status = historyFilterStatus ? historyFilterStatus.value : '';
+          historyFilters.path = historyFilterPath ? historyFilterPath.value.trim() : '';
+          historyFilters.profile = historyFilterProfile ? historyFilterProfile.value.trim() : '';
+          applyHistoryFilters();
+        });
+      }
+      
+      if (historyFilterClear) {
+        historyFilterClear.addEventListener('click', () => {
+          if (historyFilterStatus) historyFilterStatus.value = '';
+          if (historyFilterPath) historyFilterPath.value = '';
+          if (historyFilterProfile) historyFilterProfile.value = '';
+          historyFilters = { status: '', path: '', profile: '' };
+          applyHistoryFilters();
+        });
+      }
+      
+      // 支持回车键应用筛选
+      if (historyFilterPath) {
+        historyFilterPath.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' && historyFilterApply) {
+            historyFilterApply.click();
+          }
+        });
+      }
+      if (historyFilterProfile) {
+        historyFilterProfile.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' && historyFilterApply) {
+            historyFilterApply.click();
+          }
+        });
       }
       
       // 显示历史详情浮动框
@@ -2499,7 +2782,7 @@
         historyViewToggle.addEventListener('click', function() {
           historyViewMode = historyViewMode === 'list' ? 'gallery' : 'list';
           historyViewToggle.textContent = historyViewMode === 'list' ? '封面墙' : '列表';
-          loadHistory();
+          renderHistoryPage();
         });
       }
       
@@ -5304,10 +5587,19 @@
           const tasks = await fetchJSON('/api/tasks');
           if (tasks && Array.isArray(tasks)) {
             // 查找最近的一个运行中的任务
-            const runningTask = tasks.find(t => t.status === 'RUNNING');
-            if (runningTask && runningTask.id) {
-              // 自动恢复该任务的日志流，保留之前的内容
-              startManualLogStreaming(runningTask.id, true);
+            // 加载运行中或队列中的任务
+            const activeTasks = tasks.filter(t => (t.status === 'RUNNING' || t.status === 'PENDING') && t.id);
+            for (const task of activeTasks) {
+              if (task.id && !allTaskLogs.has(task.id)) {
+                // 初始化任务日志结构
+                allTaskLogs.set(task.id, {
+                  inputPath: '',
+                  movies: new Map(),
+                  status: task.status || 'UNKNOWN'
+                });
+                // 自动恢复该任务的日志流，保留之前的内容
+                startManualLogStreaming(task.id, true);
+              }
             }
             
             // 加载已完成任务的日志（按任务ID倒序，最新的在前）
@@ -5336,16 +5628,36 @@
       initUser();
       initVersion();
       
-      // 移动端菜单切换
-      function toggleMobileMenu() {
-        const sidebar = document.getElementById('sidebar');
+      // 移动端顶部抽屉切换
+      function toggleMobileDrawer() {
+        const drawer = document.getElementById('mobile-drawer');
         const overlay = document.getElementById('mobile-overlay');
-        if (sidebar && overlay) {
-          sidebar.classList.toggle('open');
+        if (drawer && overlay) {
+          drawer.classList.toggle('open');
           overlay.classList.toggle('show');
         }
       }
-      window.toggleMobileMenu = toggleMobileMenu;
+      window.toggleMobileDrawer = toggleMobileDrawer;
+      
+      // 移动端版本号同步
+      const mobileVersion = document.getElementById('mobile-version');
+      if (mobileVersion) {
+        const versionEl = document.getElementById('version');
+        if (versionEl) {
+          mobileVersion.textContent = versionEl.textContent;
+        }
+      }
+      
+      // 移动端退出登录
+      const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
+      if (mobileLogoutBtn) {
+        mobileLogoutBtn.addEventListener('click', () => {
+          const logoutBtn = document.getElementById('logout-btn');
+          if (logoutBtn) {
+            logoutBtn.click();
+          }
+        });
+      }
     })();
   </script>
 </body>
