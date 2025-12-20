@@ -2153,7 +2153,8 @@
         const pageItems = historyFilteredItems.slice(startIndex, endIndex);
         
         // 渲染当前页
-        const cards = await Promise.all(pageItems.map(async (item, index) => {
+        try {
+          const cards = await Promise.all(pageItems.map(async (item, index) => {
             const created = item.created_at ? new Date(item.created_at) : null;
             const timeText = created ? created.toLocaleString() : '-';
             // 格式化任务ID（新格式：pathhash_YYYYMMDD_HHMMSS）
