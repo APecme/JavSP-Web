@@ -1773,3 +1773,56 @@ def browse_files(
     # 简单按类型 + 名称排序：目录在前，其次按名称字典序
     entries.sort(key=lambda x: (not x.is_dir, x.name.lower()))
     return entries
+
+
+@router.get("/fs/scan", response_model=Dict[str, Any])
+def scan_folder(
+    path: str = Query(..., description="要扫描的文件夹路径（容器内绝对路径）"),
+    user: UserInfo = Depends(get_current_user),  # noqa: ARG001
+) -> Dict[str, Any]:
+    """扫描指定文件夹下的所有符合条件的文件，应用扫描配置进行过滤。
+    
+    使用当前全局规则中的扫描配置（minimum_size, filename_extensions等）过滤文件。
+    返回符合条件的文件路径列表。
+    """
+    log = logging.getLogger(__name__)
+    
+    if not os.path.isabs(path):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="必须提供绝对路径。")
+    
+    try:
+        real = os.path.realpath(path)
+    except OSError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径无效。")
+    
+    # 仅允许访问 /video 映射卷内的内容
+    root_allowed = os.path.realpath("/video")
+    if not real.startswith(root_allowed):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="只能扫描 /video 目录下的内容。")
+    
+    if not os.path.isdir(real):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="目标不是有效目录。")
+    
+    try:
+        # 使用 scan_movies 扫描文件夹，它会应用所有扫描配置
+        movies = scan_movies(real)
+        
+        # 提取所有符合条件的文件路径
+        files = []
+        for movie in movies:
+            if hasattr(movie, 'files') and movie.files:
+                files.extend(movie.files)
+        
+        # 去重并排序
+        files = sorted(list(set(files)))
+        
+        log.info(f"扫描文件夹 {path}，找到 {len(files)} 个符合条件的文件")
+        
+        return {
+            "path": path,
+            "files": files,
+            "count": len(files)
+        }
+    except Exception as e:  # noqa: BLE001
+        log.exception(f"扫描文件夹 {path} 失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"扫描失败: {str(e)}")

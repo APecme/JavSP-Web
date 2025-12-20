@@ -142,17 +142,72 @@
     .log-body { margin: 0; max-height: 720px; overflow-y: auto; padding: 6px 8px; background: #020617; border-radius: 6px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; line-height: 1.4; }
 
     @media (max-width: 800px) {
-      .layout { grid-template-columns: 1fr; height: auto; }
-      .sidebar { position: static; height: auto; flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; }
-      .content { height: auto; overflow: visible; }
-      .bottom { display: none; }
+      .layout { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+      .sidebar { position: fixed; top: 0; left: -100%; width: 220px; height: 100vh; z-index: 1000; transition: left 0.3s ease; flex-direction: column; overflow-y: auto; }
+      .sidebar.open { left: 0; }
+      .content { padding: 12px; width: 100%; }
+      .content-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .bottom { display: flex; }
       .grid-two { grid-template-columns: 1fr; }
+      .rules-layout { flex-direction: column; }
+      .rules-sidebar { width: 100%; }
+      .table { font-size: 11px; }
+      .table th, .table td { padding: 4px 6px; }
+      .panel { padding: 12px; }
+      .panel-title { font-size: 13px; }
+      .panel-desc { font-size: 11px; }
+      .field label { font-size: 11px; }
+      .field input, .field select, .field textarea { font-size: 12px; padding: 6px 8px; }
+      .primary-btn { font-size: 12px; padding: 6px 10px; }
+      .ghost-btn { font-size: 10px; padding: 2px 6px; }
+      .log-panel { padding: 8px; }
+      .log-body { font-size: 10px; max-height: 400px; }
+      .log-task-group { margin-bottom: 6px; }
+      .log-task-header { padding: 8px 10px; flex-wrap: wrap; gap: 4px; }
+      .log-task-body { padding: 6px 10px; }
+    }
+    
+    /* 移动端菜单按钮 */
+    .mobile-menu-btn {
+      display: none;
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 1001;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      padding: 8px;
+      background: #111827;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    @media (max-width: 800px) {
+      .mobile-menu-btn { display: block; }
+      .content { margin-top: 48px; }
+    }
+    
+    /* 移动端遮罩层 */
+    .mobile-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+    @media (max-width: 800px) {
+      .mobile-overlay.show { display: block; }
     }
   </style>
 </head>
 <body>
+  <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+  <div class="mobile-overlay" id="mobile-overlay" onclick="toggleMobileMenu()"></div>
   <div class="layout">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div>
         <div class="brand">JavSP-web</div>
         <div class="version" id="version">版本加载中...</div>
@@ -1390,8 +1445,48 @@
                 videodeSelected.delete(entry.path);
               }
             });
+            // 允许选择文件夹
             if (entry.is_dir) {
-              chk.disabled = true;
+              chk.addEventListener('change', async () => {
+                if (chk.checked) {
+                  // 扫描文件夹下的所有符合条件的文件
+                  try {
+                    if (videodeHint) {
+                      videodeHint.style.color = '#9ca3af';
+                      videodeHint.textContent = `正在扫描文件夹 ${entry.name}...`;
+                    }
+                    const scanResult = await fetchJSON('/api/tasks/fs/scan?path=' + encodeURIComponent(entry.path));
+                    const files = scanResult.files || [];
+                    files.forEach(filePath => {
+                      videodeSelected.add(filePath);
+                    });
+                    if (videodeHint) {
+                      videodeHint.style.color = '#22c55e';
+                      videodeHint.textContent = `文件夹 ${entry.name} 扫描完成，找到 ${files.length} 个符合条件的文件`;
+                    }
+                    // 更新复选框状态
+                    const rows = videodeTbody.querySelectorAll('tr');
+                    rows.forEach(tr => {
+                      const nameBtn = tr.querySelector('button.ghost-btn');
+                      if (nameBtn && nameBtn.textContent === entry.name) {
+                        const chk = tr.querySelector('input[type="checkbox"]');
+                        if (chk) chk.checked = true;
+                      }
+                    });
+                  } catch (err) {
+                    console.error('扫描文件夹失败:', err);
+                    if (videodeHint) {
+                      videodeHint.style.color = '#fca5a5';
+                      videodeHint.textContent = `扫描文件夹 ${entry.name} 失败: ${err.message || '未知错误'}`;
+                    }
+                    chk.checked = false;
+                  }
+                } else {
+                  // 取消选择文件夹时，移除该文件夹下的所有文件
+                  const filesToRemove = Array.from(videodeSelected).filter(path => path.startsWith(entry.path + '/'));
+                  filesToRemove.forEach(path => videodeSelected.delete(path));
+                }
+              });
             }
             tdChk.appendChild(chk);
 
@@ -5240,6 +5335,17 @@
       })();
       initUser();
       initVersion();
+      
+      // 移动端菜单切换
+      function toggleMobileMenu() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobile-overlay');
+        if (sidebar && overlay) {
+          sidebar.classList.toggle('open');
+          overlay.classList.toggle('show');
+        }
+      }
+      window.toggleMobileMenu = toggleMobileMenu;
     })();
   </script>
 </body>
