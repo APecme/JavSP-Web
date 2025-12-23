@@ -47,6 +47,28 @@ async def index_page() -> FileResponse:
     return FileResponse(ROOT_DIR / "index.html")
 
 
+# Provide a favicon to avoid 404 in browser console. Prefer project-level image if available.
+@app.get("/favicon.ico")
+async def favicon() -> FileResponse:
+    # image directory is two levels up from this package
+    try:
+        img_path = Path(__file__).resolve().parents[2] / "image" / "JavSP.ico"
+        if img_path.exists():
+            return FileResponse(img_path)
+    except Exception:
+        pass
+    # fallback: serve a static placeholder if present in webapp/static
+    try:
+        static_fav = ROOT_DIR / "static" / "favicon.ico"
+        if static_fav.exists():
+            return FileResponse(static_fav)
+    except Exception:
+        pass
+    # If not found, raise 404 so caller gets proper response
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="favicon not found")
+
+
 @app.get("/api/files")
 async def serve_file(
     path: str,

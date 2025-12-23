@@ -229,6 +229,8 @@ class Other(BaseConfig):
     check_update: bool
     auto_update: bool
     auto_exit: bool = True
+    # 每个被刮削失败的文件在任务级别可配置的重试次数（后台刮削会将该值写入此处）
+    file_retry_count: NonNegativeInt = 0
 
 def get_config_source():
     parser = ArgumentParser(prog='JavSP', description='汇总多站点数据的AV元数据刮削器', formatter_class=RawTextHelpFormatter)

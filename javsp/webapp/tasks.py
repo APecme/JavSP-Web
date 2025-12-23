@@ -38,6 +38,8 @@ def get_local_timezone():
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
+from croniter import croniter
+import math
 
 from javsp.__main__ import RunNormalMode, import_crawlers
 from javsp.config import Cfg
@@ -92,6 +94,7 @@ class HistoryItem(BaseModel):
     cid: Optional[str] = None
     save_dir: Optional[str] = None
     display_name: Optional[str] = None
+    profile: Optional[str] = None
     # 源文件列表（原始视频文件路径）
     source_files: Optional[List[str]] = None
     # 整理后的 basename（不含扩展名）
@@ -122,6 +125,19 @@ class FileEntry(BaseModel):
     size: Optional[int] = None
 
 
+class BackgroundTaskModel(BaseModel):
+    id: str
+    name: str
+    directories: List[str]
+    profile: Optional[str] = "default"
+    cron: str
+    retry_count: int = 0
+    enabled: bool = True
+    created_at: datetime
+    last_run: Optional[datetime] = None
+    next_run: Optional[datetime] = None
+
+
 _tasks: Dict[str, TaskModel] = {}
 _task_logs: Dict[str, List[str]] = {}
 _task_streams: Dict[str, str] = {}
@@ -133,6 +149,11 @@ _worker_lock = threading.Lock()
 _history: List[HistoryItem] = []
 _history_lock = threading.Lock()
 _history_id_seq = 0
+_background_tasks: Dict[str, Dict[str, Any]] = {}
+_background_lock = threading.Lock()
+_BG_TASKS_FILE = Path(resource_path("data/background_tasks.json"))
+_bg_scheduler_thread: threading.Thread | None = None
+_bg_scheduler_stop = threading.Event()
 # 历史记录文件落盘在 data/history.jsonl，下挂载到宿主机的 /app/data 目录，便于持久保存
 _HISTORY_FILE = Path(resource_path("data/history.jsonl"))
 # 任务日志文件目录，用于持久化任务日志
@@ -337,6 +358,7 @@ def _next_task_id(directory: str) -> str:
     # 替换可能不适合文件名的字符
     path_encoded = path_encoded.replace('/', '_').replace('+', '-')
     local_tz = get_local_timezone()
+    # 使用秒级时间戳，保持与旧版本一致（便于任务ID在文件名和展示中保持可读）
     timestamp = datetime.now(local_tz).strftime("%Y%m%d_%H%M%S")
     # 任务ID格式：路径编码_时间戳，例如：L3ZpZGVv_20251207_143022
     # 前端可以通过base64解码来显示原始路径
@@ -713,6 +735,15 @@ def _run_manual_task(task_id: str, directory: str) -> None:
                                         if not extrafanart_dir:
                                             extrafanart_dir = os.path.join(save_dir, "extrafanart")
 
+                                    # 尝试从当前任务获取使用的规则名（profile）
+                                    profile_name = None
+                                    try:
+                                        with _task_lock:
+                                            tsk = _tasks.get(task_id)
+                                            profile_name = getattr(tsk, "profile", None)
+                                    except Exception:
+                                        profile_name = None
+
                                     item = HistoryItem(
                                         id=hid,
                                         task_id=task_id,
@@ -737,6 +768,7 @@ def _run_manual_task(task_id: str, directory: str) -> None:
                                         fanart_download_failed_count=evt.get("fanart_download_failed_count", 0),
                                         fanart_download_results=evt.get("fanart_download_results"),
                                         used_crawlers=evt.get("used_crawlers"),
+                                        profile=profile_name,
                                     )
                                     _append_history_item(item)
                                     # 在任务日志中追加一条提示，便于确认"刮削历史"已记录
@@ -861,25 +893,55 @@ def _run_manual_task(task_id: str, directory: str) -> None:
         proc.wait()
         returncode = proc.returncode
 
+        # 基于日志内容进行失败检测（优先于 exit code），以捕获如"汇总数据失败"之类的业务失败情形
+        detected_failure = False
+        failure_reason = None
+        try:
+            with _task_lock:
+                buf_copy = list(_task_logs.get(task_id, []))
+            for ln in reversed(buf_copy):
+                if not ln:
+                    continue
+                if "汇总数据失败" in ln or "缺少必需字段" in ln:
+                    detected_failure = True
+                    failure_reason = "汇总数据失败"
+                    break
+                if "所有配置的" in ln and "未获取到影片信息" in ln:
+                    detected_failure = True
+                    failure_reason = "所有抓取器未获取到影片信息"
+                    break
+        except Exception:
+            detected_failure = False
+
         with _task_lock:
             task = _tasks.get(task_id)
             if not task:
                 return
-            if returncode == 0:
-                task.status = TaskStatus.succeeded
-                task.message = "ok"
-            else:
+            # 如果日志中检测到业务失败，则将任务标为 failed（优先）
+            if detected_failure:
                 task.status = TaskStatus.failed
-                task.message = f"javsp exited with code {returncode}"
+                task.message = failure_reason or "detected failure in logs"
+            else:
+                # 否则以子进程退出码判断
+                if returncode == 0:
+                    task.status = TaskStatus.succeeded
+                    task.message = "ok"
+                else:
+                    task.status = TaskStatus.failed
+                    task.message = f"javsp exited with code {returncode}"
             task.finished_at = datetime.now(timezone.utc)
             _tasks[task_id] = task
-            
-            # 持久化任务日志到文件
+
+            # 持久化任务日志到文件，并写入标准化结束标记，便于容器重启后准确恢复任务状态
             try:
+                result_marker = "[TASK_RESULT] SUCCEEDED" if task.status == TaskStatus.succeeded else "[TASK_RESULT] FAILED"
+                # 追加到内存日志与流缓存
+                buf = _task_logs.setdefault(task_id, [])
+                buf.append(result_marker)
+                stream = _task_streams.get(task_id, "") + result_marker + "\n"
+                _task_streams[task_id] = stream
                 log_file = _TASK_LOGS_DIR / f"task_{task_id}.log"
-                stream = _task_streams.get(task_id, "")
-                if stream:
-                    log_file.write_text(stream, encoding="utf-8")
+                log_file.write_text(stream, encoding="utf-8")
             except OSError:
                 pass  # 日志持久化失败不影响任务本身
 
@@ -971,6 +1033,15 @@ def _run_manual_task(task_id: str, directory: str) -> None:
                         # 读取配置失败时使用已提取的路径
                         pass
 
+                # 从任务记录中尝试获取 profile 信息
+                profile_name = None
+                try:
+                    with _task_lock:
+                        tsk = _tasks.get(task_id)
+                        profile_name = getattr(tsk, "profile", None)
+                except Exception:
+                    profile_name = None
+
                 item = HistoryItem(
                     id=hid,
                     task_id=task_id,
@@ -995,6 +1066,7 @@ def _run_manual_task(task_id: str, directory: str) -> None:
                     fanart_download_failed_count=0,
                     fanart_download_results=None,  # 补写时无法获取详细结果
                     used_crawlers=None,
+                    profile=profile_name,
                 )
                 _append_history_item(item)
                 with _task_lock:
@@ -1303,6 +1375,124 @@ def list_history(
         return []
 
 
+@router.get("/background", response_model=List[BackgroundTaskModel])
+def list_background_tasks(
+    user: UserInfo = Depends(get_current_user),  # noqa: ARG001
+) -> List[BackgroundTaskModel]:
+    with _background_lock:
+        items = []
+        for k, v in _background_tasks.items():
+            try:
+                model = BackgroundTaskModel(
+                    id=k,
+                    name=v.get("name", ""),
+                    directories=v.get("directories", []),
+                    profile=v.get("profile", "default"),
+                    cron=v.get("cron", "* * * * *"),
+                    retry_count=int(v.get("retry_count", 0) or 0),
+                    enabled=bool(v.get("enabled", True)),
+                    created_at=datetime.fromisoformat(v.get("created_at")) if v.get("created_at") else datetime.now(timezone.utc),
+                    last_run=datetime.fromisoformat(v.get("last_run")) if v.get("last_run") else None,
+                    next_run=datetime.fromisoformat(v.get("next_run")) if v.get("next_run") else None,
+                )
+                items.append(model)
+            except Exception:
+                continue
+        return items
+
+
+class BackgroundCreateRequest(BaseModel):
+    name: str
+    directories: List[str]
+    profile: Optional[str] = "default"
+    cron: str
+    retry_count: int = 0
+
+
+@router.post("/background", status_code=status.HTTP_201_CREATED)
+def create_background_task(
+    payload: BackgroundCreateRequest,
+    user: UserInfo = Depends(get_current_user),  # noqa: ARG001
+) -> Dict[str, str]:
+    # validate cron
+    if not payload.name or not payload.cron or not payload.directories:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="缺少必要字段")
+    try:
+        # quick cron validation
+        croniter(payload.cron, datetime.now(timezone.utc))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"无效的 cron 表达式: {e}")
+
+    tid = f"bg_{int(time.time())}"
+    with _background_lock:
+        _background_tasks[tid] = {
+            "name": payload.name,
+            "directories": payload.directories,
+            "profile": payload.profile or "default",
+            "cron": payload.cron,
+            "retry_count": int(payload.retry_count or 0),
+            "enabled": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_run": None,
+            "next_run": _compute_next_run(payload.cron),
+        }
+        _save_bg_tasks()
+    # ensure scheduler running
+    _start_bg_scheduler()
+    return {"id": tid}
+
+
+@router.delete("/background/{bg_id}", status_code=status.HTTP_200_OK)
+def delete_background_task(
+    bg_id: str,
+    user: UserInfo = Depends(get_current_user),  # noqa: ARG001
+) -> Dict[str, bool]:
+    with _background_lock:
+        if bg_id in _background_tasks:
+            del _background_tasks[bg_id]
+            _save_bg_tasks()
+            return {"success": True}
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+
+@router.post("/background/{bg_id}/run", status_code=status.HTTP_200_OK)
+def run_background_task_now(
+    bg_id: str,
+    user: UserInfo = Depends(get_current_user),  # noqa: ARG001
+) -> Dict[str, str]:
+    with _background_lock:
+        cfg = _background_tasks.get(bg_id)
+    if not cfg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    dirs = cfg.get("directories", []) or []
+    profile = cfg.get("profile", "default")
+    retry = int(cfg.get("retry_count", 0) or 0)
+    for d in dirs:
+        try:
+            # If target is a directory, scan it and enqueue each matching file as a separate manual task
+            if os.path.isdir(d):
+                try:
+                    movies = scan_movies(os.path.realpath(d))
+                    files = []
+                    for m in movies:
+                        if hasattr(m, "files") and m.files:
+                            files.extend(m.files)
+                    files = sorted(list(set(files)))
+                    for f in files:
+                        _enqueue_manual_task(f, profile, retry)
+                except Exception:
+                    # Fallback: enqueue the directory as a single task if scanning fails
+                    log = logging.getLogger(__name__)
+                    log.exception("扫描目录失败，回退为目录任务：%s", d)
+                    _enqueue_manual_task(d, profile, retry)
+            else:
+                _enqueue_manual_task(d, profile, retry)
+        except Exception as e:
+            log = logging.getLogger(__name__)
+            log.exception("立即执行后台任务失败: %s", d)
+    return {"status": "started"}
+
+
 class HistoryDeleteRequest(BaseModel):
     ids: List[int] = Field(..., description="要删除的历史记录ID列表")
     mode: str = Field(..., description="删除模式：record=仅删除记录, files=删除文件, both=删除记录和文件")
@@ -1370,6 +1560,113 @@ def delete_history(
     except Exception as e:  # noqa: BLE001
         log.exception("删除历史记录失败：%s", e)
         return {"success": False, "error": str(e)}
+
+
+def _load_bg_tasks() -> None:
+    global _background_tasks
+    try:
+        if not _BG_TASKS_FILE.exists():
+            _background_tasks = {}
+            return
+        text = _BG_TASKS_FILE.read_text(encoding="utf-8")
+        data = json.loads(text)
+        _background_tasks = data
+    except Exception:
+        _background_tasks = {}
+
+_load_bg_tasks()
+
+
+def _save_bg_tasks() -> None:
+    try:
+        _BG_TASKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _BG_TASKS_FILE.write_text(json.dumps(_background_tasks, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _compute_next_run(cron_expr: str, base_dt: Optional[datetime] = None) -> Optional[str]:
+    try:
+        base = base_dt or datetime.now(timezone.utc)
+        it = croniter(cron_expr, base)
+        nxt = it.get_next(datetime)
+        return nxt.astimezone(timezone.utc).isoformat()
+    except Exception:
+        return None
+
+
+def _bg_scheduler_loop():
+    """后台线程：检查所有已启用的 background tasks，并在到点时触发实际的刮削任务。"""
+    while not _bg_scheduler_stop.is_set():
+        now = datetime.now(timezone.utc)
+        with _background_lock:
+            tasks = list(_background_tasks.items())
+        for tid, cfg in tasks:
+            try:
+                if not cfg.get("enabled", True):
+                    continue
+                cron = cfg.get("cron")
+                # ensure next_run exists
+                nr = cfg.get("next_run")
+                if not nr:
+                    nr = _compute_next_run(cron, now)
+                    cfg["next_run"] = nr
+                    _save_bg_tasks()
+                else:
+                    next_dt = datetime.fromisoformat(nr)
+                    if next_dt <= now:
+                        # trigger: enqueue manual tasks for each directory
+                        dirs = cfg.get("directories", []) or []
+                        profile = cfg.get("profile", "default")
+                        retry = int(cfg.get("retry_count", 0) or 0)
+                        for d in dirs:
+                            try:
+                                # 如果是目录，先扫描符合条件的文件，再为每个文件创建单独的手动任务（与手动刮削一致）
+                                if os.path.isdir(d):
+                                    try:
+                                        movies = scan_movies(os.path.realpath(d))
+                                        files = []
+                                        for m in movies:
+                                            if hasattr(m, "files") and m.files:
+                                                files.extend(m.files)
+                                        files = sorted(list(set(files)))
+                                        for f in files:
+                                            _enqueue_manual_task(f, profile, retry)
+                                    except Exception:
+                                        log = logging.getLogger(__name__)
+                                        log.exception("扫描目录失败，回退为目录任务：%s", d)
+                                        _enqueue_manual_task(d, profile, retry)
+                                else:
+                                    _enqueue_manual_task(d, profile, retry)
+                            except Exception:
+                                log = logging.getLogger(__name__)
+                                log.exception("创建后台刮削子任务失败: %s", d)
+                        # update last_run and compute next_run
+                        cfg["last_run"] = datetime.now(timezone.utc).isoformat()
+                        cfg["next_run"] = _compute_next_run(cron, datetime.now(timezone.utc))
+                        _save_bg_tasks()
+            except Exception:
+                log = logging.getLogger(__name__)
+                log.exception("后台刮削调度器处理任务失败: %s", tid)
+        # sleep until next minute tick
+        # align to seconds to reduce drift
+        _bg_scheduler_stop.wait(30)
+
+
+def _start_bg_scheduler():
+    global _bg_scheduler_thread
+    with _background_lock:
+        if _bg_scheduler_thread and _bg_scheduler_thread.is_alive():
+            return
+        _bg_scheduler_stop.clear()
+        _bg_scheduler_thread = threading.Thread(target=_bg_scheduler_loop, daemon=True, name="bg-scheduler")
+        _bg_scheduler_thread.start()
+
+
+def _stop_bg_scheduler():
+    _bg_scheduler_stop.set()
+    if _bg_scheduler_thread:
+        _bg_scheduler_thread.join(timeout=1)
 
 
 class HistoryRedownloadRequest(BaseModel):
@@ -1537,23 +1834,41 @@ def get_task_logs(
         if len(lines) > limit:
             lines = lines[-limit:]
 
-        # 兜底：如果状态仍为 RUNNING，但日志中已经出现失败标记，则强制标记为 FAILED
+        # 优先使用标准化的结束标记判断任务最终状态（避免依赖自然语言关键词导致误判）
         status_value = task.status
-        if status_value == TaskStatus.running:
-            fail_marker = f"手动刮削任务 #{task_id} 失败"
-            success_marker = f"手动刮削任务 #{task_id} 完成"
-            if any(fail_marker in line for line in lines):
-                status_value = TaskStatus.failed
+        # 查找标准化标记（优先）：格式为 "[TASK_RESULT] SUCCEEDED" 或 "[TASK_RESULT] FAILED"
+        explicit_result = None
+        for ln in lines:
+            if isinstance(ln, str) and ln.startswith("[TASK_RESULT]"):
+                if "SUCCEEDED" in ln:
+                    explicit_result = TaskStatus.succeeded
+                elif "FAILED" in ln:
+                    explicit_result = TaskStatus.failed
+                break
+        if explicit_result is not None:
+            status_value = explicit_result
+            if task.status != status_value:
                 task.status = status_value
                 if not task.finished_at:
                     task.finished_at = datetime.now(timezone.utc)
                 _tasks[task_id] = task
-            elif any(success_marker in line for line in lines):
-                status_value = TaskStatus.succeeded
-                task.status = status_value
-                if not task.finished_at:
-                    task.finished_at = datetime.now(timezone.utc)
-                _tasks[task_id] = task
+        else:
+            # 兜底：如果状态仍为 RUNNING，但日志中已经出现失败标记，则强制标记为 FAILED
+            if status_value == TaskStatus.running:
+                fail_marker = f"手动刮削任务 #{task_id} 失败"
+                success_marker = f"手动刮削任务 #{task_id} 完成"
+                if any(fail_marker in line for line in lines):
+                    status_value = TaskStatus.failed
+                    task.status = status_value
+                    if not task.finished_at:
+                        task.finished_at = datetime.now(timezone.utc)
+                    _tasks[task_id] = task
+                elif any(success_marker in line for line in lines):
+                    status_value = TaskStatus.succeeded
+                    task.status = status_value
+                    if not task.finished_at:
+                        task.finished_at = datetime.now(timezone.utc)
+                    _tasks[task_id] = task
 
     return TaskLogResponse(id=task_id, status=status_value, lines=lines)
 
@@ -1849,3 +2164,96 @@ def scan_folder(
     except Exception as e:  # noqa: BLE001
         log.exception(f"扫描文件夹 {path} 失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"扫描失败: {str(e)}")
+
+
+def _enqueue_manual_task(directory: str, profile: str = "default", retry_count: int = 0) -> str:
+    """内部使用：为指定目录创建一个手动任务并入队，返回 task_id"""
+    # 重use create_manual_task logic but without auth and request model
+    directory = str(directory)
+    if not os.path.isabs(directory):
+        raise ValueError("必须提供绝对路径")
+    if not os.path.exists(directory):
+        raise ValueError("路径不存在")
+
+    task_id = _next_task_id(directory)
+
+    # 读取全局配置
+    cfg_path = Path(resource_path("data/config.yml"))
+    cfg_data = None
+    if cfg_path.is_file():
+        try:
+            text = cfg_path.read_text(encoding="utf-8")
+            cfg_data = json.loads(text)
+        except Exception:
+            cfg_data = None
+    if cfg_data is None:
+        cfg = Cfg()
+        try:
+            cfg_data = cfg.model_dump(mode="json")  # type: ignore[attr-defined]
+        except AttributeError:
+            cfg_data = json.loads(cfg.json())  # type: ignore[no-untyped-call]
+
+    merged = dict(cfg_data)
+    # 应用手动规则预设（如果存在）
+    if profile and profile != "default":
+        manual_rules_path = Path(resource_path("data/tasks/manual_rules.json"))
+        if manual_rules_path.is_file():
+            try:
+                manual_rules_text = manual_rules_path.read_text(encoding="utf-8")
+                all_manual_rules = json.loads(manual_rules_text)
+                if profile in all_manual_rules:
+                    manual_rules = all_manual_rules[profile]
+                    def _deep_merge(base: dict, override: dict) -> dict:
+                        result = base.copy()
+                        for key, value in override.items():
+                            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                                result[key] = _deep_merge(result[key], value)
+                            else:
+                                result[key] = value
+                        return result
+                    merged = _deep_merge(merged, manual_rules)
+            except Exception:
+                pass
+
+    scanner_cfg = dict(merged.get("scanner", {}))
+    scanner_cfg["input_directory"] = directory
+    scanner_cfg["manual"] = False
+    merged["scanner"] = scanner_cfg
+    # 将后台任务的单文件重试次数写入配置，供子进程读取
+    other_cfg = dict(merged.get("other", {}))
+    other_cfg["file_retry_count"] = int(retry_count or 0)
+    merged["other"] = other_cfg
+    # 将后台任务指定的重试次数应用到网络重试设置，便于爬虫重试网络/解析异常
+    network_cfg = dict(merged.get("network", {}))
+    network_cfg["retry"] = int(retry_count or network_cfg.get("retry", 1))
+    merged["network"] = network_cfg
+
+    task_cfg_path = Path(resource_path(f"data/tasks/manual_{task_id}.json"))
+    try:
+        task_cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        task_cfg_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError as e:  # noqa: BLE001
+        raise
+
+    task = TaskModel(
+        id=task_id,
+        type=TaskType.manual,
+        status=TaskStatus.pending,
+        input_directory=directory,
+        profile=profile or "default",
+        created_at=datetime.now(timezone.utc),
+        config_path=str(task_cfg_path),
+    )
+    with _task_lock:
+        _tasks[task_id] = task
+        _task_logs.setdefault(task_id, [])
+        _task_streams.setdefault(task_id, "")
+        _pending_queue.append(task_id)
+        buf = _task_logs.setdefault(task_id, [])
+        line = f"[队列] 任务 #{task_id} 已加入队列，等待执行"
+        buf.append(line)
+        stream0 = _task_streams.get(task_id, "")
+        _task_streams[task_id] = stream0 + line + "\n"
+
+    _start_worker()
+    return task_id

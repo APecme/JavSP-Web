@@ -116,6 +116,14 @@
     .rules-card-title::before { content:''; display:inline-block; width:3px; height:14px; border-radius:999px; background:#22c55e; }
     .rules-tab-panel { display:none; }
     .rules-tab-panel.active { display:block; }
+    
+    /* modal stacking fix
+       Ensure modal overlays appear above floating controls (mobile popup / floating buttons)
+       and override inline z-index values when necessary. */
+    [id$="-modal"],
+    div[style*="position:fixed"][style*="inset:0"] {
+      z-index: 1200 !important;
+    }
 
     /* chips 输入组件 */
     .chips-container { border-radius:8px; border:1px solid #374151; background:#020617; padding:6px 8px 8px; }
@@ -178,19 +186,58 @@
     .mobile-drawer {
       display: none;
       position: fixed;
-      top: 0;
       left: 0;
       right: 0;
+      bottom: 0;
       background: #020617;
-      border-bottom: 1px solid #1f2937;
+      border-top: 1px solid #1f2937;
       z-index: 1001;
-      max-height: 80vh;
+      max-height: 60vh;
       overflow-y: auto;
-      transform: translateY(-100%);
-      transition: transform 0.3s ease;
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(.22,.9,.18,1);
     }
     .mobile-drawer.open {
       transform: translateY(0);
+    }
+    .drawer-list .drawer-item {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 10px;
+      border-radius:8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #e5e7eb;
+      font-size:13px;
+      text-align:left;
+    }
+    .drawer-list .drawer-item svg { margin-right:6px; color:#9ca3af; fill:#9ca3af; }
+    .drawer-list .drawer-item:hover { background:#0f1720; }
+    /* 弹窗内按钮（移动端更多设置）更适合触屏操作，拉伸到全宽并增大触控目标 */
+    #mobile-popup .drawer-item {
+      display:block;
+      width:100%;
+      padding:12px 14px;
+      border-radius:10px;
+      margin-bottom:8px;
+      background:#0b1220;
+      border:1px solid #1f2937;
+      text-align:center;
+      font-size:15px;
+      color:#e5e7eb;
+    }
+    #mobile-popup .drawer-item svg { margin-right:0; margin-left:6px; vertical-align:middle; }
+    @media (max-width:480px) {
+      .mobile-float-btn {
+        width:76px;
+        height:68px;
+        border-radius:18px;
+        font-size:13px;
+      }
+      .mobile-float-btn svg { width:26px; height:26px; }
+      .mobile-float-btn .label { font-size:12px; }
     }
     @media (max-width: 800px) {
       .mobile-drawer { display: block; }
@@ -261,31 +308,101 @@
       font-size: 12px;
       color: #9ca3af;
     }
+    /* Mobile floating pill styles */
+    #mobile-floating { display: none; }
+    .mobile-floating-pill {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px;
+      border-radius:28px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(55,65,81,0.6);
+      box-shadow: 0 2px 8px rgba(2,6,23,0.6);
+      backdrop-filter: blur(6px);
+    }
+    .mobile-float-btn {
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      width:68px;
+      height:56px;
+      border-radius:20px;
+      background: transparent;
+      color:#9ca3af;
+      border:none;
+      cursor:pointer;
+      gap:4px;
+      font-size:11px;
+    }
+    .mobile-float-btn svg { width:22px;height:22px; color: #9ca3af; fill: #9ca3af; opacity:0.95; }
+    .mobile-float-btn .label { font-size:11px;color:#9ca3af;margin-top:4px; }
+    .mobile-float-btn.active { background: linear-gradient(135deg, rgba(124,58,237,0.10), rgba(124,58,237,0.04)); border-radius:12px; padding:6px 8px; }
+    .mobile-float-btn.active svg { color: #7c3aed; fill: #7c3aed; opacity:1; }
+    .mobile-float-btn.active .label { color:#7c3aed; font-weight:600; }
+    /* SVG gradient definition anchor (inserted as background-image via CSS fallback) */
+    .mobile-floating-pill { position: relative; }
+    .mobile-grid-btn {
+      width:48px;height:48px;border-radius:24px;border:1px solid rgba(55,65,81,0.6);background:#0b1220;color:#e5e7eb;display:flex;align-items:center;justify-content:center;cursor:pointer;
+    }
   </style>
 </head>
 <body>
-  <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileDrawer()">☰</button>
-  <div class="mobile-overlay" id="mobile-overlay" onclick="toggleMobileDrawer()"></div>
-  <div class="mobile-drawer" id="mobile-drawer">
-    <div style="padding: 16px 14px;">
-      <div class="brand" style="margin-bottom: 16px;">JavSP-web</div>
-      <div class="version" id="mobile-version" style="font-size: 11px; color: #6b7280; margin-bottom: 16px;">版本加载中...</div>
-      <div class="nav-section-title">任务</div>
-      <div class="nav">
-        <button class="nav-btn" data-view="manual" onclick="toggleMobileDrawer();switchView('manual')">手动刮削</button>
-        <button class="nav-btn" data-view="watch" onclick="toggleMobileDrawer();switchView('watch')">监控刮削</button>
-        <button class="nav-btn" data-view="schedule" onclick="toggleMobileDrawer();switchView('schedule')">定时刮削</button>
+  <!-- Mobile bottom center floating widget (显示三个按钮：手动、后台、更多设置) -->
+  <!-- Mobile overlay and drawer for '更多设置' -->
+  <div id="mobile-overlay" class="mobile-overlay" aria-hidden="true"></div>
+  <div id="mobile-drawer" class="mobile-drawer" aria-hidden="true">
+    <div style="padding:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-weight:600;color:#e5e7eb;">更多设置</div>
+        <button style="border:none;background:transparent;color:#9ca3af;font-size:20px;cursor:pointer;" aria-label="关闭" onclick="toggleMobileDrawer()">×</button>
       </div>
-      <div class="nav-section-title" style="margin-top: 16px;">系统</div>
-      <div class="nav">
-        <button class="nav-btn" data-view="rules" onclick="toggleMobileDrawer();switchView('rules')">全局规则</button>
-        <button class="nav-btn" data-view="history" onclick="toggleMobileDrawer();switchView('history')">刮削历史</button>
-        <button class="nav-btn" data-view="cookiecloud" onclick="toggleMobileDrawer();switchView('cookiecloud')">CookieCloud</button>
-        <button class="nav-btn" data-view="account" onclick="toggleMobileDrawer();switchView('account')">账号与安全</button>
+      <div class="drawer-list" style="display:flex;flex-direction:column;gap:6px;">
+        <button class="drawer-item" type="button" onclick="switchView('rules'); toggleMobileDrawer();">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;"><path d="M12 2L3 7v7c0 5 5 9 9 9s9-4 9-9V7l-9-5z" stroke="#9ca3af" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="color:#e5e7eb;">全局规则</span>
+        </button>
+        <button class="drawer-item" type="button" onclick="switchView('cookiecloud'); toggleMobileDrawer();">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;"><path d="M4 8a8 8 0 1016 0 6 6 0 00-6 6H10a6 6 0 00-6-6z" stroke="#9ca3af" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="color:#e5e7eb;">CookieCloud</span>
+        </button>
+        <button class="drawer-item" type="button" onclick="switchView('account'); toggleMobileDrawer();">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#9ca3af" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="4" stroke="#9ca3af" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="color:#e5e7eb;">账号与安全</span>
+        </button>
       </div>
-      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #1f2937;">
-        <button class="logout-btn" id="mobile-logout-btn" style="width: 100%;">退出登录</button>
-      </div>
+    </div>
+  </div>
+
+  <!-- Mobile popup (floating) for '更多设置' -->
+  <div id="mobile-popup-overlay" class="mobile-overlay" aria-hidden="true" style="display:none;"></div>
+  <div id="mobile-popup" style="position:fixed;left:50%;transform:translateX(-50%) translateY(8px);bottom:92px;display:none;z-index:1110;border-radius:14px;background:linear-gradient(180deg, rgba(15,23,42,0.9), rgba(7,10,20,0.9));border:1px solid rgba(255,255,255,0.03);padding:12px 14px;box-shadow:0 10px 30px rgba(2,6,23,0.65);backdrop-filter:blur(6px);min-width:260px;transition:transform .16s ease,opacity .16s ease;opacity:0;">
+    <div style="display:flex;flex-direction:column;gap:8px;min-width:240px;">
+      <button class="drawer-item" type="button" onclick="switchView('rules'); closeMobilePopup();">全局规则</button>
+      <button class="drawer-item" type="button" onclick="switchView('cookiecloud'); closeMobilePopup();">CookieCloud</button>
+      <button class="drawer-item" type="button" onclick="switchView('account'); closeMobilePopup();">账号与安全</button>
+    </div>
+  </div>
+
+  <div id="mobile-floating" style="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;display:none;z-index:1100;gap:8px;">
+    <div class="mobile-floating-pill" role="toolbar" aria-label="Mobile menu">
+      <button class="mobile-float-btn" data-view="manual" onclick="switchView('manual')" type="button" aria-label="手动刮削">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 10.5L12 4l9 6.5V21a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V10.5z" fill="currentColor" /></svg>
+        <div class="label">手动刮削</div>
+      </button>
+      <button class="mobile-float-btn" data-view="background" onclick="switchView('background')" type="button" aria-label="后台刮削">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 7h18v4H3V7zm0 6h18v4H3v-4z" fill="currentColor"/></svg>
+        <div class="label">后台刮削</div>
+      </button>
+      <button class="mobile-float-btn" data-view="history" onclick="switchView('history')" type="button" aria-label="刮削历史">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="label">刮削历史</div>
+      </button>
+      <button class="mobile-float-btn" data-view="more" onclick="toggleMobilePopup()" type="button" aria-label="更多设置">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>
+        <div class="label">更多设置</div>
+      </button>
     </div>
   </div>
   <div class="layout">
@@ -296,13 +413,13 @@
         <div class="nav-section-title">任务</div>
         <div class="nav">
           <button class="nav-btn active" data-view="manual">手动刮削</button>
-          <button class="nav-btn" data-view="watch">监控刮削</button>
-          <button class="nav-btn" data-view="schedule">定时刮削</button>
+          <button class="nav-btn" data-view="background">后台刮削</button>
+          <button class="nav-btn" data-view="history">刮削历史</button>
+          <button class="nav-btn" data-view="schedule" style="display:none;">(legacy)</button>
         </div>
         <div class="nav-section-title">系统</div>
         <div class="nav">
           <button class="nav-btn" data-view="rules">全局规则</button>
-          <button class="nav-btn" data-view="history">刮削历史</button>
           <button class="nav-btn" data-view="cookiecloud">CookieCloud</button>
           <button class="nav-btn" data-view="account">账号与安全</button>
         </div>
@@ -374,6 +491,11 @@
             <span>任务日志</span>
             <div style="display:flex;align-items:center;gap:6px;">
               <span id="manual-log-status">尚未创建任务</span>
+              <div id="manual-log-pagination" style="display:flex;align-items:center;gap:8px;margin-left:8px;">
+                <button class="ghost-btn" id="manual-prev-page" style="font-size:11px;" disabled>上一页</button>
+                <span id="manual-page-info" style="font-size:12px;color:#9ca3af;">第 1 页</span>
+                <button class="ghost-btn" id="manual-next-page" style="font-size:11px;" disabled>下一页</button>
+              </div>
             </div>
           </div>
           <!-- 任务日志筛选控件 -->
@@ -392,6 +514,12 @@
               <label style="font-size:12px;color:#9ca3af;">路径:</label>
               <select id="manual-log-filter-path" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:200px;">
                 <option value="">全部路径</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <label style="font-size:12px;color:#9ca3af;">规则:</label>
+              <select id="manual-log-filter-profile" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:150px;">
+                <option value="">全部规则</option>
               </select>
             </div>
             <button class="ghost-btn" id="manual-log-filter-apply" style="font-size:11px;">应用筛选</button>
@@ -416,16 +544,25 @@
         </div>
       </section>
 
-      <section id="view-watch" class="panel" style="display:none;">
-        <div class="panel-title">监控刮削</div>
-        <div class="panel-desc">配置需要长期监控的目录，当发现新文件时自动创建刮削任务。</div>
-        <p class="placeholder">界面骨架：后续将展示监控任务列表、创建和编辑对话框。</p>
-      </section>
-
-      <section id="view-schedule" class="panel" style="display:none;">
-        <div class="panel-title">定时刮削</div>
-        <div class="panel-desc">按计划定期触发刮削任务，例如每天凌晨整理指定目录。</div>
-        <p class="placeholder">界面骨架：后续将展示定时任务列表和新建计划表单。</p>
+      <section id="view-background" class="panel" style="display:none;">
+        <div class="panel-title">后台刮削</div>
+        <div class="panel-desc">选择要周期性刮削的目录和使用的规则（支持 cron 表达式），系统将按计划对所选目录执行刮削。</div>
+        <div style="display:flex;gap:16px;align-items:flex-start;margin-top:12px;">
+          <div style="flex:0 0 420px;min-width:320px;display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;justify-content:flex-end;">
+              <button class="primary-btn" id="bg-open-create-btn" type="button">新建后台任务</button>
+            </div>
+            <div class="rules-card" style="display:flex;flex-direction:column;">
+              <div class="rules-card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>后台任务列表</span>
+                <span style="font-size:12px;color:#9ca3af;">最多显示最近 200 条</span>
+              </div>
+              <div id="bg-list" style="margin-top:8px;max-height:72vh;overflow:auto;padding-right:6px;">
+                <div class="placeholder">正在加载...</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="view-rules" class="panel" style="display:none;">
@@ -961,6 +1098,18 @@
               <option value="">全部规则</option>
             </select>
           </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <label style="font-size:12px;color:#9ca3af;">状态:</label>
+            <select id="history-filter-status" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:120px;">
+              <option value="">全部</option>
+              <option value="SUCCEEDED">成功</option>
+              <option value="FAILED">失败</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <label style="font-size:12px;color:#9ca3af;">番号/关键词:</label>
+            <input id="history-filter-dvdid" placeholder="输入番号或标题关键词" style="padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:12px;min-width:160px;" />
+          </div>
           <button class="ghost-btn" id="history-filter-apply" style="font-size:11px;">应用筛选</button>
           <button class="ghost-btn" id="history-filter-clear" style="font-size:11px;">清除</button>
         </div>
@@ -980,27 +1129,29 @@
       <section id="view-cookiecloud" class="panel" style="display:none;">
         <div class="panel-title">CookieCloud 配置</div>
         <div class="panel-desc">配置 CookieCloud 以支持需要登录的站点（如 JavDB、JavLib 等）。</div>
-        <div class="grid-two">
-          <div class="field checkbox-inline">
-            <label for="rules-cookiecloud-enabled">启用 CookieCloud</label>
-            <input type="checkbox" id="rules-cookiecloud-enabled" />
+        <div class="rules-card">
+          <div class="grid-two">
+            <div class="field checkbox-inline">
+              <label for="rules-cookiecloud-enabled">启用 CookieCloud</label>
+              <input type="checkbox" id="rules-cookiecloud-enabled" />
+            </div>
+            <div class="field">
+              <label for="rules-cookiecloud-server-url">CookieCloud 服务器地址</label>
+              <input id="rules-cookiecloud-server-url" placeholder="例如 http://localhost:8088" />
+            </div>
+            <div class="field">
+              <label for="rules-cookiecloud-uuid">UUID</label>
+              <input id="rules-cookiecloud-uuid" placeholder="CookieCloud 的 UUID" />
+            </div>
+            <div class="field">
+              <label for="rules-cookiecloud-password">密码</label>
+              <input id="rules-cookiecloud-password" type="password" placeholder="CookieCloud 的密码" />
+            </div>
           </div>
-          <div class="field">
-            <label for="rules-cookiecloud-server-url">CookieCloud 服务器地址</label>
-            <input id="rules-cookiecloud-server-url" placeholder="例如 http://localhost:8088" />
+          <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
+            <button class="primary-btn" id="cookiecloud-save">保存 CookieCloud 配置</button>
+            <span id="cookiecloud-status" class="placeholder"></span>
           </div>
-          <div class="field">
-            <label for="rules-cookiecloud-uuid">UUID</label>
-            <input id="rules-cookiecloud-uuid" placeholder="CookieCloud 的 UUID" />
-          </div>
-          <div class="field">
-            <label for="rules-cookiecloud-password">密码</label>
-            <input id="rules-cookiecloud-password" type="password" placeholder="CookieCloud 的密码" />
-          </div>
-        </div>
-        <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
-          <button class="primary-btn" id="cookiecloud-save">保存 CookieCloud 配置</button>
-          <span id="cookiecloud-status" class="placeholder"></span>
         </div>
       </section>
       
@@ -1066,23 +1217,25 @@
       <section id="view-account" class="panel" style="display:none;">
         <div class="panel-title">账号与安全</div>
         <div class="panel-desc">修改 Web 登录用的用户名和密码。</div>
-        <div class="grid-two">
-          <div class="field">
-            <label for="old-password">当前密码</label>
-            <input id="old-password" type="password" />
+        <div class="rules-card">
+          <div class="grid-two">
+            <div class="field">
+              <label for="old-password">当前密码</label>
+              <input id="old-password" type="password" />
+            </div>
+            <div class="field">
+              <label for="new-username">新用户名（可选）</label>
+              <input id="new-username" placeholder="留空则不修改用户名" />
+            </div>
+            <div class="field">
+              <label for="new-password">新密码</label>
+              <input id="new-password" type="password" />
+            </div>
           </div>
-          <div class="field">
-            <label for="new-username">新用户名（可选）</label>
-            <input id="new-username" placeholder="留空则不修改用户名" />
+          <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
+            <button class="primary-btn" id="account-save">保存修改</button>
+            <span id="account-error" class="error"></span>
           </div>
-          <div class="field">
-            <label for="new-password">新密码</label>
-            <input id="new-password" type="password" />
-          </div>
-        </div>
-        <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
-          <button class="primary-btn" id="account-save">保存修改</button>
-          <span id="account-error" class="error"></span>
         </div>
       </section>
       <div id="proxyfree-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:40;align-items:center;justify-content:center;">
@@ -1214,10 +1367,170 @@
         ]);
       };
       
-      const views = ['manual','watch','schedule','rules','history','cookiecloud','account'];
+      // 轻量气泡提示（非模态），自动消失
+      window.showToast = function(message, duration = 2200) {
+        try {
+          const id = 'javsp-toast-' + Date.now();
+          const el = document.createElement('div');
+          el.id = id;
+          el.textContent = message;
+          el.style.cssText = [
+            'position:fixed',
+            'right:18px',
+            'bottom:28px',
+            'z-index:9999',
+            'background:rgba(17,24,39,0.95)',
+            'color:#e5e7eb',
+            'padding:8px 12px',
+            'border-radius:8px',
+            'box-shadow:0 6px 18px rgba(2,6,23,0.6)',
+            'font-size:13px',
+            'opacity:1',
+            'transition:opacity 200ms ease'
+          ].join(';') + ';';
+          document.body.appendChild(el);
+          setTimeout(() => {
+            try { el.style.opacity = '0'; } catch (e) {}
+            setTimeout(() => { try { el.remove(); } catch (e) {} }, 260);
+          }, Math.max(800, duration));
+        } catch (e) {}
+      };
+      
+      // 本地记录用户在手动界面创建的任务 ID（用于区分手动触发与后台触发）
+      window.getManualTaskIds = function() {
+        try {
+          const raw = localStorage.getItem('manualTaskIds');
+          if (!raw) return new Set();
+          const arr = JSON.parse(raw);
+          if (!Array.isArray(arr)) return new Set();
+          return new Set(arr);
+        } catch (e) {
+          return new Set();
+        }
+      };
+      window.addManualTaskId = function(id) {
+        if (!id) return;
+        try {
+          const set = window.getManualTaskIds();
+          set.add(String(id));
+          localStorage.setItem('manualTaskIds', JSON.stringify(Array.from(set)));
+        } catch (e) {}
+      };
+      window.removeManualTaskId = function(id) {
+        if (!id) return;
+        try {
+          const set = window.getManualTaskIds();
+          if (set.has(String(id))) {
+            set.delete(String(id));
+            localStorage.setItem('manualTaskIds', JSON.stringify(Array.from(set)));
+          }
+        } catch (e) {}
+      };
+      
+      // 在删除按钮下方显示确认气泡（带 确定 / 取消）
+      window.showDeleteBubble = function(buttonEl, taskId) {
+        try {
+          // 先移除已有同类气泡
+          const exist = document.getElementById('javsp-delete-bubble');
+          if (exist) exist.remove();
+          const rect = buttonEl.getBoundingClientRect();
+          const bubble = document.createElement('div');
+          bubble.id = 'javsp-delete-bubble';
+          bubble.style.cssText = [
+            'position:fixed',
+            // initial position placeholder; real position calculated after insertion
+            'left:0px',
+            'top:0px',
+            'z-index:1200',
+            'background:#0b1220',
+            'border:1px solid #1f2937',
+            'color:#e5e7eb',
+            'padding:8px',
+            'border-radius:8px',
+            'box-shadow:0 6px 18px rgba(2,6,23,0.6)',
+            'min-width:180px'
+          ].join(';') + ';';
+          bubble.innerHTML = `<div style="font-size:12px;margin-bottom:8px;color:#fca5a5;">确定删除该任务日志？此操作不可恢复。</div><div style="display:flex;justify-content:flex-end;gap:8px;"><button id="jb-del-cancel" class="ghost-btn" type="button">取消</button><button id="jb-del-confirm" class="primary-btn" type="button">确定</button></div>`;
+          document.body.appendChild(bubble);
+          // calculate and adjust position so the bubble stays within the viewport
+          try {
+            const margin = 12;
+            const bw = bubble.offsetWidth;
+            const bh = bubble.offsetHeight;
+            let left = rect.left;
+            // if overflow right, move left
+            if (left + bw > window.innerWidth - margin) {
+              left = Math.max(margin, window.innerWidth - bw - margin);
+            }
+            // prevent overflow left
+            if (left < margin) left = margin;
+            let top = rect.bottom + 8;
+            // if overflow bottom, show above the button
+            if (top + bh > window.innerHeight - margin) {
+              top = rect.top - bh - 8;
+              // if still overflows (very tall bubble), clamp to viewport
+              if (top < margin) top = Math.max(margin, window.innerHeight - bh - margin);
+            }
+            bubble.style.left = `${left}px`;
+            bubble.style.top = `${top}px`;
+          } catch (e) { /* ignore positioning errors */ }
+          // cancel handler
+          bubble.querySelector('#jb-del-cancel').addEventListener('click', () => {
+            bubble.remove();
+          });
+          // confirm handler
+          bubble.querySelector('#jb-del-confirm').addEventListener('click', async () => {
+            try {
+              await deleteTaskLogConfirmed(taskId);
+            } finally {
+              try { bubble.remove(); } catch (e) {}
+            }
+          });
+          // click outside to dismiss
+          const onDocClick = (ev) => {
+            if (!bubble.contains(ev.target) && ev.target !== buttonEl) {
+              bubble.remove();
+              document.removeEventListener('click', onDocClick, true);
+            }
+          };
+          setTimeout(() => document.addEventListener('click', onDocClick, true), 10);
+        } catch (e) { console.warn(e); }
+      };
+
+      // 真正执行删除的内部函数（不弹模态）
+      window.deleteTaskLogConfirmed = async function(taskId) {
+        try {
+          const safeTaskId = encodeURIComponent(String(taskId));
+          const response = await fetch(`/api/tasks/${safeTaskId}/logs`, { method: 'DELETE' });
+          if (!response.ok) throw new Error('删除日志失败');
+          const data = await response.json();
+          if (data.success) {
+            allTaskLogs.delete(taskId);
+            const taskGroup = document.querySelector(`.log-task-group[data-task-id="${String(taskId).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"]`);
+            if (taskGroup) taskGroup.remove();
+            if (allTaskLogs.size === 0) {
+              if (manualLogContainer) manualLogContainer.innerHTML = '<div class="placeholder">暂无日志</div>';
+            } else {
+              renderCollapsibleLogs();
+            }
+            // 更新本地 manualTaskIds 集合
+            try { removeManualTaskId(taskId); } catch (e) {}
+            // 显示成功提示泡泡
+            window.showToast('日志已删除', 2000);
+            return;
+          }
+          throw new Error(data.error || '删除失败');
+        } catch (err) {
+          console.error('删除日志失败:', err);
+          window.showAlert('删除日志失败：' + (err.message || '请稍后重试'));
+        }
+      };
+      
+      const views = ['manual','background','watch','schedule','rules','history','cookiecloud','account'];
       const navButtons = document.querySelectorAll('.nav-btn');
       const titleMap = {
         manual: ['手动刮削', '从 /video 选择具体影片文件，按顺序触发手动刮削任务。'],
+        background: ['后台刮削', '选择要周期性刮削的目录并配置执行规则与重试次数。'],
         watch: ['监控刮削', '监控目录中新文件并自动触发刮削任务。'],
         schedule: ['定时刮削', '按计划定期触发刮削任务。'],
         rules: ['全局规则', '管理 JavSP 的全局配置规则。'],
@@ -1233,14 +1546,14 @@
       const logoutBtn = document.getElementById('logout-btn');
       let manualLogContainer = document.getElementById('manual-log-container');
       const manualLogTermEl = null; // 不再使用xterm，改用可展开收起的结构
-      const manualLogStatusEl = document.getElementById('manual-log-status');
+      let manualLogStatusEl = document.getElementById('manual-log-status');
       const manualLogCopyBtn = null; // 按钮已移除，保持兼容性防止未定义
       
       // 复制任务日志函数 - 复制原始未过滤的日志
       window.copyTaskLog = async function(taskId) {
         try {
           // 从后端获取原始日志流（offset=0 获取全部）
-          const safeTaskId = encodeURIComponent(String(taskId));
+          const safeTaskId = window.cleanTaskIdForUrl(taskId);
           const response = await fetch(`/api/tasks/${safeTaskId}/logstream?offset=0`);
           if (!response.ok) {
             throw new Error('获取日志失败');
@@ -1263,7 +1576,7 @@
               textArea.select();
               try {
                 document.execCommand('copy');
-                window.showAlert('原始日志已复制到剪贴板');
+                window.showToast('原始日志已复制到剪贴板');
               } catch (e) {
                 window.showAlert('复制失败，请手动复制');
               }
@@ -1273,7 +1586,7 @@
           // 优先使用 Clipboard API，若不可用则回退
           if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
             navigator.clipboard.writeText(textToCopy).then(() => {
-              window.showAlert('原始日志已复制到剪贴板');
+              window.showToast('原始日志已复制到剪贴板');
             }).catch(err => {
               console.error('复制失败:', err);
               fallbackCopy();
@@ -1290,28 +1603,14 @@
       // 删除任务日志函数
       window.deleteTaskLog = async function(taskId) {
         // 解码任务路径用于显示
-        const decodeTaskPath = (taskId) => {
-          try {
-            const parts = String(taskId).split('_');
-            if (parts.length >= 2) {
-              let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
-              while (pathEncoded.length % 4 !== 0) {
-                pathEncoded += '=';
-              }
-              return atob(pathEncoded);
-            }
-          } catch (e) {
-            console.warn('解码任务路径失败:', e);
-          }
-          return null;
-        };
-        const decodedPath = decodeTaskPath(taskId) || taskId;
+        const parts = String(taskId).split('_');
+        const decodedPath = (parts.length >= 2 ? decodeBase64UrlUtf8(parts[0]) : null) || taskId;
         const confirmed = await window.showConfirm('确定要删除任务 ' + decodedPath + ' 的日志吗？此操作不可恢复。', '删除日志');
         if (!confirmed) {
           return;
         }
         try {
-          const safeTaskId = encodeURIComponent(String(taskId));
+          const safeTaskId = window.cleanTaskIdForUrl(taskId);
           const response = await fetch(`/api/tasks/${safeTaskId}/logs`, {
             method: 'DELETE'
           });
@@ -1336,6 +1635,7 @@
             renderCollapsibleLogs();
             }
             window.showAlert('日志已删除');
+            try { removeManualTaskId(taskId); } catch (e) {}
           } else {
             throw new Error(data.error || '删除失败');
           }
@@ -1348,7 +1648,7 @@
       // 取消任务（排队或运行中）
       window.cancelTask = async function(taskId) {
         try {
-          const safeTaskId = encodeURIComponent(String(taskId));
+          const safeTaskId = window.cleanTaskIdForUrl(taskId);
           const resp = await fetch(`/api/tasks/${safeTaskId}/cancel`, { method: 'POST' });
           if (!resp.ok) throw new Error('取消失败');
           const data = await resp.json();
@@ -1476,6 +1776,7 @@
       let nfoSnapshot = null;
       let manualLogTaskId = null;
       let manualLogTimer = null;
+      let bgLogTimer = null;
     let manualLogTerm = null;
       let manualLogLastLinesKey = null;
       let manualLogRawText = '';
@@ -1491,12 +1792,25 @@
       let rulesLoaded = false;
 
       function switchView(view) {
+        // validate view, fall back to manual if unknown
+        if (!views.includes(view)) view = 'manual';
+        // persist choice to hash and localStorage so refresh keeps current view
+        try { history.replaceState(null, '', '#' + view); } catch (e) {}
+        try { localStorage.setItem('lastView', view); } catch (e) {}
+
         views.forEach(v => {
           const section = document.getElementById('view-' + v);
           if (section) section.style.display = v === view ? 'block' : 'none';
         });
         navButtons.forEach(btn => {
           btn.classList.toggle('active', btn.dataset.view === view);
+        });
+        // 同步移动端浮动按钮状态
+        const mobileBtns = document.querySelectorAll('.mobile-float-btn');
+        mobileBtns.forEach(btn => {
+          try {
+            btn.classList.toggle('active', btn.dataset.view === view);
+          } catch (e) {}
         });
         const t = titleMap[view];
         if (t) {
@@ -1510,6 +1824,9 @@
         if (view === 'history') {
           loadHistory();
         }
+        if (view === 'background') {
+          loadBackgroundTasks();
+        }
         if (view === 'manual') {
           // 切换到手动刮削视图时刷新文件列表
           loadVideode(videodeCurrentPath || '/video');
@@ -1517,6 +1834,7 @@
       }
 
       // /videode：按文件刮削浏览与队列执行
+      window.switchView = switchView;
       const videodePathEl = document.getElementById('videode-path');
       const videodeTbody = document.getElementById('videode-tbody');
       const videodeHint = document.getElementById('videode-hint');
@@ -1707,10 +2025,15 @@
         });
       }
 
+      
+
       async function waitTaskFinished(id) {
         for (;;) {
           try {
-            const t = await fetchJSON('/api/tasks/' + id);
+            // Some code paths may append a suffix like ":1" to the id (e.g. DOM ids or list indices).
+            // Strip trailing colon-number fragments and ensure the id is URI-encoded when calling the API.
+            const cleanId = String(id).replace(/:\d+$/, '');
+            const t = await fetchJSON('/api/tasks/' + encodeURIComponent(cleanId));
             const s = t.status || 'UNKNOWN';
             if (s === 'SUCCEEDED' || s === 'FAILED') {
               return s;
@@ -1770,30 +2093,22 @@
                 })
               });
               
-              // 解码任务ID中的路径用于显示
+              // 解码任务ID中的路径用于显示（支持 UTF-8）
               const decodeTaskPath = (taskId) => {
                 try {
                   const parts = String(taskId).split('_');
                   if (parts.length >= 2) {
-                    let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
-                    while (pathEncoded.length % 4 !== 0) {
-                      pathEncoded += '=';
-                    }
-                    return atob(pathEncoded);
+                    return decodeBase64UrlUtf8(parts[0]);
                   }
                 } catch (e) {
                   console.warn('解码任务路径失败:', e);
                 }
                 return null;
               };
-              
-              // 提取时间戳用于显示
+
+              // 提取并格式化任务时间戳用于显示（YYYY-MM-DD HH:MM:SS）
               const getTaskTime = (taskId) => {
-                const parts = String(taskId).split('_');
-                if (parts.length >= 3) {
-                  return `${parts[1]} ${parts[2]}`; // YYYYMMDD HHMMSS
-                }
-                return String(taskId);
+                return formatTaskId(taskId);
               };
               
               const decodedPath = decodeTaskPath(task.id) || filePath;
@@ -1805,6 +2120,13 @@
               }
               // 不清空之前的日志，保留所有任务的日志
               startManualLogStreaming(task.id, false);
+              // 将解码后的路径写入任务缓存，便于日志面板立即显示正确的任务名
+              try {
+                const td = allTaskLogs.get(task.id);
+                if (td) td.inputPath = decodedPath || filePath || td.inputPath || '';
+              } catch (e) {}
+              // 记录该任务为用户在手动界面创建的任务（用于界面级别区分）
+              try { addManualTaskId(task.id); } catch (e) {}
             } catch (e) {
               console.warn(e);
               if (videodeRunHint) {
@@ -2050,12 +2372,24 @@
         }
       }
 
-      // 格式化任务ID显示
+      // 格式化任务ID显示或时间戳（返回 YYYY-MM-DD HH:MM:SS）
       function formatTaskId(taskId) {
         if (!taskId || taskId === '-') return taskId;
         const parts = String(taskId).split('_');
         if (parts.length >= 3) {
-          return `${parts[1]} ${parts[2]}`; // YYYYMMDD HHMMSS
+          const datePart = parts[1]; // YYYYMMDD
+          const timePart = parts[2]; // HHMMSS or HHMMSS_xxx
+          try {
+            const y = datePart.slice(0,4);
+            const m = datePart.slice(4,6);
+            const d = datePart.slice(6,8);
+            const hh = timePart.slice(0,2);
+            const mm = timePart.slice(2,4);
+            const ss = timePart.slice(4,6);
+            return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+          } catch (e) {
+            return `${parts[1]} ${parts[2]}`;
+          }
         }
         return String(taskId);
       }
@@ -2067,8 +2401,15 @@
       let historyFilteredItems = [];
       let historyFilters = {
         path: '',
-        profile: ''
+        profile: '',
+        dvdid: '',
+        status: ''
       };
+      
+      // 手动日志分页
+      let manualPage = 1;
+      let manualPageSize = 11;
+      let manualFilteredTasks = [];
       
       // 任务日志筛选状态
       let manualLogFilters = {
@@ -2099,7 +2440,7 @@
         }
       }
       
-      function applyHistoryFilters() {
+      async function applyHistoryFilters() {
         const historyContainer = document.getElementById('history-container');
         const historyPlaceholder = document.getElementById('history-placeholder');
         if (!historyContainer) return;
@@ -2108,22 +2449,31 @@
         const pathSelect = document.getElementById('history-filter-path');
         if (pathSelect) {
           const currentValue = pathSelect.value;
+          // 抽取路径头（例如 /video/#整理完成），用于去重显示
           const uniquePaths = new Set();
+          const getPathHead = (p) => {
+            if (!p) return '';
+            const np = String(p).replace(/\\\\/g, '/').replace(/\\/g, '/');
+            const parts = np.split('/').filter(Boolean);
+            if (parts.length >= 2) {
+              return '/' + parts.slice(0, 2).join('/');
+            }
+            return '/' + parts.join('/');
+          };
           historyAllItems.forEach(item => {
             if (item.save_dir) {
-              uniquePaths.add(item.save_dir);
+              uniquePaths.add(getPathHead(item.save_dir));
             }
             if (item.source_files && Array.isArray(item.source_files)) {
               item.source_files.forEach(file => {
                 if (file) {
-                  // 提取目录路径
                   const dirPath = file.substring(0, file.lastIndexOf('/') || file.lastIndexOf('\\'));
-                  if (dirPath) uniquePaths.add(dirPath);
+                  if (dirPath) uniquePaths.add(getPathHead(dirPath));
                 }
               });
             }
           });
-          const sortedPaths = Array.from(uniquePaths).sort();
+          const sortedPaths = Array.from(uniquePaths).filter(Boolean).sort();
           pathSelect.innerHTML = '<option value="">全部路径</option>' + sortedPaths.map(path => 
             `<option value="${path.replace(/"/g, '&quot;')}">${path}</option>`
           ).join('');
@@ -2132,24 +2482,41 @@
         
         // 应用筛选
         historyFilteredItems = historyAllItems.filter(item => {
-          // 路径筛选（精确匹配）
+          // 路径筛选（精确匹配路径头）
           if (historyFilters.path) {
+            const headMatch = (p) => {
+              if (!p) return false;
+              const np = String(p).replace(/\\\\/g, '/').replace(/\\/g, '/');
+              const parts = np.split('/').filter(Boolean);
+              if (parts.length >= 2) {
+                return '/' + parts.slice(0, 2).join('/') === historyFilters.path;
+              }
+              return ('/' + parts.join('/')) === historyFilters.path;
+            };
             const saveDir = item.save_dir || '';
             const sourceFiles = item.source_files || [];
-            const matchesPath = saveDir === historyFilters.path || 
-              sourceFiles.some(file => {
-                const dirPath = file.substring(0, file.lastIndexOf('/') || file.lastIndexOf('\\'));
-                return dirPath === historyFilters.path;
-              });
+            const matchesPath = headMatch(saveDir) || sourceFiles.some(file => {
+              const dirPath = file.substring(0, file.lastIndexOf('/') || file.lastIndexOf('\\'));
+              return headMatch(dirPath);
+            });
             if (!matchesPath) return false;
           }
-          
-          // 规则筛选（从task_id中提取，或使用profile字段）
+
+          // 规则筛选（匹配HistoryItem.profile）
           if (historyFilters.profile) {
-            // 目前历史记录中没有profile字段，可以从task_id或其他字段推断
-            // 暂时跳过此筛选，或根据实际需求实现
+            const profile = item.profile || '';
+            if (profile !== historyFilters.profile) return false;
           }
-          
+
+          // 番号/关键词搜索（支持dvdid、display_name、target_basename）
+          if (historyFilters.dvdid && String(historyFilters.dvdid).trim() !== '') {
+            const q = String(historyFilters.dvdid).trim().toLowerCase();
+            const dvdid = (item.dvdid || '').toLowerCase();
+            const display = (item.display_name || '').toLowerCase();
+            const basename = (item.target_basename || '').toLowerCase();
+            if (!dvdid.includes(q) && !display.includes(q) && !basename.includes(q)) return false;
+          }
+
           return true;
         });
         
@@ -2160,6 +2527,21 @@
           return timeB - timeA;
         });
         
+        // 如果按状态筛选（SUCCEEDED/FAILED），补充每项的任务状态并再次过滤
+        if (historyFilters.status && historyFilters.status !== '') {
+          const statusMap = {};
+          await Promise.all(historyFilteredItems.map(async it => {
+            try {
+              if (!it.task_id) return;
+              const t = await fetchJSON('/api/tasks/' + encodeURIComponent(it.task_id));
+              statusMap[it.task_id] = t && t.status ? t.status : '';
+            } catch (e) {
+              statusMap[it.task_id] = '';
+            }
+          }));
+          historyFilteredItems = historyFilteredItems.filter(it => (statusMap[it.task_id] || '') === historyFilters.status);
+        }
+
         // 重置到第一页
         historyPage = 1;
         renderHistoryPage();
@@ -2199,13 +2581,39 @@
             let taskId = item.task_id != null ? String(item.task_id) : '-';
             if (taskId !== '-') {
               const parts = taskId.split('_');
-              if (parts.length >= 3) {
-                taskId = `${parts[1]} ${parts[2]}`; // YYYYMMDD HHMMSS
-              }
+            if (parts.length >= 3) {
+              taskId = formatTaskId(taskId);
+            }
             }
             const name = item.display_name || item.dvdid || item.cid || '-';
             const saveDir = item.save_dir || '-';
             const safeSaveDir = String(saveDir).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // 源路径（显示刮削时使用的源文件路径列表）
+            let sourcePathHtml = '';
+            if (item.source_files && Array.isArray(item.source_files) && item.source_files.length > 0) {
+              const safeSources = item.source_files.map(s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+              sourcePathHtml = `<div style="font-size:11px;color:#9ca3af;margin-top:6px;word-break:break-all;">源路径: ${safeSources.join(', ')}</div>`;
+            }
+            
+            // 获取任务状态以在历史卡中显示（成功/失败）
+            let taskStatus = '';
+            let statusBadge = '';
+            if (item.task_id) {
+              try {
+                const t = await fetchJSON('/api/tasks/' + encodeURIComponent(item.task_id));
+                taskStatus = t && t.status ? t.status : '';
+                if (taskStatus === 'SUCCEEDED') {
+                  statusBadge = '<span style="color:#22c55e;font-weight:600;margin-left:8px;">已成功</span>';
+                } else if (taskStatus === 'FAILED') {
+                  statusBadge = '<span style="color:#ef4444;font-weight:600;margin-left:8px;">刮削失败</span>';
+                } else if (taskStatus) {
+                  statusBadge = `<span style="color:#9ca3af;font-weight:600;margin-left:8px;">${taskStatus}</span>`;
+                }
+              } catch (e) {
+                taskStatus = '';
+                statusBadge = '';
+              }
+            }
             
             // 解析NFO
             let nfoData = null;
@@ -2317,6 +2725,12 @@
               crawlersInfo = `<div style="font-size:11px;color:#9ca3af;margin-top:4px;">爬虫: ${item.used_crawlers.join(', ')}</div>`;
             }
             
+            // 使用的规则信息（profile）
+            let profileInfo = '';
+            if (item.profile) {
+              profileInfo = `<div style="font-size:11px;color:#9ca3af;margin-top:4px;">规则: ${item.profile}</div>`;
+            }
+            
             // 剧照按钮 - 从save_dir中提取extrafanart目录，显示在封面内部右下角
             let fanartBtn = '';
             let fanartDir = item.extrafanart_dir;
@@ -2384,11 +2798,13 @@
                   <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
                     <div style="flex:1;">
                       <div style="font-size:14px;font-weight:600;color:#e5e7eb;margin-bottom:4px;">${name}</div>
-                      <div style="font-size:11px;color:#9ca3af;">任务 ${formatTaskId(taskId)} · ${timeText}</div>
+                      <div style="font-size:11px;color:#9ca3af;">任务 ${formatTaskId(taskId)} · ${timeText}${statusBadge}</div>
                       ${crawlersInfo}
+                      ${profileInfo}
                     </div>
                   </div>
                   <div style="font-size:11px;color:#9ca3af;margin-top:8px;word-break:break-all;">保存路径: ${safeSaveDir}</div>
+                  ${sourcePathHtml}
                   ${downloadStatusBlocks}
                   ${nfoInfoHtml}
                 </div>
@@ -2567,21 +2983,697 @@
       const historyFilterClear = document.getElementById('history-filter-clear');
       
       if (historyFilterApply) {
-        historyFilterApply.addEventListener('click', () => {
+        historyFilterApply.addEventListener('click', async () => {
           historyFilters.path = historyFilterPath ? historyFilterPath.value : '';
           historyFilters.profile = historyFilterProfile ? historyFilterProfile.value : '';
-          applyHistoryFilters();
+          const historyDvdEl = document.getElementById('history-filter-dvdid');
+          historyFilters.dvdid = historyDvdEl ? historyDvdEl.value : '';
+          const historyStatusEl = document.getElementById('history-filter-status');
+          historyFilters.status = historyStatusEl ? historyStatusEl.value : '';
+          await applyHistoryFilters();
         });
       }
       
       if (historyFilterClear) {
-        historyFilterClear.addEventListener('click', () => {
+        historyFilterClear.addEventListener('click', async () => {
           if (historyFilterPath) historyFilterPath.value = '';
           if (historyFilterProfile) historyFilterProfile.value = '';
-          historyFilters = { path: '', profile: '' };
-          applyHistoryFilters();
+          const historyDvdEl = document.getElementById('history-filter-dvdid');
+          if (historyDvdEl) historyDvdEl.value = '';
+          const historyStatusEl = document.getElementById('history-filter-status');
+          if (historyStatusEl) historyStatusEl.value = '';
+          historyFilters = { path: '', profile: '', dvdid: '', status: '' };
+          await applyHistoryFilters();
         });
       }
+
+      // Background tasks: load/create/list UI
+      async function loadBackgroundTasks() {
+        const bgList = document.getElementById('bg-list');
+        if (!bgList) return;
+        bgList.innerHTML = '<div class="placeholder">正在加载...</div>';
+        try {
+          const items = await fetchJSON('/api/tasks/background');
+          if (!items || items.length === 0) {
+            bgList.innerHTML = '<div class="placeholder">暂无后台任务</div>';
+            return;
+          }
+          const html = items.map(it => {
+            const nextRun = it.next_run ? new Date(it.next_run).toLocaleString() : '-';
+            const lastRun = it.last_run ? new Date(it.last_run).toLocaleString() : '-';
+            return `<div style="border:1px solid #1f2937;border-radius:8px;padding:10px;margin-bottom:8px;background:#020617;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-weight:600;color:#e5e7eb;">${it.name}</div>
+                  <div style="font-size:12px;color:#9ca3af;">路径: ${it.directories.join(', ')}</div>
+                  <div style="font-size:12px;color:#9ca3af;">规则: ${it.profile || 'default'}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="font-size:11px;color:#9ca3af;">下次: ${nextRun}</div>
+                  <div style="display:flex;gap:6px;">
+                    <button class="ghost-btn" onclick="showBgTaskLogs('${it.id}')">日志</button>
+                    <button class="ghost-btn" onclick="runBg('${it.id}')">立即执行</button>
+                    <button class="ghost-btn" onclick="deleteBg('${it.id}')">删除</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+          }).join('');
+          bgList.innerHTML = html;
+        } catch (e) {
+          console.error('加载后台任务失败', e);
+          bgList.innerHTML = '<div class="placeholder">加载失败</div>';
+        }
+      }
+
+      document.getElementById('bg-add-dir')?.addEventListener('click', () => {
+        const input = document.getElementById('bg-dir-input');
+        const container = document.getElementById('bg-dirs');
+        if (!input || !container) return;
+        const v = input.value && input.value.trim();
+        if (!v) return;
+        const el = document.createElement('div');
+        el.style.display = 'flex';
+        el.style.gap = '8px';
+        el.innerHTML = `<input value="${v}" style="flex:1;padding:6px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;" /><button class="ghost-btn">删除</button>`;
+        el.querySelector('button')?.addEventListener('click', () => el.remove());
+        container.appendChild(el);
+        input.value = '';
+      });
+
+      // 打开目录浏览弹窗（仅显示文件夹），允许将选中路径添加到目标容器（bg-dirs / modal-bg-dirs）
+      document.getElementById('bg-browse-dir')?.addEventListener('click', async () => {
+        const openDirBrowser = async (initialPath, onAdd) => {
+          let currentPath = initialPath || '/video';
+          const modalWrap = document.createElement('div');
+          modalWrap.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(15,23,42,0.9);z-index:120;align-items:center;justify-content:center;padding:20px;';
+          modalWrap.innerHTML = `
+            <div style="background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:12px;max-width:800px;width:100%;max-height:80vh;overflow:auto;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="font-size:16px;font-weight:600;color:#e5e7eb;">选择目录</div>
+                <div>
+                  <button class="ghost-btn modal-add-selected" style="margin-right:8px;">添加选中</button>
+                  <button class="modal-close-btn" style="border:none;background:transparent;color:#9ca3af;font-size:20px;cursor:pointer;">×</button>
+                </div>
+              </div>
+              <div id="dir-browser-breadcrumb" style="font-size:13px;color:#9ca3af;margin-bottom:8px;"></div>
+              <div id="dir-browser-list" style="max-height:56vh;overflow:auto;padding-right:6px;"></div>
+            </div>
+          `;
+          document.body.appendChild(modalWrap);
+          const closeModal = () => { document.body.removeChild(modalWrap); };
+          modalWrap.querySelector('.modal-close-btn')?.addEventListener('click', closeModal);
+
+          const renderList = async (path) => {
+            currentPath = path;
+            const listEl = modalWrap.querySelector('#dir-browser-list');
+            const breadcrumbEl = modalWrap.querySelector('#dir-browser-breadcrumb');
+            breadcrumbEl.textContent = currentPath;
+            listEl.innerHTML = '<div class="placeholder">正在加载...</div>';
+            try {
+              const entries = await fetchJSON('/api/tasks/fs/browse?path=' + encodeURIComponent(currentPath));
+              // 仅显示目录
+              const dirs = (Array.isArray(entries) ? entries : []).filter(e => e.is_dir);
+              if (dirs.length === 0) {
+                listEl.innerHTML = '<div class="placeholder">当前目录下没有子目录</div>';
+                return;
+              }
+              const html = dirs.map(d => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #0b1220;">
+                  <div style="cursor:pointer;">
+                    <div style="font-weight:600;color:#e5e7eb;" data-path="${d.path}" class="dir-name">${d.name}</div>
+                    <div style="font-size:12px;color:#9ca3af;">目录</div>
+                  </div>
+                  <div><input type="checkbox" class="dir-select" data-path="${d.path}" /></div>
+                </div>
+              `).join('');
+              listEl.innerHTML = '';
+              // 上级目录
+              if (currentPath !== '/' && currentPath !== '' && currentPath !== '.' ) {
+                const upDiv = document.createElement('div');
+                upDiv.style.padding = '6px 0';
+                upDiv.innerHTML = `<button class="ghost-btn dir-up">.. 上级目录</button>`;
+                listEl.appendChild(upDiv);
+              }
+              listEl.insertAdjacentHTML('beforeend', html);
+
+              // 点击目录名进入（导航）
+              listEl.addEventListener('click', (ev) => {
+                const nameEl = ev.target && ev.target.closest && ev.target.closest('.dir-name');
+                if (nameEl) {
+                  const path = nameEl.getAttribute('data-path');
+                  if (path) renderList(path);
+                }
+                const upBtn = ev.target && ev.target.closest && ev.target.closest('.dir-up');
+                if (upBtn) {
+                  // 计算上级路径
+                  const parts = currentPath.replace(/\\/g, '/').split('/');
+                  if (parts.length > 1) {
+                    parts.pop();
+                    const up = parts.length === 1 ? '/' : parts.join('/');
+                    renderList(up);
+                  }
+                }
+              });
+            } catch (err) {
+              console.error('浏览目录失败', err);
+              listEl.innerHTML = '<div class="placeholder">无法浏览目录</div>';
+            }
+          };
+
+          // 添加选中到目标容器
+          modalWrap.querySelector('.modal-add-selected')?.addEventListener('click', () => {
+            const checks = Array.from(modalWrap.querySelectorAll('.dir-select'));
+            const selected = checks.filter(c => c.checked).map(c => c.getAttribute('data-path')).filter(Boolean);
+            if (selected.length === 0) {
+              window.showAlert('请先勾选至少一个目录');
+              return;
+            }
+            onAdd(selected);
+            closeModal();
+          });
+
+          // 初始加载
+          await renderList(currentPath);
+        };
+
+        try {
+          await openDirBrowser('/video', (paths) => {
+            const container = document.getElementById('bg-dirs');
+            if (!container) return;
+            paths.forEach(path => {
+              const el = document.createElement('div');
+              el.style.display = 'flex';
+              el.style.gap = '8px';
+              el.innerHTML = `<input value="${path}" style="flex:1;padding:6px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;" /><button class="ghost-btn">删除</button>`;
+              el.querySelector('button')?.addEventListener('click', () => el.remove());
+              container.appendChild(el);
+            });
+          });
+        } catch (err) {
+          console.error('打开目录浏览失败', err);
+          window.showAlert('无法打开目录浏览');
+        }
+      });
+
+      // 新建后台任务弹窗（浮动）
+      document.getElementById('bg-open-create-btn')?.addEventListener('click', () => {
+        try {
+          const modal = document.createElement('div');
+          modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(15,23,42,0.9);z-index:140;align-items:center;justify-content:center;padding:12px;';
+          modal.innerHTML = `
+            <div style="background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:16px;max-width:720px;width:100%;max-height:80vh;overflow:auto;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <div style="font-size:16px;font-weight:600;color:#e5e7eb;">新建后台刮削任务</div>
+                <div>
+                  <button class="modal-close-btn" style="border:none;background:transparent;color:#9ca3af;font-size:20px;cursor:pointer;margin-left:8px;">×</button>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div class="field"><label>任务名称</label><input id="modal-bg-name" placeholder="例如：整理完成任务" /></div>
+                <div class="field">
+                  <label>选择目录（多选）</label>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                    <code id="modal-videode-path" style="padding:2px 6px;border-radius:999px;border:1px solid #374151;background:#020617;font-size:11px;">/video</code>
+                    <button type="button" class="ghost-btn" id="modal-videode-up" style="font-size:11px;">上一级</button>
+                    <button type="button" class="ghost-btn" id="modal-videode-refresh" style="font-size:11px;">刷新</button>
+                  </div>
+                  <table class="table" id="modal-videode-table" style="font-size:11px;margin-top:8px;">
+                    <thead>
+                      <tr>
+                        <th style="width:32px;"><input type="checkbox" id="modal-videode-select-all" /></th>
+                        <th>名称</th>
+                        <th style="width:80px;">类型</th>
+                        <th style="width:120px;">大小</th>
+                        <th style="width:80px;">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="modal-videode-tbody"></tbody>
+                  </table>
+                  <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button class="primary-btn" id="modal-videode-add" style="font-size:11px;">添加到选择目录</button>
+                  </div>
+                  <div id="modal-bg-dirs" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>
+                </div>
+                <div class="field" style="display:flex;align-items:center;gap:8px;">
+                  <div style="flex:1;min-width:0;">
+                    <label>使用规则预设</label>
+                    <select id="modal-bg-profile" style="width:100%;"></select>
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="primary-btn" id="modal-bg-new-rule" style="font-size:11px;">新建规则</button>
+                    <button class="primary-btn" id="modal-bg-edit-rule" style="font-size:11px;display:none;">编辑规则</button>
+                  </div>
+                </div>
+                <div class="field"><label>Cron 表达式</label><input id="modal-bg-cron" value="0 */2 * * *" placeholder="例如: 0 */2 * * * (每2小时)" /></div>
+                <div class="field"><label>失败重试次数</label><input id="modal-bg-retry" type="number" min="0" value="0" /></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="primary-btn" id="modal-bg-create">创建任务</button><button class="ghost-btn modal-bg-cancel">取消</button></div>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(modal);
+          const closeModal = () => { document.body.removeChild(modal); };
+          modal.querySelector('.modal-close-btn')?.addEventListener('click', closeModal);
+          modal.querySelector('.modal-bg-cancel')?.addEventListener('click', closeModal);
+
+          // 填充规则下拉（克隆现有 bg-profile 的 options，若不存在则从 API 拉）
+          const src = document.getElementById('bg-profile');
+          const dst = modal.querySelector('#modal-bg-profile');
+          if (src && dst) {
+            dst.innerHTML = src.innerHTML;
+          } else {
+            // fallback: load from API
+            fetchJSON('/api/tasks/manual/rules').then(rules => {
+              if (dst) {
+                dst.innerHTML = '<option value="default">使用当前全局规则</option>' + Object.keys(rules || {}).map(n => `<option value="${n}">${n}</option>`).join('');
+              }
+            }).catch(()=>{});
+          }
+
+          // modal 内的视频/目录列表：加载并渲染（仅启用目录复选）
+          const modalVideodePathEl = modal.querySelector('#modal-videode-path');
+          const modalVideodeTbody = modal.querySelector('#modal-videode-tbody');
+          const modalVideodeSelectAll = modal.querySelector('#modal-videode-select-all');
+          const modalVideodeUpBtn = modal.querySelector('#modal-videode-up');
+          const modalVideodeRefreshBtn = modal.querySelector('#modal-videode-refresh');
+          const modalVideodeAddBtn = modal.querySelector('#modal-videode-add');
+          let modalVideodeCurrentPath = '/video';
+          let modalVideodeEntries = [];
+          let modalVideodeSelected = new Set();
+
+          async function loadModalVideode(path) {
+            modalVideodeCurrentPath = path || '/video';
+            if (modalVideodePathEl) modalVideodePathEl.textContent = modalVideodeCurrentPath;
+            const hintEl = modal.querySelector('#modal-videode-run-hint');
+            try {
+              const items = await fetchJSON('/api/tasks/fs/browse?path=' + encodeURIComponent(modalVideodeCurrentPath));
+              modalVideodeEntries = Array.isArray(items) ? items : [];
+              modalVideodeSelected.clear();
+              if (modalVideodeSelectAll) modalVideodeSelectAll.checked = false;
+              if (!modalVideodeTbody) return;
+              modalVideodeTbody.innerHTML = '';
+              modalVideodeEntries.forEach(entry => {
+                const tr = document.createElement('tr');
+                const tdChk = document.createElement('td');
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                // 仅允许选择目录
+                if (!entry.is_dir) chk.disabled = true;
+                chk.addEventListener('change', () => {
+                  if (chk.checked) modalVideodeSelected.add(entry.path);
+                  else modalVideodeSelected.delete(entry.path);
+                });
+                tdChk.appendChild(chk);
+
+                const tdName = document.createElement('td');
+                const nameBtn = document.createElement('button');
+                nameBtn.type = 'button';
+                nameBtn.textContent = entry.name;
+                nameBtn.className = 'ghost-btn';
+                nameBtn.style.padding = '2px 6px';
+                nameBtn.style.fontSize = '11px';
+                nameBtn.addEventListener('click', () => {
+                  if (entry.is_dir) loadModalVideode(entry.path);
+                });
+                tdName.appendChild(nameBtn);
+
+                const tdType = document.createElement('td');
+                tdType.textContent = entry.is_dir ? '目录' : '文件';
+                const tdSize = document.createElement('td');
+                tdSize.textContent = entry.is_dir ? '' : (entry.size ? fmtSize(entry.size) : '');
+                const tdOp = document.createElement('td');
+                tdOp.innerHTML = entry.is_dir ? '' : `<button class="ghost-btn" style="font-size:11px;" onclick="event.stopPropagation();">仅刮此文件</button>`;
+
+                tr.appendChild(tdChk);
+                tr.appendChild(tdName);
+                tr.appendChild(tdType);
+                tr.appendChild(tdSize);
+                tr.appendChild(tdOp);
+                modalVideodeTbody.appendChild(tr);
+              });
+            } catch (err) {
+              console.error('加载目录失败', err);
+            }
+          }
+
+          if (modalVideodeSelectAll && modalVideodeTbody) {
+            modalVideodeSelectAll.addEventListener('change', () => {
+              const rows = modalVideodeTbody.querySelectorAll('tr');
+              modalVideodeSelected.clear();
+              rows.forEach(tr => {
+                const chk = tr.querySelector('input[type="checkbox"]');
+                if (chk) {
+                  chk.checked = modalVideodeSelectAll.checked && !chk.disabled;
+                  const nameBtn = tr.querySelector('button.ghost-btn');
+                  if (chk.checked && nameBtn) {
+                    const entry = modalVideodeEntries.find(e => e.name === nameBtn.textContent);
+                    if (entry && entry.is_dir) modalVideodeSelected.add(entry.path);
+                  }
+                }
+              });
+            });
+          }
+          if (modalVideodeUpBtn) {
+            modalVideodeUpBtn.addEventListener('click', () => {
+              if (!modalVideodeCurrentPath || modalVideodeCurrentPath === '/video') return;
+              const parent = modalVideodeCurrentPath.replace(/\/+$/,'');
+              const idx = parent.lastIndexOf('/');
+              const next = idx > 0 ? parent.slice(0, idx) : '/video';
+              loadModalVideode(next || '/video');
+            });
+          }
+          if (modalVideodeRefreshBtn) {
+            modalVideodeRefreshBtn.addEventListener('click', () => {
+              loadModalVideode(modalVideodeCurrentPath || '/video');
+            });
+          }
+          if (modalVideodeAddBtn) {
+            modalVideodeAddBtn.addEventListener('click', () => {
+              const container = modal.querySelector('#modal-bg-dirs');
+              if (!container) return;
+              const paths = Array.from(modalVideodeSelected);
+              if (paths.length === 0) { window.showAlert('请先勾选至少一个目录'); return; }
+              paths.forEach(path => {
+                const el = document.createElement('div');
+                el.style.display = 'flex';
+                el.style.gap = '8px';
+                el.innerHTML = `<input value="${path}" style="flex:1;padding:6px;border-radius:6px;border:1px solid #374151;background:#020617;color:#e5e7eb;" /><button class="ghost-btn">删除</button>`;
+                el.querySelector('button')?.addEventListener('click', () => el.remove());
+                container.appendChild(el);
+              });
+              modalVideodeSelected.clear();
+              const rows = modalVideodeTbody.querySelectorAll('tr');
+              rows.forEach(tr => { const chk = tr.querySelector('input[type="checkbox"]'); if (chk) chk.checked = false; });
+              if (modalVideodeSelectAll) modalVideodeSelectAll.checked = false;
+            });
+          }
+
+          // 初始化 modal 内文件列表
+          loadModalVideode('/video');
+
+          
+
+          // modal 中规则下拉变化时显示/隐藏编辑按钮
+          modal.querySelector('#modal-bg-profile')?.addEventListener('change', function () {
+            const eb = modal.querySelector('#modal-bg-edit-rule');
+            if (eb) eb.style.display = this.value !== 'default' ? 'inline-block' : 'none';
+          });
+
+          // 新建规则 / 编辑规则 按钮行为：调用已有的手动规则模态
+          modal.querySelector('#modal-bg-new-rule')?.addEventListener('click', () => {
+            const btn = document.getElementById('manual-rules-btn');
+            if (btn) btn.click();
+          });
+          modal.querySelector('#modal-bg-edit-rule')?.addEventListener('click', () => {
+            const sel = modal.querySelector('#modal-bg-profile');
+            const selectedRule = sel ? sel.value : null;
+            if (!selectedRule || selectedRule === 'default') return;
+            if (manualProfileSelect) {
+              manualProfileSelect.value = selectedRule;
+              manualProfileSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (manualRulesEditBtn) manualRulesEditBtn.click();
+          });
+
+          // 创建任务
+          modal.querySelector('#modal-bg-create')?.addEventListener('click', async () => {
+            const nameEl = modal.querySelector('#modal-bg-name');
+            const dirContainer = modal.querySelector('#modal-bg-dirs');
+            const profileEl = modal.querySelector('#modal-bg-profile');
+            const cronEl = modal.querySelector('#modal-bg-cron');
+            const retryEl = modal.querySelector('#modal-bg-retry');
+            if (!dirContainer || !cronEl) return;
+            const dirs = [];
+            Array.from(dirContainer.querySelectorAll('input')).forEach(i => {
+              if (i.value && i.value.trim()) dirs.push(i.value.trim());
+            });
+            if (dirs.length === 0) {
+              window.showAlert('请至少添加一个目录');
+              return;
+            }
+            const payload = {
+              name: nameEl ? (nameEl.value || '后台任务') : '后台任务',
+              directories: dirs,
+              profile: profileEl ? profileEl.value : 'default',
+              cron: cronEl.value || '0 */2 * * *',
+              retry_count: Number(retryEl ? retryEl.value : 0)
+            };
+            try {
+              await fetchJSON('/api/tasks/background', { method: 'POST', body: JSON.stringify(payload) });
+              window.showAlert('创建成功');
+              closeModal();
+              loadBackgroundTasks();
+            } catch (e) {
+              console.error('创建后台任务失败', e);
+              window.showAlert('创建失败');
+            }
+          });
+
+        } catch (e) {
+          console.error('打开新建后台任务弹窗失败', e);
+          window.showAlert('操作失败');
+        }
+      });
+
+      document.getElementById('bg-create')?.addEventListener('click', async () => {
+        const nameEl = document.getElementById('bg-name');
+        const dirContainer = document.getElementById('bg-dirs');
+        const profileEl = document.getElementById('bg-profile');
+        const cronEl = document.getElementById('bg-cron');
+        const retryEl = document.getElementById('bg-retry');
+        const statusEl = document.getElementById('bg-create-status');
+        if (!nameEl || !dirContainer || !cronEl) return;
+        const dirs = [];
+        Array.from(dirContainer.querySelectorAll('input')).forEach(i => {
+          if (i.value && i.value.trim()) dirs.push(i.value.trim());
+        });
+        if (dirs.length === 0) {
+          if (statusEl) { statusEl.style.color = '#fca5a5'; statusEl.textContent = '请至少添加一个目录'; }
+          return;
+        }
+        const payload = {
+          name: nameEl.value || '后台任务',
+          directories: dirs,
+          profile: profileEl ? profileEl.value : 'default',
+          cron: cronEl.value || '0 */2 * * *',
+          retry_count: Number(retryEl ? retryEl.value : 0)
+        };
+        try {
+          const resp = await fetchJSON('/api/tasks/background', { method: 'POST', body: JSON.stringify(payload) });
+          if (statusEl) { statusEl.style.color = '#22c55e'; statusEl.textContent = '创建成功'; }
+          // reset form
+          nameEl.value = '';
+          cronEl.value = '';
+          retryEl.value = '0';
+          Array.from(dirContainer.querySelectorAll('div')).forEach((d, idx) => { if (idx>0) d.remove(); }); // keep initial input
+          loadBackgroundTasks();
+        } catch (e) {
+          console.error('创建后台任务失败', e);
+          if (statusEl) { statusEl.style.color = '#fca5a5'; statusEl.textContent = '创建失败'; }
+        }
+      });
+
+      window.runBg = async function(id) {
+        try {
+          await fetchJSON('/api/tasks/background/' + encodeURIComponent(id) + '/run', { method: 'POST' });
+          window.showAlert('后台任务已触发');
+        } catch (e) {
+          window.showAlert('触发失败');
+        }
+      };
+
+      window.deleteBg = async function(id) {
+        const ok = await window.showConfirm('确定删除该后台任务吗？');
+        if (!ok) return;
+        try {
+          await fetchJSON('/api/tasks/background/' + encodeURIComponent(id), { method: 'DELETE' });
+          loadBackgroundTasks();
+        } catch (e) {
+          window.showAlert('删除失败');
+        }
+      };
+      
+      // 弹出后台任务相关的子任务列表与日志（后台任务本身无运行日志，显示其触发的手动子任务）
+      window.showBgTaskLogs = async function(bgTaskId) {
+        try {
+          // 先获取 background task 配置以获取目录列表
+          const bgTasks = await fetchJSON('/api/tasks/background');
+          const cfg = Array.isArray(bgTasks) ? bgTasks.find(b => b.id === bgTaskId) : null;
+          if (!cfg) {
+            window.showAlert('未找到该后台任务');
+            return;
+          }
+          const dirs = cfg.directories || [];
+
+          // 获取所有手动任务并筛选与该后台任务目录相关的任务
+          const allTasks = await fetchJSON('/api/tasks');
+          const related = (Array.isArray(allTasks) ? allTasks : []).filter(t => {
+            const taskPath = (t.input_directory || t.inputPath || '').toString();
+            if (taskPath) {
+              return dirs.some(d => taskPath.startsWith(d));
+            }
+            // fallback: 尝试从 task id 解码路径并匹配
+            try {
+              const parts = String(t.id || '').split('_');
+              if (parts.length >= 2) {
+                const decoded = decodeBase64UrlUtf8(parts[0]);
+                return dirs.some(d => decoded && decoded.startsWith(d));
+              }
+            } catch (e) {}
+            return false;
+          }).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+          // 创建 modal，先展示相关任务列表，点击某个任务可查看该任务日志（复用 startManualLogStreaming）
+          const modal = document.createElement('div');
+          modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(15,23,42,0.9);z-index:130;align-items:center;justify-content:center;padding:12px;';
+          modal.innerHTML = `
+            <div style="background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:12px;max-width:900px;width:100%;max-height:80vh;overflow:auto;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-size:16px;font-weight:600;color:#e5e7eb;">后台任务：${cfg.name || bgTaskId} — 相关子任务</div>
+                <button class="modal-close-btn" style="border:none;background:transparent;color:#9ca3af;font-size:20px;cursor:pointer;">×</button>
+              </div>
+              <div id="bg-log-modal-body" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
+          `;
+          document.body.appendChild(modal);
+          modal.addEventListener('click', (e) => { if (e.target === modal) modal.querySelector('.modal-close-btn')?.click(); });
+
+          // 备份占位的恢复变量，以便在 modal 关闭时恢复页面状态
+          let prevManualLogContainer = null;
+          let prevManualLogStatusEl = null;
+          let prevAllTaskEntries = null;
+          let prevProcessedLines = null;
+          // 备份正在运行的日志轮询信息，以便关闭 modal 后恢复实时流
+          let prevManualLogTimer = null;
+          let prevManualLogTaskId = null;
+
+          modal.querySelector('.modal-close-btn')?.addEventListener('click', () => {
+            // 恢复/停止日志轮询，并恢复全局手动日志数据
+            try { 
+              // 保存当前 timers then 清理 modal 内轮询
+              if (manualLogTimer) { clearInterval(manualLogTimer); manualLogTimer = null; } 
+            } catch {}
+            try { if (bgLogTimer) { clearInterval(bgLogTimer); bgLogTimer = null; } } catch {}
+            try {
+              if (prevAllTaskEntries) {
+                allTaskLogs.clear();
+                for (const [k, v] of prevAllTaskEntries) allTaskLogs.set(k, v);
+              }
+              if (prevProcessedLines) {
+                processedLogLines.clear();
+                for (const v of prevProcessedLines) processedLogLines.add(v);
+              }
+              if (prevManualLogContainer !== null) manualLogContainer = prevManualLogContainer;
+              if (prevManualLogStatusEl !== null) manualLogStatusEl = prevManualLogStatusEl;
+            } catch (e) {
+              console.warn('恢复手动日志状态失败', e);
+            }
+            document.body.removeChild(modal);
+            // 如果关闭 modal 前存在正在实时流的手动任务，则恢复其实时流
+            try {
+              if (prevManualLogTaskId) {
+                // 以 preserveContent=true 恢复之前的已加载内容，并开启实时轮询
+                startManualLogStreaming(prevManualLogTaskId, /*preserveContent=*/true, /*singleShot=*/false);
+              }
+            } catch (e) {
+              console.warn('恢复手动实时流失败', e);
+            }
+          });
+
+          const body = modal.querySelector('#bg-log-modal-body');
+          if (!body) return;
+
+          if (!related || related.length === 0) {
+            body.innerHTML = `<div class="placeholder">未找到与该后台任务关联的手动子任务（可能尚未触发）</div>`;
+            return;
+          }
+
+          // 使用与手动刮削相同的可折叠日志视图来显示相关手动任务（复用现有渲染与解析逻辑）
+          body.innerHTML = '';
+          // 为避免污染全局手动日志视图与已处理行集合，备份并清空相关全局结构，然后在 modal 中进行独立轮询渲染
+          prevManualLogContainer = typeof manualLogContainer !== 'undefined' ? manualLogContainer : null;
+          prevManualLogStatusEl = typeof manualLogStatusEl !== 'undefined' ? manualLogStatusEl : null;
+          prevAllTaskEntries = Array.from(allTaskLogs.entries());
+          prevProcessedLines = Array.from(processedLogLines.values());
+          
+          // 备份并停止当前的手动日志轮询（如果有），以便在 modal 关闭后恢复
+          try {
+            prevManualLogTimer = manualLogTimer;
+            prevManualLogTaskId = manualLogTaskId;
+            if (manualLogTimer) { clearInterval(manualLogTimer); manualLogTimer = null; }
+            manualLogTaskId = null;
+          } catch (e) {}
+
+          // 清空全局集合，保证手动日志列表不被后台任务日志污染
+          allTaskLogs.clear();
+          processedLogLines.clear();
+
+          // 将渲染目标指向 modal body
+          manualLogContainer = body;
+          // 在 modal 顶部放一个状态元素供渲染函数使用
+          const statusEl = document.createElement('div');
+          statusEl.id = 'bg-manual-log-status';
+          statusEl.style.cssText = 'font-size:12px;color:#9ca3af;margin-bottom:8px;';
+          body.appendChild(statusEl);
+          manualLogStatusEl = statusEl;
+
+          // 按创建时间倒序渲染全部相关手动任务（最新在上）
+          related.sort((a, b) => ((b.created_at || '') > (a.created_at || '')) ? 1 : -1);
+
+          // 直接在 modal 中渲染与手动刮削相同的可折叠日志视图，实时更新（通过周期性 singleShot 抓取每个子任务的日志）
+          related.sort((a, b) => ((b.created_at || '') > (a.created_at || '')) ? 1 : -1);
+          // 首次单次加载所有相关子任务的日志快照（使用较大 fetchLimit 提供更多上下文）
+          for (const t of related) {
+            try {
+              await startManualLogStreaming(t.id, /*preserveContent=*/true, /*singleShot=*/true, /*fetchLimit=*/2000);
+            } catch (e) {
+              const err = document.createElement('div');
+              err.className = 'placeholder';
+              err.textContent = `加载日志出错：${t.id}`;
+              body.appendChild(err);
+            }
+          }
+          // 不做全量周期性刷新以避免 UI 闪烁。
+          // 初次加载后，如果存在正在运行的子任务，则将其设为流式实时更新（与手动界面一致，只对单个任务启动流）。
+          try {
+            const runningTask = related.find(t => (t.status === 'RUNNING' || t.status === 'PENDING'));
+            if (runningTask) {
+              // preserveContent=true 保留已加载的快照内容，singleShot=false 开启实时轮询
+              await startManualLogStreaming(runningTask.id, /*preserveContent=*/true, /*singleShot=*/false);
+            }
+          } catch (e) {
+            console.warn('无法开启子任务实时流', e);
+          }
+
+          // 支持在 modal 中点击任务头切换时自动开启对应任务的实时流（行为与手动界面保持一致）
+          try {
+            if (!manualLogContainer._bgModalDelegated) {
+              manualLogContainer.addEventListener('click', function(e) {
+                const header = e.target.closest('.log-task-header');
+                if (!header) return;
+                const group = header.closest('.log-task-group');
+                if (!group) return;
+                const tid = group.getAttribute('data-task-id');
+                // 延迟一点时间，让 toggleTaskLog 执行完成（切换显示状态）
+                setTimeout(() => {
+                  const bodyEl = group.querySelector('.log-task-body');
+                  if (bodyEl && bodyEl.style.display !== 'none') {
+                    try { startManualLogStreaming(tid, /*preserveContent=*/true, /*singleShot=*/false); } catch (err) {}
+                  }
+                }, 60);
+              }, true);
+              manualLogContainer._bgModalDelegated = true;
+            }
+          } catch (e) {
+            console.warn('绑定 modal 内点击监听失败', e);
+          }
+          
+
+        } catch (e) {
+          console.error('打开后台日志失败', e);
+          window.showAlert('打开日志失败');
+        }
+      };
       
       // 任务日志筛选功能
       const manualLogFilterStatus = document.getElementById('manual-log-filter-status');
@@ -2595,21 +3687,17 @@
         const currentValue = manualLogFilterPath.value;
         const uniquePaths = new Set();
         allTaskLogs.forEach((taskData, taskId) => {
-          const decodedPath = (() => {
-            try {
-              const parts = String(taskId).split('_');
-              if (parts.length >= 2) {
-                let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
-                while (pathEncoded.length % 4 !== 0) {
-                  pathEncoded += '=';
+            const decodedPath = (() => {
+              try {
+                const parts = String(taskId).split('_');
+                if (parts.length >= 2) {
+                  return tryFixMojibake(decodeBase64UrlUtf8(parts[0]) || null);
                 }
-                return atob(pathEncoded);
+              } catch (e) {
+                return null;
               }
-            } catch (e) {
               return null;
-            }
-            return null;
-          })();
+            })();
           if (decodedPath) {
             const dirPath = decodedPath.substring(0, decodedPath.lastIndexOf('/') || decodedPath.lastIndexOf('\\'));
             if (dirPath) uniquePaths.add(dirPath);
@@ -2626,11 +3714,11 @@
         if (currentValue) manualLogFilterPath.value = currentValue;
       }
       
-      // 应用任务日志筛选并重新渲染
+      // 应用任务日志筛选并重新渲染（支持规则与分页）
       function applyManualLogFilters() {
         if (!manualLogContainer) return;
         updateManualLogPathFilter();
-        
+
         // 获取所有任务并应用筛选
         const allTasks = Array.from(allTaskLogs.entries());
         const filteredTasks = allTasks.filter(([taskId, taskData]) => {
@@ -2639,18 +3727,20 @@
             const status = taskData.status || 'RUNNING';
             if (status !== manualLogFilters.status) return false;
           }
-          
+
+          // 规则筛选
+          if (manualLogFilters.profile) {
+            const profile = taskData.profile || '';
+            if (profile !== manualLogFilters.profile) return false;
+          }
+
           // 路径筛选
           if (manualLogFilters.path) {
             const decodedPath = (() => {
               try {
                 const parts = String(taskId).split('_');
                 if (parts.length >= 2) {
-                  let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
-                  while (pathEncoded.length % 4 !== 0) {
-                    pathEncoded += '=';
-                  }
-                  return atob(pathEncoded);
+                  return decodeBase64UrlUtf8(parts[0]);
                 }
               } catch (e) {
                 return null;
@@ -2661,11 +3751,11 @@
             const dirPath = taskPath.substring(0, Math.max(taskPath.lastIndexOf('/'), taskPath.lastIndexOf('\\')));
             if (dirPath !== manualLogFilters.path) return false;
           }
-          
+
           return true;
         });
-        
-        // 重新渲染任务日志（调用现有的渲染逻辑）
+
+        // 重新渲染任务日志（分页）
         if (manualLogContainer) {
           const html = [];
           const sortedTasks = filteredTasks.sort((a, b) => {
@@ -2673,40 +3763,40 @@
             const timeB = b[0].split('_').slice(1).join('_');
             return timeB.localeCompare(timeA);
           });
-          
+
+          const totalPages = Math.max(1, Math.ceil(sortedTasks.length / manualPageSize));
+          if (manualPage > totalPages) manualPage = totalPages;
+          const startIndex = (manualPage - 1) * manualPageSize;
+          const endIndex = startIndex + manualPageSize;
+          const pageTasks = sortedTasks.slice(startIndex, endIndex);
+
           // 解码base64路径的函数
           const decodeTaskPath = (taskId) => {
             try {
               const parts = String(taskId).split('_');
               if (parts.length >= 2) {
-                let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
-                while (pathEncoded.length % 4 !== 0) {
-                  pathEncoded += '=';
-                }
-                return atob(pathEncoded);
+                return decodeBase64UrlUtf8(parts[0]);
               }
             } catch (e) {
               console.warn('解码任务路径失败:', e);
             }
             return null;
           };
-          
-          sortedTasks.forEach(([taskId, taskData]) => {
+
+          pageTasks.forEach(([taskId, taskData]) => {
             const decodedPath = decodeTaskPath(taskId);
             const displayPath = decodedPath || taskData.inputPath || '';
             const parts = String(taskId).split('_');
             let taskTimeFormatted = '';
             if (parts.length >= 3) {
-              const datePart = parts[1];
-              const timePart = parts[2];
-              taskTimeFormatted = `${datePart} ${timePart}`;
+              taskTimeFormatted = formatTaskId(taskId);
             }
             const status = taskData.status || 'RUNNING';
             const statusColor = status === 'SUCCEEDED' ? '#22c55e' : status === 'FAILED' ? '#ef4444' : status === 'PENDING' ? '#f59e0b' : '#3b82f6';
             const statusText = status === 'SUCCEEDED' ? '完成' : status === 'FAILED' ? '失败' : status === 'PENDING' ? '队列中' : '进行中';
             const isTaskExpanded = expandedTasks.has(String(taskId));
             const safeTaskId = String(taskId).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-            
+
             let stepsHtml = '';
             if (taskData.steps && taskData.steps.length > 0) {
               const stepsList = taskData.steps.map((step, idx) => {
@@ -2715,7 +3805,7 @@
               }).join(', ');
               stepsHtml = `<div style="font-size:10px;color:#9ca3af;margin-top:4px;">${stepsList}</div>`;
             }
-            
+
             const showCancel = status !== 'SUCCEEDED' && status !== 'FAILED';
             html.push(`
               <div class="log-task-group" data-task-id="${safeTaskId}" style="border:1px solid #1f2937;border-radius:8px;margin-bottom:8px;overflow:hidden;background:#020617;">
@@ -2729,7 +3819,7 @@
                   <div style="display:flex;gap:4px;">
                     ${showCancel ? `<button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#f59e0b;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();cancelTask('${safeTaskId}')">取消</button>` : ''}
                     <button class="copy-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#9ca3af;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();copyTaskLog('${safeTaskId}')">复制日志</button>
-                    <button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#ef4444;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();deleteTaskLog('${safeTaskId}')">删除日志</button>
+                    <button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#ef4444;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();showDeleteBubble(this,'${safeTaskId}')">删除日志</button>
                   </div>
                 </div>
                 <div class="log-task-body" id="task-log-${safeTaskId.replace(/[^a-zA-Z0-9]/g, '_')}" style="display:${isTaskExpanded ? 'block' : 'none'};padding:8px 12px;">
@@ -2770,36 +3860,26 @@
                       errorHtml = '<div style="margin-left:20px;margin-top:8px;">' +
                         '<div style="padding:6px 8px;background:#111827;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="toggleErrorLog(\'' + taskId + '-' + safeKey + '\')">' +
                         '<span class="error-arrow-' + taskId + '-' + safeKey + '" style="color:#ef4444;font-size:11px;font-family:ui-monospace;">[+]</span>' +
-                        '<span style="font-size:11px;color:#ef4444;">错误日志</span>' +
+                        '<span style="font-size:11px;color:#ef4444;font-weight:600;">失败日志</span>' +
                         '</div>' +
-                        '<div class="error-body" id="error-log-' + taskId + '-' + safeKey + '" style="display:none;margin-left:20px;padding:6px 8px;background:#020617;">' +
-                        '<div style="font-size:10px;color:#ef4444;font-family:ui-monospace,monospace;line-height:1.4;white-space:pre-wrap;word-break:break-all;overflow-wrap:break-word;">' +
+                        '<div class="error-body" id="error-log-' + taskId + '-' + safeKey + '" style="display:none;margin-left:20px;padding:6px 8px;background:#1f1f1f;">' +
+                        '<div style="font-size:10px;color:#fca5a5;font-family:ui-monospace,monospace;line-height:1.4;white-space:pre-wrap;word-break:break-all;overflow-wrap:break-word;">' +
                         movieData.errors.map(err => String(err).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('\n') +
                         '</div>' +
                         '</div>' +
                         '</div>';
                     }
                     
-                    return '<div style="margin-left:20px;margin-bottom:8px;padding:8px;background:#111827;border-radius:6px;">' +
-                      '<div style="font-size:11px;font-weight:600;color:#e5e7eb;margin-bottom:4px;">影片: ' + movieId + '</div>' +
-                      stepsHtml +
-                      saveDirHtml +
-                      errorHtml +
-                      '</div>';
-                  }).join('') : '<div style="font-size:11px;color:#9ca3af;padding:8px;">暂无影片数据</div>'}
+                    return stepsHtml + saveDirHtml + errorHtml;
+                  }).join('') : '<div style="padding:8px;color:#9ca3af;font-size:11px;">日志加载中...</div>'}
                 </div>
               </div>
             `);
           });
           
-          // 应用筛选后再渲染
-        if (manualLogFilters.status || manualLogFilters.path) {
-          applyManualLogFilters();
-        } else {
+          // 更新分页控件
+          updateManualPagination();
           manualLogContainer.innerHTML = html.join('');
-          // 更新路径筛选下拉框
-          updateManualLogPathFilter();
-        }
         }
       }
       
@@ -2807,6 +3887,10 @@
         manualLogFilterApply.addEventListener('click', () => {
           manualLogFilters.status = manualLogFilterStatus ? manualLogFilterStatus.value : '';
           manualLogFilters.path = manualLogFilterPath ? manualLogFilterPath.value : '';
+          const manualProfileEl = document.getElementById('manual-log-filter-profile');
+          manualLogFilters.profile = manualProfileEl ? manualProfileEl.value : '';
+          // 重置到第一页
+          manualPage = 1;
           applyManualLogFilters();
         });
       }
@@ -2815,8 +3899,103 @@
         manualLogFilterClear.addEventListener('click', () => {
           if (manualLogFilterStatus) manualLogFilterStatus.value = '';
           if (manualLogFilterPath) manualLogFilterPath.value = '';
-          manualLogFilters = { status: '', path: '' };
+          const manualProfileEl = document.getElementById('manual-log-filter-profile');
+          if (manualProfileEl) manualProfileEl.value = '';
+          manualLogFilters = { status: '', path: '', profile: '' };
+          manualPage = 1;
           applyManualLogFilters();
+        });
+      }
+
+      // 分页控件更新函数
+      function updateManualPagination() {
+        const total = Array.from(allTaskLogs.entries()).filter(([taskId, taskData]) => {
+          // 同样的筛选逻辑以计算分页信息
+          if (manualLogFilters.status) {
+            const status = taskData.status || 'RUNNING';
+            if (status !== manualLogFilters.status) return false;
+          }
+          if (manualLogFilters.profile) {
+            const profile = taskData.profile || '';
+            if (profile !== manualLogFilters.profile) return false;
+          }
+          if (manualLogFilters.path) {
+            const decodedPath = (() => {
+              try {
+                const parts = String(taskId).split('_');
+                if (parts.length >= 2) {
+                  return decodeBase64UrlUtf8(parts[0]);
+                }
+              } catch (e) {
+                return null;
+              }
+              return null;
+            })();
+            const taskPath = decodedPath || taskData.inputPath || '';
+            const dirPath = taskPath.substring(0, Math.max(taskPath.lastIndexOf('/'), taskPath.lastIndexOf('\\')));
+            if (dirPath !== manualLogFilters.path) return false;
+          }
+          return true;
+        }).length;
+        const totalPages = Math.max(1, Math.ceil(total / manualPageSize));
+        const pageInfo = document.getElementById('manual-page-info');
+        const prevBtn = document.getElementById('manual-prev-page');
+        const nextBtn = document.getElementById('manual-next-page');
+        if (pageInfo) pageInfo.textContent = `第 ${manualPage} 页，共 ${totalPages || 1} 页（共 ${total} 条）`;
+        if (prevBtn) prevBtn.disabled = manualPage <= 1;
+        if (nextBtn) nextBtn.disabled = manualPage >= totalPages;
+      }
+
+      // 分页按钮事件
+      const manualPrevBtn = document.getElementById('manual-prev-page');
+      const manualNextBtn = document.getElementById('manual-next-page');
+      if (manualPrevBtn) {
+        manualPrevBtn.addEventListener('click', () => {
+          if (manualPage > 1) {
+            manualPage--;
+            applyManualLogFilters();
+          }
+        });
+      }
+      if (manualNextBtn) {
+        manualNextBtn.addEventListener('click', () => {
+          // 计算总页数
+          const total = Array.from(allTaskLogs.entries()).filter(([taskId, taskData]) => {
+            if (manualLogFilters.status) {
+              const status = taskData.status || 'RUNNING';
+              if (status !== manualLogFilters.status) return false;
+            }
+            if (manualLogFilters.profile) {
+              const profile = taskData.profile || '';
+              if (profile !== manualLogFilters.profile) return false;
+            }
+            if (manualLogFilters.path) {
+              const decodedPath = (() => {
+                try {
+                  const parts = String(taskId).split('_');
+                  if (parts.length >= 2) {
+                    let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
+                    while (pathEncoded.length % 4 !== 0) {
+                      pathEncoded += '=';
+                    }
+                    return atob(pathEncoded);
+                  }
+                } catch (e) {
+                  return null;
+                }
+                return null;
+              })();
+              const taskPath = decodedPath || taskData.inputPath || '';
+              const dirPath = taskPath.substring(0, Math.max(taskPath.lastIndexOf('/'), taskPath.lastIndexOf('\\')));
+              if (dirPath !== manualLogFilters.path) return false;
+            }
+            return true;
+          }).length;
+          const totalPages = Math.max(1, Math.ceil(total / manualPageSize));
+          if (manualPage < totalPages) {
+            manualPage++;
+            applyManualLogFilters();
+          }
         });
       }
       
@@ -3432,9 +4611,63 @@
       bindCopyVarButtons();
 
       async function fetchJSON(url, options) {
-        const res = await fetch(url, Object.assign({ credentials: 'include' }, options || {}));
+        // Force no-cache to ensure clients always receive latest logs/status from server
+        const opts = Object.assign({ credentials: 'include', cache: 'no-store' }, options || {});
+        // Ensure JSON content-type when sending a string body
+        if (opts.body && !(opts.headers instanceof Headers) && !(opts.headers && (opts.headers['Content-Type'] || opts.headers['content-type']))) {
+          opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+        }
+        const res = await fetch(url, opts);
         if (!res.ok) throw res;
         return res.json();
+      }
+
+      // Normalize taskId coming from DOM or other sources:
+      // - strip trailing ":<number>" fragments that some DOM ids append
+      // - URI-encode the result for safe inclusion in URLs
+      window.cleanTaskIdForUrl = function(id) {
+        try {
+          const cleaned = String(id).replace(/:\d+$/, '');
+          return encodeURIComponent(cleaned);
+        } catch (e) {
+          return encodeURIComponent(String(id));
+        }
+      };
+
+      // 解码 base64 urlsafe 编码并正确按 UTF-8 返回路径
+      function decodeBase64UrlUtf8(taskIdPart) {
+        try {
+          if (!taskIdPart) return null;
+          let s = String(taskIdPart).replace(/_/g, '/').replace(/-/g, '+');
+          while (s.length % 4 !== 0) s += '=';
+          const binary = atob(s);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          if (typeof TextDecoder !== 'undefined') {
+            return new TextDecoder('utf-8').decode(bytes);
+          } else {
+            // 老环境回退
+            return decodeURIComponent(escape(binary));
+          }
+        } catch (e) {
+          console.warn('decodeBase64UrlUtf8 failed', e);
+          return null;
+        }
+      }
+
+      // 修复可能的 mojibake（把以 Latin1 解读的 UTF-8 再转换回来）
+      function tryFixMojibake(s) {
+        try {
+          // 若包含常见 mojibake 标记（例如 "Ã" / "æ"），尝试转换
+          if (typeof s === 'string' && /[ÃÂæ]/.test(s)) {
+            // decodeURIComponent(escape()) 把 Latin1 字符串按字节解释并转为 UTF-8
+            // eslint-disable-next-line no-undef
+            return decodeURIComponent(escape(s));
+          }
+        } catch (e) {
+          // ignore
+        }
+        return s;
       }
 
       async function initUser() {
@@ -4153,19 +5386,13 @@
           return getTimestamp(b[0]).localeCompare(getTimestamp(a[0]));
         });
         
-        // 解码base64路径的函数
+        // 解码base64路径的函数（返回 UTF-8 字符串，自动修复可能的 mojibake）
         const decodeTaskPath = (taskId) => {
           try {
             const parts = String(taskId).split('_');
             if (parts.length >= 2) {
-              // 恢复base64编码（还原被替换的字符）
-              let pathEncoded = parts[0].replace(/_/g, '/').replace(/-/g, '+');
-              // 添加填充
-              while (pathEncoded.length % 4 !== 0) {
-                pathEncoded += '=';
-              }
-              const decoded = atob(pathEncoded);
-              return decoded;
+              const decoded = decodeBase64UrlUtf8(parts[0]);
+              return tryFixMojibake(decoded || null);
             }
           } catch (e) {
             console.warn('解码任务路径失败:', e);
@@ -4176,7 +5403,7 @@
         sortedTasks.forEach(([taskId, taskData]) => {
           // 解码任务路径用于显示
           const decodedPath = decodeTaskPath(taskId);
-          const displayPath = decodedPath || taskData.inputPath || '';
+          const displayPath = tryFixMojibake(decodedPath || taskData.inputPath || '');
           // 提取时间戳用于显示
           const parts = String(taskId).split('_');
           let taskTimeFormatted = '';
@@ -4214,7 +5441,7 @@
                 <div style="display:flex;gap:4px;">
                   ${showCancel ? `<button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#f59e0b;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();cancelTask('${safeTaskId}')">取消</button>` : ''}
                   <button class="copy-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#9ca3af;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();copyTaskLog('${safeTaskId}')">复制日志</button>
-                  <button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#ef4444;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();deleteTaskLog('${safeTaskId}')">删除日志</button>
+                  <button class="delete-task-log-btn" data-task-id="${safeTaskId}" style="border-radius:999px;border:1px solid #374151;padding:2px 8px;background:transparent;color:#ef4444;font-size:10px;cursor:pointer;" onclick="event.stopPropagation();showDeleteBubble(this,'${safeTaskId}')">删除日志</button>
                 </div>
               </div>
               <div class="log-task-body" id="task-log-${safeTaskId.replace(/[^a-zA-Z0-9]/g, '_')}" style="display:${isTaskExpanded ? 'block' : 'none'};padding:8px 12px;">
@@ -4273,7 +5500,7 @@
         });
         
         // 应用筛选后再渲染
-        if (manualLogFilters.status || manualLogFilters.path) {
+        if (manualLogFilters.status || manualLogFilters.path || manualLogFilters.profile) {
           applyManualLogFilters();
         } else {
           manualLogContainer.innerHTML = html.join('');
@@ -4380,7 +5607,7 @@
       };
       
       // singleShot: 仅抓取一次日志用于已完成任务的还原，避免开启定时器
-      function startManualLogStreaming(taskId, preserveContent = false, singleShot = false) {
+      function startManualLogStreaming(taskId, preserveContent = false, singleShot = false, fetchLimit = null) {
         if (!manualLogStatusEl || !manualLogContainer) return;
         const hasOtherTask = manualLogTaskId !== null && manualLogTaskId !== taskId;
         if (manualLogTimer && !singleShot && !hasOtherTask) {
@@ -4403,7 +5630,8 @@
           allTaskLogs.set(taskId, {
             inputPath: '',
             movies: new Map(),
-            status: 'RUNNING'
+            status: 'RUNNING',
+            profile: 'default'
           });
         }
         // 仅在需要全量还原或切换任务时重置状态，避免跨任务污染
@@ -4427,11 +5655,7 @@
         }
         renderManualProgress();
         // 格式化任务ID显示（解码路径或显示时间戳）
-        let taskIdFormatted = String(taskId);
-        const parts = String(taskId).split('_');
-        if (parts.length >= 3) {
-          taskIdFormatted = `${parts[1]} ${parts[2]}`; // YYYYMMDD HHMMSS
-        }
+        let taskIdFormatted = formatTaskId(taskId);
         manualLogStatusEl.textContent = '任务 ' + taskIdFormatted + ' 日志加载中...';
         // 如果是恢复任务，重新渲染日志
         if (preserveContent) {
@@ -4440,8 +5664,8 @@
         const fetchAndProcessLogs = async function () {
           try {
             // 刷新或单次还原时需要更多上下文行来正确分类影片
-            const logFetchLimit = (preserveContent || singleShot) ? 2000 : 500;
-            const resp = await fetchJSON('/api/tasks/' + taskId + '/logs?limit=' + logFetchLimit);
+            const logFetchLimit = fetchLimit || ((preserveContent || singleShot) ? 2000 : 500);
+            const resp = await fetchJSON('/api/tasks/' + window.cleanTaskIdForUrl(taskId) + '/logs?limit=' + logFetchLimit);
             const lines = resp.lines || [];
             const status = resp.status || 'UNKNOWN';
             // 不再需要检查滚动位置，因为使用可展开收起结构
@@ -4808,10 +6032,7 @@
             // 格式化任务ID显示
             let taskIdFormatted = String(taskId);
             const parts = String(taskId).split('_');
-            if (parts.length >= 3) {
-              taskIdFormatted = `${parts[1]} ${parts[2]}`; // YYYYMMDD HHMMSS
-            }
-            manualLogStatusEl.textContent = '任务 ' + taskIdFormatted + ' 状态：' + status;
+            manualLogStatusEl.textContent = '任务 ' + formatTaskId(taskId) + ' 状态：' + status;
             if (manualHint) {
               manualHint.style.color = '#9ca3af';
               manualHint.textContent = '任务 ' + taskIdFormatted + ' 状态：' + status + '。';
@@ -4871,6 +6092,26 @@
             opt.textContent = ruleName;
             manualProfileSelect.appendChild(opt);
           });
+          // 同步填充用于筛选的规则下拉框（手动日志与历史）
+          const historyProfileSelect = document.getElementById('history-filter-profile');
+          const manualLogProfileSelect = document.getElementById('manual-log-filter-profile');
+          const makeOptionsHtml = () => {
+            const opts = ['<option value="">全部规则</option>'];
+            Object.keys(allRules).forEach(ruleName => {
+              opts.push(`<option value="${ruleName}">${ruleName}</option>`);
+            });
+            return opts.join('');
+          };
+          if (historyProfileSelect) {
+            historyProfileSelect.innerHTML = '<option value="">全部规则</option>' + Object.keys(allRules).map(n => `<option value="${n}">${n}</option>`).join('');
+          }
+          if (manualLogProfileSelect) {
+            manualLogProfileSelect.innerHTML = '<option value="">全部规则</option>' + Object.keys(allRules).map(n => `<option value="${n}">${n}</option>`).join('');
+          }
+          const bgProfileSelect = document.getElementById('bg-profile');
+          if (bgProfileSelect) {
+            bgProfileSelect.innerHTML = '<option value="default">使用当前全局规则</option>' + Object.keys(allRules).map(n => `<option value="${n}">${n}</option>`).join('');
+          }
         } catch (e) {
           console.error('加载规则列表失败:', e);
         }
@@ -5006,6 +6247,42 @@
             console.error('加载规则失败:', e);
             window.showAlert('加载规则失败，请稍后重试');
           }
+        });
+      }
+      
+      // 后台视图的“新建规则 / 编辑规则”按钮（调用现有规则模态）
+      const bgNewRuleBtn = document.getElementById('bg-new-rule-btn');
+      const bgEditRuleBtn = document.getElementById('bg-edit-rule-btn');
+      if (bgNewRuleBtn) {
+        bgNewRuleBtn.addEventListener('click', function () {
+          const btn = document.getElementById('manual-rules-btn');
+          if (btn) btn.click();
+        });
+      }
+      if (bgEditRuleBtn) {
+        bgEditRuleBtn.addEventListener('click', function () {
+          const bgProfileSelect = document.getElementById('bg-profile');
+          const selectedRule = bgProfileSelect ? bgProfileSelect.value : null;
+          if (!selectedRule || selectedRule === 'default') return;
+
+          // 将手动规则选择框同步为当前所选规则，然后触发编辑操作
+          if (manualProfileSelect) {
+            manualProfileSelect.value = selectedRule;
+            // 触发 change 事件以显示编辑按钮并保证内部状态一致
+            const ev = new Event('change', { bubbles: true });
+            manualProfileSelect.dispatchEvent(ev);
+          }
+          if (manualRulesEditBtn) {
+            manualRulesEditBtn.click();
+          }
+        });
+      }
+
+      // 监听后台视图的规则选择，显示或隐藏编辑按钮（与手动视图一致）
+      const bgProfileSelect = document.getElementById('bg-profile');
+      if (bgProfileSelect && bgEditRuleBtn) {
+        bgProfileSelect.addEventListener('change', function () {
+          bgEditRuleBtn.style.display = this.value !== 'default' ? 'inline-block' : 'none';
         });
       }
       
@@ -5839,7 +7116,19 @@
 
       // 不再使用xterm，改用可展开收起的日志结构
 
-      switchView('manual');
+      // 恢复上次查看页或使用 URL hash 指定视图，默认回落为 manual
+      (function() {
+        let initial = 'manual';
+        try {
+          const h = (location.hash || '').replace('#','').trim();
+          if (h && views.includes(h)) initial = h;
+        } catch (e) {}
+        try {
+          const saved = localStorage.getItem('lastView');
+          if (saved && views.includes(saved)) initial = saved;
+        } catch (e) {}
+        switchView(initial);
+      })();
       // 预加载 /video 目录，便于快速切换到"按文件刮削"视图
       if (videodeTbody) {
         loadVideode('/video');
@@ -5849,17 +7138,29 @@
       (async function() {
         try {
           const tasks = await fetchJSON('/api/tasks');
+          // 获取后台任务配置列表，用于将由后台触发的手动子任务从全局手动日志视图中过滤掉
+          let bgTasks = [];
+          try {
+            bgTasks = await fetchJSON('/api/tasks/background');
+          } catch (e) {
+            // ignore
+            bgTasks = [];
+          }
+          const bgDirs = Array.isArray(bgTasks) ? bgTasks.flatMap(b => (b.directories || [])) : [];
           if (tasks && Array.isArray(tasks)) {
             // 查找最近的一个运行中的任务
             // 加载运行中或队列中的任务
-            const activeTasks = tasks.filter(t => (t.status === 'RUNNING' || t.status === 'PENDING') && t.id);
+            // 仅恢复由用户在手动界面创建的任务，确保手动与后台日志隔离
+            const manualIds = getManualTaskIds();
+            const activeTasks = tasks.filter(t => (t.status === 'RUNNING' || t.status === 'PENDING') && t.id && manualIds.has(String(t.id)));
             for (const task of activeTasks) {
               if (task.id && !allTaskLogs.has(task.id)) {
                 // 初始化任务日志结构
                 allTaskLogs.set(task.id, {
                   inputPath: '',
                   movies: new Map(),
-                  status: task.status || 'UNKNOWN'
+                  status: task.status || 'UNKNOWN',
+                  profile: task.profile || 'default'
                 });
                 // 自动恢复该任务的日志流，保留之前的内容
                 startManualLogStreaming(task.id, true);
@@ -5867,10 +7168,11 @@
             }
             
             // 加载已完成任务的日志（按任务ID倒序，最新的在前）
+            // 仅加载用户在手动界面创建的已完成任务，保持手动界面与后台触发任务隔离
             const completedTasks = tasks
-              .filter(t => (t.status === 'SUCCEEDED' || t.status === 'FAILED') && t.id)
+              .filter(t => (t.status === 'SUCCEEDED' || t.status === 'FAILED') && t.id && manualIds.has(String(t.id)))
               .sort((a, b) => (b.id || 0) - (a.id || 0))
-              .slice(0, 10); // 只加载最近10个已完成的任务
+              .slice(0, 200); // 只加载最近若干已完成的任务（用于分页）
             
             for (const task of completedTasks) {
               if (task.id && !allTaskLogs.has(task.id)) {
@@ -5878,7 +7180,8 @@
                 allTaskLogs.set(task.id, {
                   inputPath: '',
                   movies: new Map(),
-                  status: task.status || 'UNKNOWN'
+                  status: task.status || 'UNKNOWN',
+                  profile: task.profile || 'default'
                 });
                 // 触发一次性日志加载以填充数据结构（使用更大日志窗口避免分类缺失）
                 await startManualLogStreaming(task.id, true, true);
@@ -5891,6 +7194,18 @@
       })();
       initUser();
       initVersion();
+      // 显示移动端底部悬浮菜单（小屏幕）
+      const mobileFloating = document.getElementById('mobile-floating');
+      const applyMobileVisibility = () => {
+        if (!mobileFloating) return;
+        if (window.innerWidth <= 800) {
+          mobileFloating.style.display = 'block';
+        } else {
+          mobileFloating.style.display = 'none';
+        }
+      };
+      applyMobileVisibility();
+      window.addEventListener('resize', applyMobileVisibility);
       
       // 移动端顶部抽屉切换
       function toggleMobileDrawer() {
@@ -5902,6 +7217,71 @@
         }
       }
       window.toggleMobileDrawer = toggleMobileDrawer;
+      // overlay 点击关闭抽屉
+      const mobileOverlayEl = document.getElementById('mobile-overlay');
+      if (mobileOverlayEl) {
+        mobileOverlayEl.addEventListener('click', () => {
+          const d = document.getElementById('mobile-drawer');
+          if (d && d.classList.contains('open')) {
+            toggleMobileDrawer();
+          }
+        });
+      }
+      // 初始化抽屉内按钮（如需额外行为可在此处绑定）
+      const drawer = document.getElementById('mobile-drawer');
+      if (drawer) {
+        drawer.querySelectorAll('.drawer-item').forEach(btn => {
+          btn.addEventListener('click', () => {
+            // click handler defined inline on buttons already; keep for safety
+          });
+        });
+      }
+      // Mobile popup (floating) 控制
+      function closeMobilePopup() {
+        const popup = document.getElementById('mobile-popup');
+        const overlay = document.getElementById('mobile-popup-overlay');
+        if (popup) {
+          popup.style.opacity = '0';
+          popup.style.transform = 'translateX(-50%) translateY(16px)';
+          // wait for transition then hide
+          setTimeout(() => { popup.style.display = 'none'; }, 180);
+        }
+        if (overlay) overlay.style.display = 'none';
+        const moreBtn = document.querySelector('.mobile-float-btn[data-view="more"]');
+        if (moreBtn) moreBtn.classList.remove('active');
+      }
+      function toggleMobilePopup() {
+        const popup = document.getElementById('mobile-popup');
+        const overlay = document.getElementById('mobile-popup-overlay');
+        if (!popup || !overlay) return;
+        const isOpen = popup.style.display === 'block';
+        if (isOpen) {
+          closeMobilePopup();
+          return;
+        }
+        // open
+        popup.style.display = 'block';
+        // small delay to allow transition
+        requestAnimationFrame(() => {
+          popup.style.opacity = '1';
+          popup.style.transform = 'translateX(-50%) translateY(8px)';
+        });
+        overlay.style.display = 'block';
+        const moreBtn = document.querySelector('.mobile-float-btn[data-view="more"]');
+        if (moreBtn) moreBtn.classList.add('active');
+      }
+      window.toggleMobilePopup = toggleMobilePopup;
+      // popup overlay 点击关闭
+      const popupOverlay = document.getElementById('mobile-popup-overlay');
+      if (popupOverlay) {
+        popupOverlay.addEventListener('click', closeMobilePopup);
+      }
+      // 当切换视图时，自动关闭 popup
+      const origSwitchView = window.switchView;
+      window.switchView = function(view) {
+        if (origSwitchView) origSwitchView(view);
+        closeMobilePopup();
+      };
       
       // 移动端版本号同步
       const mobileVersion = document.getElementById('mobile-version');

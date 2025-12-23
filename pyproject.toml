@@ -30,6 +30,7 @@ pydantic-extra-types = "^2.9.0"
 pendulum = "^3.0.0"
 fastapi = "^0.110.0"
 uvicorn = "^0.29.0"
+croniter = "^1.4.0"
 
 [tool.poetry.scripts]
 javsp = "javsp.__main__:entry"
