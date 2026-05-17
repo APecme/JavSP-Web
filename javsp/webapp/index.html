@@ -3296,11 +3296,14 @@
                   <div style="font-weight:600;color:#e5e7eb;">${it.name}</div>
                   <div style="font-size:12px;color:#9ca3af;">路径: ${it.directories.join(', ')}</div>
                   <div style="font-size:12px;color:#9ca3af;">规则: ${it.profile || 'default'}</div>
+                  <div style="font-size:12px;color:#9ca3af;">Cron: ${it.cron || '-'}</div>
+                  <div style="font-size:12px;color:#9ca3af;">上次: ${lastRun}</div>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                   <div style="font-size:11px;color:#9ca3af;">下次: ${nextRun}</div>
                   <div style="display:flex;gap:6px;">
                     <button class="ghost-btn" onclick="showBgTaskLogs('${it.id}')">日志</button>
+                    <button class="ghost-btn" onclick="editBg(${JSON.stringify(it.id)})">编辑</button>
                     <button class="ghost-btn" onclick="runBg('${it.id}')">立即执行</button>
                     <button class="ghost-btn" onclick="deleteBg('${it.id}')">删除</button>
                   </div>
@@ -3755,6 +3758,43 @@
           window.showAlert('后台任务已触发');
         } catch (e) {
           window.showAlert('触发失败');
+        }
+      };
+
+      window.editBg = async function(id) {
+        try {
+          const items = await fetchJSON('/api/tasks/background');
+          const task = Array.isArray(items) ? items.find(it => it.id === id) : null;
+          if (!task) {
+            window.showAlert('未找到后台任务');
+            return;
+          }
+
+          const name = window.prompt('任务名称', task.name || '');
+          if (name === null) return;
+          const cron = window.prompt('Cron 表达式', task.cron || '0 */2 * * *');
+          if (cron === null) return;
+          const dirs = window.prompt('目录列表（使用英文逗号分隔）', (task.directories || []).join(','));
+          if (dirs === null) return;
+          const retry = window.prompt('失败重试次数', String(task.retry_count || 0));
+          if (retry === null) return;
+
+          await fetchJSON('/api/tasks/background/' + encodeURIComponent(id), {
+            method: 'PUT',
+            body: JSON.stringify({
+              name: name.trim() || task.name,
+              cron: cron.trim() || task.cron,
+              directories: String(dirs).split(',').map(s => s.trim()).filter(Boolean),
+              profile: task.profile || 'default',
+              retry_count: Number(retry) || 0,
+              enabled: task.enabled !== false,
+            })
+          });
+          window.showAlert('更新成功');
+          loadBackgroundTasks();
+        } catch (e) {
+          console.error('更新后台任务失败', e);
+          window.showAlert('更新失败：' + (e.message || '请稍后重试'));
         }
       };
 
@@ -5548,11 +5588,35 @@
             if (rulesTranslatePlot) {
               fields.plot = !!rulesTranslatePlot.checked;
             }
-            if (Object.keys(fields).length > 0) {
-              payload.translator = payload.translator || {};
-              payload.translator.fields = fields;
-            }
+          if (Object.keys(fields).length > 0) {
+            payload.translator = payload.translator || {};
+            payload.translator.fields = fields;
           }
+        }
+
+        // translator.engine
+        if (rulesTranslateEngine) {
+          const engineName = rulesTranslateEngine.value.trim();
+          if (engineName && engineName !== 'disabled') {
+            payload.translator = payload.translator || {};
+            const engine = { name: engineName };
+
+            if (engineName === 'baidu') {
+              if (rulesTranslateBaiduAppId && rulesTranslateBaiduAppId.value.trim()) engine.app_id = rulesTranslateBaiduAppId.value.trim();
+              if (rulesTranslateBaiduApiKey && rulesTranslateBaiduApiKey.value.trim()) engine.api_key = rulesTranslateBaiduApiKey.value.trim();
+            } else if (engineName === 'bing') {
+              if (rulesTranslateBingApiKey && rulesTranslateBingApiKey.value.trim()) engine.api_key = rulesTranslateBingApiKey.value.trim();
+            } else if (engineName === 'claude') {
+              if (rulesTranslateClaudeApiKey && rulesTranslateClaudeApiKey.value.trim()) engine.api_key = rulesTranslateClaudeApiKey.value.trim();
+            } else if (engineName === 'openai') {
+              if (rulesTranslateOpenaiUrl && rulesTranslateOpenaiUrl.value.trim()) engine.url = rulesTranslateOpenaiUrl.value.trim();
+              if (rulesTranslateOpenaiApiKey && rulesTranslateOpenaiApiKey.value.trim()) engine.api_key = rulesTranslateOpenaiApiKey.value.trim();
+              if (rulesTranslateOpenaiModel && rulesTranslateOpenaiModel.value.trim()) engine.model = rulesTranslateOpenaiModel.value.trim();
+            }
+
+            payload.translator.engine = engine;
+          }
+        }
 
           rulesStatus.style.color = '#9ca3af';
           rulesStatus.textContent = '正在保存配置...';

@@ -1441,19 +1441,38 @@ class BackgroundCreateRequest(BaseModel):
     retry_count: int = 0
 
 
+class BackgroundUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    directories: Optional[List[str]] = None
+    profile: Optional[str] = None
+    cron: Optional[str] = None
+    retry_count: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+def _normalize_cron(cron_expr: str) -> str:
+    return " ".join(str(cron_expr).strip().split())
+
+
+def _validate_cron_or_400(cron_expr: str) -> str:
+    cron_expr = _normalize_cron(cron_expr)
+    if not cron_expr:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cron 表达式不能为空")
+    try:
+        croniter(cron_expr, datetime.now(timezone.utc))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"无效的 cron 表达式: {e}")
+    return cron_expr
+
+
 @router.post("/background", status_code=status.HTTP_201_CREATED)
 def create_background_task(
     payload: BackgroundCreateRequest,
     user: UserInfo = Depends(get_current_user),  # noqa: ARG001
 ) -> Dict[str, str]:
-    # validate cron
-    if not payload.name or not payload.cron or not payload.directories:
+    if not payload.name or not payload.directories:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="缺少必要字段")
-    try:
-        # quick cron validation
-        croniter(payload.cron, datetime.now(timezone.utc))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"无效的 cron 表达式: {e}")
+    cron_expr = _validate_cron_or_400(payload.cron)
 
     tid = f"bg_{int(time.time())}"
     with _background_lock:
@@ -1461,17 +1480,56 @@ def create_background_task(
             "name": payload.name,
             "directories": payload.directories,
             "profile": payload.profile or "default",
-            "cron": payload.cron,
+            "cron": cron_expr,
             "retry_count": int(payload.retry_count or 0),
             "enabled": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_run": None,
-            "next_run": _compute_next_run(payload.cron),
+            "next_run": _compute_next_run(cron_expr),
         }
         _save_bg_tasks()
     # ensure scheduler running
     _start_bg_scheduler()
     return {"id": tid}
+
+
+@router.put("/background/{bg_id}", status_code=status.HTTP_200_OK)
+def update_background_task(
+    bg_id: str,
+    payload: BackgroundUpdateRequest,
+    user: UserInfo = Depends(get_current_user),  # noqa: ARG001
+) -> Dict[str, bool]:
+    with _background_lock:
+        cfg = _background_tasks.get(bg_id)
+        if not cfg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+        if payload.name is not None:
+            name = payload.name.strip()
+            if not name:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="任务名称不能为空")
+            cfg["name"] = name
+        if payload.directories is not None:
+            if not payload.directories:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="至少需要一个目录")
+            cfg["directories"] = payload.directories
+        if payload.profile is not None:
+            cfg["profile"] = payload.profile or "default"
+        if payload.retry_count is not None:
+            cfg["retry_count"] = int(payload.retry_count or 0)
+        if payload.enabled is not None:
+            cfg["enabled"] = bool(payload.enabled)
+        if payload.cron is not None:
+            cron_expr = _validate_cron_or_400(payload.cron)
+            cfg["cron"] = cron_expr
+            cfg["next_run"] = _compute_next_run(cron_expr)
+        elif payload.enabled is not None and cfg.get("enabled", True):
+            cfg["next_run"] = _compute_next_run(str(cfg.get("cron") or ""))
+
+        _save_bg_tasks()
+
+    _start_bg_scheduler()
+    return {"success": True}
 
 
 @router.delete("/background/{bg_id}", status_code=status.HTTP_200_OK)
