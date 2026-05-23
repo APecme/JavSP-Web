@@ -116,3 +116,10 @@ JavSP-Web 支持集成 [FlareSolverr](https://github.com/FlareSolverr/FlareSolve
 ---
 
 **注意**：本项目是 JavSP 的 Web 界面版本，核心刮削功能完全继承自原项目。如有问题，请先查看 [原项目文档](https://github.com/Yuukiy/JavSP/wiki)。
+
+---
+<p align="center">
+  <a href="https://star-history.com/#APecme/JavSP-Web&Date">
+    <img src="https://api.star-history.com/svg?repos=APecme/JavSP-Web&type=Date" alt="Star History Chart" width="100%">
+  </a>
+</p>

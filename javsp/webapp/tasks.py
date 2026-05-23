@@ -1677,8 +1677,12 @@ def _save_bg_tasks() -> None:
 
 def _compute_next_run(cron_expr: str, base_dt: Optional[datetime] = None) -> Optional[str]:
     try:
+        local_tz = get_local_timezone()
         base = base_dt or datetime.now(timezone.utc)
-        it = croniter(cron_expr, base)
+        if base.tzinfo is None:
+            base = base.replace(tzinfo=timezone.utc)
+        local_base = base.astimezone(local_tz)
+        it = croniter(cron_expr, local_base)
         nxt = it.get_next(datetime)
         return nxt.astimezone(timezone.utc).isoformat()
     except Exception:

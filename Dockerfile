@@ -1,5 +1,7 @@
 FROM python:3.12-slim AS builder
 
+ARG TZ=Asia/Shanghai
+
 WORKDIR /app
 
 ENV PATH=/root/.local/bin:$PATH
@@ -18,6 +20,9 @@ RUN poetry config virtualenvs.in-project true && \
     /app/.venv/bin/python -m compileall -q /app/javsp
 
 FROM python:3.12-slim AS runner
+
+ARG TZ=Asia/Shanghai
+ENV TZ=${TZ}
 
 WORKDIR /app
 
