@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/javsp-logo.png?v=2">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+  <title>登录 · JavSP WEB</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/overrides.css">
+</head>
+<body class="auth-shell">
+  <main class="auth-card">
+    <img class="auth-logo" src="/assets/javsp-logo.png" alt="JavSP">
+    <p class="eyebrow">JavSP WEB</p>
+    <h1>登录控制端</h1>
+    <p class="muted">管理本机 JavSP 配置和刮削任务</p>
+    <form id="login-form" class="stack">
+      <label>用户名<input id="username" autocomplete="username" required></label>
+      <label>密码<input id="password" type="password" autocomplete="current-password" required></label>
+      <button class="button primary" type="submit">进入控制台</button>
+      <p id="login-error" class="form-error" role="alert"></p>
+    </form>
+    <p class="hint">首次登录：admin / admin，请在系统设置中修改。</p>
+    <p id="login-version" class="app-version auth-version">v1.1.01</p>
+  </main>
+  <script>
+    fetch('/api/public-info').then((response) => response.ok ? response.json() : null).then((info) => { if (info && info.version) document.querySelector('#login-version').textContent = `v${info.version}`; }).catch(() => {});
+    const form = document.querySelector('#login-form');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('button');
+      button.disabled = true;
+      document.querySelector('#login-error').textContent = '';
+      try {
+        const response = await fetch('/api/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:document.querySelector('#username').value.trim(), password:document.querySelector('#password').value})});
+        if (!response.ok) throw new Error((await response.json()).detail || '登录失败');
+        location.href = '/';
+      } catch (error) {
+        document.querySelector('#login-error').textContent = error.message;
+      } finally { button.disabled = false; }
+    });
+  </script>
+</body>
+</html>

@@ -1,6 +1,8 @@
-**/__pycache__/
-.github/
-.idea/
-.vscode/
-.devcontainer/
-**/*.log
+.git
+__pycache__
+*.pyc
+data
+video
+dist
+build
+*.spec

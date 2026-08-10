@@ -1,13 +1,13 @@
-version: "3.9"
-
 services:
   javsp-web:
-    image: apecme/javsp-web:latest
+    build: .
     container_name: javsp-web
     restart: unless-stopped
     ports:
       - "8090:8090"
+    environment:
+      JAVSP_WEB_HOST: 0.0.0.0
+      JAVSP_WEB_PORT: 8090
     volumes:
       - ./data:/app/data
       - ./video:/video
-    entrypoint: ["/app/.venv/bin/server"]

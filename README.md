@@ -1,125 +1,123 @@
-![JavSP](./image/JavSP.svg)
+![JavSP WEB](./javsp_web/web/assets/javsp-logo.png)
 
-# JavSP-Web
+# JavSP WEB
 
-**JavSP 的 Web 界面版本 - 汇总多站点数据的AV元数据刮削器**
+JavSP WEB 是 [JavSP](https://github.com/Yuukiy/JavSP) 的本地 Web 控制端。它将刮削、预设配置、下载任务接管、媒体库联动和用户管理分别放在独立工作区中，便于在浏览器、Docker 或 Windows 托盘程序中管理本机的 JavSP 任务。
 
-JavSP-Web 是基于 [JavSP](https://github.com/Yuukiy/JavSP) 开发的 Web 界面版本，提供了完整的图形化操作界面，让您可以通过浏览器轻松管理刮削任务。
-
-提取影片文件名中的番号信息，自动抓取并汇总多个站点数据的 AV 元数据，按照指定的规则分类整理影片文件，并创建供 Emby、Jellyfin、Kodi 等软件使用的元数据文件。
-
-[![Version](https://img.shields.io/badge/version-1.0.1-blue)](https://github.com/APecme/javsp-web/releases/tag/v1.0.1)
-[![Docker Image](https://img.shields.io/docker/v/apecme/javsp-web?label=Docker&logo=docker)](https://hub.docker.com/r/apecme/javsp-web)
-[![Docker Pulls](https://img.shields.io/docker/pulls/apecme/javsp-web)](https://hub.docker.com/r/apecme/javsp-web)
-![License](https://img.shields.io/github/license/APecme/JavSP-Web)
-![Python 3.10](https://img.shields.io/badge/python-3.10+-green.svg)
-[![原项目](https://img.shields.io/badge/原项目-JavSP-blue)](https://github.com/Yuukiy/JavSP)
-[![本项目](https://img.shields.io/badge/本项目-JavSP--Web-green)](https://github.com/APecme/JavSP-Web)
+当前版本：`1.1.01`
 
 ## 功能特点
 
-### Web 界面功能
+### 刮削工作区
 
-- ✅ **手动刮削**：通过文件浏览器选择影片文件，按顺序执行刮削任务
-- ✅ **监控刮削**：监控指定目录，自动处理新添加的影片文件
-- ✅ **定时刮削**：按计划定期触发刮削任务
-- ✅ **全局规则配置**：通过 Web 界面配置扫描、网络、爬虫、整理、翻译等规则
-- ✅ **自定义规则**：创建多个规则预设，针对不同需求使用不同配置
-- ✅ **刮削历史**：查看所有刮削任务的记录，支持列表和封面墙两种视图
-- ✅ **任务日志**：实时查看任务执行日志，支持展开/折叠、复制、删除
-- ✅ **剧照预览**：查看剧照图片，支持全屏预览和左右翻页
-- ✅ **下载状态**：显示封面和剧照的下载成功/失败状态
-- ✅ **账号安全**：支持修改登录用户名和密码
+- 手动输入目录或单个视频文件创建刮削任务。
+- Windows EXE 可调用系统文件/目录选择窗口；Docker 环境可从 `/video` 映射目录中选择路径。
+- 目录中的多个视频会拆分为独立任务，并按照预设中的并发数依次调度。
+- 任务队列提供状态、路径、预设、时间、结构化刮削进度、可折叠日志、日志复制、停止、删除和失败图片重新下载。
+- 概览使用已完成任务的封面墙；详情中可查看封面、剧照与已汇总的影片数据。
 
+### 预设与配置
 
-## 项目链接
+- 支持多个刮削预设，内置默认预设不可删除，用户创建的预设可从预设列表删除。
+- 默认使用按 `config.yml` 分类的表单：扫描、网络、爬虫、文件夹整理、替代文本、图片、自定义、翻译器和其他。
+- 每个字段显示中文名称、原始配置路径、说明和备注；布尔值使用“是/否”选择。
+- 可在表单与完整 `config.yml` 之间切换，保存时验证 YAML 和 JavSP 配置合法性。
+- 命名规则字段提供可复制的变量提示。
 
-- **原项目（JavSP）**：https://github.com/Yuukiy/JavSP
-- **本项目（JavSP-Web）**：https://github.com/APecme/JavSP-Web
+### 自动化与下载管理
 
-## 安装与运行
+- 定时自动刮削：为指定目录和预设创建 Cron 规则，支持立即运行、启停、编辑和全部运行记录。
+- 每次定时运行保留关联任务；任务日志和手动刮削一样可按任务折叠查看及复制。
+- 支持添加多个 qBittorrent 下载器，通过账号密码验证 Web API。
+- 下载管理按下载器分标签页显示接管任务，可配置全局分享率、做种时长、非活跃时长和自动删种。
+- 下载完成自动刮削支持多个规则，可按标签和分类匹配预设。
+- 路径映射可将 qBittorrent 的下载路径转换为 JavSP WEB 容器中的路径。
 
-### 使用 Docker Compose 部署
+### 系统与媒体库
 
-### Docker Compose 配置说明
+- 管理员可新增、编辑和删除用户；新密码必须输入两次确认。
+- 支持多个 Emby 或 Jellyfin 媒体服务器，保存前验证连接并选择管理的媒体库。
+- 刮削完成后可按设置延迟扫描指定媒体库；任务详情封面可直接打开可播放的媒体库条目。
+- 登录页与主界面显示当前版本号。
 
-`docker-compose.yml` 文件配置如下：
+## 项目结构
+
+| 路径 | 说明 |
+| --- | --- |
+| `javsp_web/` | FastAPI 服务、任务调度和 Web 界面 |
+| `vendor/JavSP/` | 随项目分发的 JavSP 核心代码 |
+| `data/` | 运行时用户、会话、预设、任务、下载器与媒体服务器数据 |
+| `build-windows.ps1` | Windows 单文件 EXE 构建脚本 |
+| `docker-compose.yml` | Docker Compose 部署配置 |
+
+`data/` 为持久化目录，请保留并备份。任务会使用独立配置快照，因此后续修改预设不会改变已排队任务。
+
+## 本地运行
+
+### Python
+
+需要 Python 3.11 或更新版本。
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m javsp_web.server
+```
+
+打开 `http://127.0.0.1:8090/login`。首次登录账号为 `admin`，密码为 `admin`；登录后请立刻在“系统设置”中修改。
+
+### Windows 托盘 EXE
+
+```powershell
+.\build-windows.ps1
+```
+
+构建产物为 `dist\JavSP-Web.exe`。启动后程序只保留一个实例，显示在 Windows 通知区域，并打开本机登录页。退出托盘菜单只会停止服务，不会删除 `data/` 中的配置和任务记录。
+
+## Docker Compose 部署
+
+```powershell
+docker compose up -d --build
+```
+
+默认访问地址为 `http://127.0.0.1:8090/login`。当前 `docker-compose.yml` 会持久化数据，并将宿主机的 `./video` 映射到容器内 `/video`：
 
 ```yaml
-version: "3.9"
-
 services:
   javsp-web:
-    image: apecme/javsp-web:latest
-    container_name: javsp-web
-    restart: unless-stopped
     ports:
       - "8090:8090"
     volumes:
       - ./data:/app/data
       - ./video:/video
-    entrypoint: ["/app/.venv/bin/server"]
-
 ```
 
-#### 配置项说明
+将待处理视频放入 `./video`，或把该卷替换为实际媒体目录。Docker 内的手动刮削、定时规则和路径映射都必须使用容器可访问的路径，例如 `/video/Movies`。
 
-  - 如需设置时区，可添加：
-    ```yaml
-    environment:
-      - TZ=Asia/Shanghai
-    ```
+停止服务但保留数据：
 
-## FlareSolverr 集成
+```powershell
+docker compose down
+```
 
-JavSP-Web 支持集成 [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) 来解决 Cloudflare 验证问题。
+## 使用说明
 
-### 设置步骤
+1. 登录后在“刮削预设”中检查默认配置，或创建适合不同片源的预设。
+2. 在“手动刮削”中选择目录/文件和预设，然后启动任务。
+3. 在任务队列展开任务查看三个阶段的进度和完整日志；失败的封面或剧照可使用“重新下载图片”。
+4. 需要自动执行时，在“自动刮削”创建 Cron 规则。示例：`0 2 * * *` 表示每天 02:00。
+5. 需要接管下载时，先在“系统设置”添加并测试 qBittorrent 下载器，再在“下载管理”设置接管、做种和自动刮削规则。
+6. 需要媒体库联动时，在“系统设置”添加 Emby 或 Jellyfin，测试连接、选择媒体库并按需开启完成后自动扫描。
 
-1. **安装 FlareSolverr**：
-   ```bash
-   docker run -d \
-     --name=flaresolverr \
-     -p 8191:8191 \
-     -e LOG_LEVEL=info \
-     --restart unless-stopped \
-     ghcr.io/flaresolverr/flaresolverr:latest
-   ```
+## 注意事项
 
-2. **在 JavSP-Web 中启用**：
-   - 进入 Web 界面 → 规则设置 → FlareSolverr 配置
-   - 启用 FlareSolverr
-   - 设置服务器地址（默认为 `http://localhost:8191`）
-   - 保存配置
-
-3. **使用效果**：
-   - 当遇到 Cloudflare 验证时，JavSP 会自动尝试使用 FlareSolverr 绕过
-   - 支持获取 cookies 和页面内容
-   - 失败时会回退到其他方法
-
-**注意**：FlareSolverr 需要与 JavSP 在同一 Docker 网络中，或通过正确的网络配置访问。
-
-## 许可
-
-此项目的所有权利与许可受 GPL-3.0 License 与 [Anti 996 License](https://github.com/996icu/996.ICU/blob/master/LICENSE_CN) 共同限制。此外，如果你使用此项目，表明你还额外接受以下条款：
-
-- 本软件仅供学习 Python 和技术交流使用
-- 请勿在微博、微信等墙内的公共社交平台上宣传此项目
-- 用户在使用本软件时，请遵守当地法律法规
-- 禁止将本软件用于商业用途
+- 本项目需要网络访问多个公开数据源；站点可用性、反爬策略和返回内容会影响刮削结果。
+- qBittorrent 使用原生 Web API 的账号密码认证。请填写可从 JavSP WEB 运行环境访问的服务地址。
+- Docker、qBittorrent 和媒体服务器不在同一网络时，应配置可互相访问的地址、端口和路径映射。
+- 请遵守当地法律法规、数据源的服务条款以及 [JavSP 项目文档](https://github.com/Yuukiy/JavSP/wiki)。
 
 ## 致谢
 
-- 感谢 [Yuukiy](https://github.com/Yuukiy) 开发了优秀的 [JavSP](https://github.com/Yuukiy/JavSP) 项目
-- 本项目基于 JavSP 开发，保留了所有核心功能，并添加了 Web 界面支持
-
----
-
-**注意**：本项目是 JavSP 的 Web 界面版本，核心刮削功能完全继承自原项目。如有问题，请先查看 [原项目文档](https://github.com/Yuukiy/JavSP/wiki)。
-
----
-<p align="center">
-  <a href="https://star-history.com/#APecme/JavSP-Web&Date">
-    <img src="https://api.star-history.com/svg?repos=APecme/JavSP-Web&type=Date" alt="Star History Chart" width="100%">
-  </a>
-</p>
+- [Yuukiy/JavSP](https://github.com/Yuukiy/JavSP) 提供核心刮削能力与配置规则。
+- [APecme/JavSP-Web](https://github.com/APecme/JavSP-Web) 为本项目参考的公开仓库与发布入口。

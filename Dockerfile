@@ -1,26 +1,16 @@
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim
 
 WORKDIR /app
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 JAVSP_WEB_HOST=0.0.0.0 JAVSP_WEB_PORT=8090 JAVSP_WEB_DOCKER=1
 
-ENV PATH=/root/.local/bin:$PATH
-RUN pip install pipx && \
-    pipx ensurepath && \
-    pipx install poetry
-RUN apt update && \
-    apt install -y --no-install-recommends git build-essential cmake && \
-    rm -rf /var/lib/apt/lists/*
+COPY requirements.txt ./
+COPY vendor/JavSP ./vendor/JavSP
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY javsp_web ./javsp_web
+COPY launcher.py README.md ./
+RUN mkdir -p /app/data
 
-RUN poetry config virtualenvs.in-project true && \
-    poetry lock && \
-    poetry install --no-interaction --no-ansi && \
-    /app/.venv/bin/python -m compileall -q /app/javsp
-
-FROM python:3.12-slim AS runner
-
-WORKDIR /app
-
-COPY --from=builder /app/ /app/
-
-ENTRYPOINT ["/app/.venv/bin/server"]
+EXPOSE 8090
+VOLUME ["/app/data", "/video"]
+CMD ["python", "-m", "javsp_web.server"]

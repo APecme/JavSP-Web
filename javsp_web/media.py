@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import time
+from urllib.parse import quote
+
+import requests
+
+from .storage import list_media_servers
+
+
+def _headers(server: dict) -> dict[str, str]:
+    key = str(server.get("api_key") or "")
+    return {"X-Emby-Token": key} if key else {}
+
+
+def _params(server: dict, **params: object) -> dict[str, object]:
+    result = dict(params)
+    key = str(server.get("api_key") or "")
+    if key:
+        result["api_key"] = key
+    return result
+
+
+def sync_media_server(server: dict) -> dict:
+    libraries = [str(value) for value in (server.get("libraries") or []) if str(value).strip()]
+    targets = libraries or [None]
+    for library_id in targets:
+        params = _params(server)
+        if library_id:
+            params["LibraryId"] = library_id
+        response = requests.post(f"{server['url']}/Library/Refresh", params=params, headers=_headers(server), timeout=30)
+        response.raise_for_status()
+    return {"id": server["id"], "name": server["name"], "ok": True, "message": "媒体库扫描已启动"}
+
+
+def list_media_libraries(server: dict) -> list[dict]:
+    response = requests.get(
+        f"{server['url']}/Library/VirtualFolders",
+        params=_params(server),
+        headers=_headers(server),
+        timeout=20,
+    )
+    response.raise_for_status()
+    libraries = []
+    for item in response.json() or []:
+        if not isinstance(item, dict):
+            continue
+        libraries.append({"id": str(item.get("ItemId") or item.get("Id") or item.get("Name") or ""), "name": str(item.get("Name") or item.get("CollectionType") or "未命名媒体库")})
+    return [item for item in libraries if item["id"]]
+
+
+def _search_server(server: dict, task: dict) -> dict | None:
+    metadata = (task.get("progress") or {}).get("metadata") or {}
+    terms = [str(metadata.get("dvdid") or "").strip(), str(metadata.get("title") or task.get("title") or "").strip()]
+    terms = [term for term in terms if term]
+    if not terms:
+        return None
+    for term in terms:
+        response = requests.get(
+            f"{server['url']}/Items",
+            params=_params(server, SearchTerm=term, IncludeItemTypes="Movie,Video", Recursive="true", Limit=10),
+            headers=_headers(server),
+            timeout=20,
+        )
+        response.raise_for_status()
+        items = response.json().get("Items") or []
+        if items:
+            return items[0]
+    return None
+
+
+def media_links_for_task(task: dict) -> list[dict]:
+    links: list[dict] = []
+    for server in list_media_servers():
+        try:
+            item = _search_server(server, task)
+            base = server.get("external_url") or server["url"]
+            link = {
+                "id": server["id"],
+                "name": server["name"],
+                "type": server["type"],
+                "found": bool(item),
+                "title": (item or {}).get("Name") or "",
+                "play_url": f"{base}/web/index.html#!/details?id={quote(str(item['Id']))}" if item and item.get("Id") else "",
+                "search_url": f"{base}/web/index.html#!/search.html?query={quote(str((task.get('progress') or {}).get('metadata', {}).get('dvdid') or task.get('title') or task.get('name') or ''))}",
+            }
+            links.append(link)
+        except (OSError, requests.RequestException, ValueError) as exc:
+            links.append({"id": server["id"], "name": server["name"], "type": server["type"], "found": False, "error": str(exc)})
+    return links
+
+
+def auto_sync_media_servers() -> None:
+    for server in list_media_servers():
+        if not server.get("auto_scan"):
+            continue
+        try:
+            delay = max(0, min(86400, int(server.get("auto_scan_delay", 0) or 0)))
+            if delay:
+                time.sleep(delay)
+            sync_media_server(server)
+        except (OSError, requests.RequestException):
+            continue
