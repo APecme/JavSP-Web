@@ -458,9 +458,9 @@ function renderDockerPathBrowser(data) {
   const entries = data.entries || [];
   list.innerHTML = entries.length ? entries.map((item) => {
     const canSelect = state.pathBrowser.kind === 'any' || state.pathBrowser.kind === item.kind;
-    const enter = item.kind === 'directory' ? '<span class="path-browser-enter">进入</span>' : '';
     const selectLabel = item.kind === 'directory' ? '选此文件夹' : '选此文件';
-    return `<div class="path-browser-row"><button class="path-browser-entry" type="button" data-path-browser-enter="${escapeHtml(item.path)}" data-path-browser-kind="${escapeHtml(item.kind)}"><span class="path-browser-entry-icon">${item.kind === 'directory' ? '文件夹' : '视频'}</span><span class="path-browser-entry-name">${escapeHtml(item.name)}</span>${enter}</button>${canSelect ? `<button class="button secondary path-browser-select" type="button" data-path-browser-select="${escapeHtml(item.path)}">${selectLabel}</button>` : ''}</div>`;
+    const enter = item.kind === 'directory' ? `<button class="button secondary path-browser-enter" type="button" data-path-browser-enter="${escapeHtml(item.path)}" data-path-browser-kind="directory">进入</button>` : '';
+    return `<div class="path-browser-row"><span class="path-browser-entry-icon">${item.kind === 'directory' ? '文件夹' : '视频'}</span><span class="path-browser-entry-name">${escapeHtml(item.name)}</span><div class="path-browser-row-actions">${enter}${canSelect ? `<button class="button secondary path-browser-select" type="button" data-path-browser-select="${escapeHtml(item.path)}">${selectLabel}</button>` : ''}</div></div>`;
   }).join('') : '<p class="muted path-browser-empty">此文件夹中没有可用的子目录或视频文件。</p>';
 }
 
@@ -1450,6 +1450,9 @@ $('#add-downloader').addEventListener('click', () => editDownloader(null));
 $('#add-auto-scrape-schedule').addEventListener('click', async () => {
   await loadPresets();
   editAutoScrapeSchedule();
+});
+['#close-auto-scrape-schedule', '#cancel-auto-scrape-schedule'].forEach((selector) => {
+  $(selector)?.addEventListener('click', () => $('#auto-scrape-schedule-dialog').close());
 });
 $('.native-schedule-path-button').addEventListener('click', async () => {
   const message = $('#auto-scrape-schedule-message');
