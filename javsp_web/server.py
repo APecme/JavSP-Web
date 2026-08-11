@@ -58,6 +58,16 @@ from .tasks import cancel_task, create_tasks, delete_task, get_cover_path, get_f
 ensure_seed_data()
 app = FastAPI(title="JavSP WEB", version=__version__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
+
+
+@app.middleware("http")
+async def disable_asset_cache(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
 IS_DOCKER = Path("/.dockerenv").exists() or os.environ.get("JAVSP_WEB_DOCKER") == "1"
 DOCKER_VIDEO_ROOT = Path("/video")
