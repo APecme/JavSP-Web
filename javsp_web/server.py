@@ -252,7 +252,7 @@ def browse_path(path: str = Query(default="/video", max_length=2048), _: dict = 
                 entries.append({"name": item.name, "path": resolved.as_posix(), "kind": "file"})
     except OSError as exc:
         raise HTTPException(status_code=400, detail=f"无法读取目录: {exc}") from exc
-    parent = root if current != root else None
+    parent = current.parent if current != root else None
     return {"path": current.as_posix(), "parent": parent.as_posix() if parent else None, "entries": entries}
 
 

@@ -69,6 +69,7 @@ select[multiple] { min-height: 104px; }
 .path-browser-entry:hover { color: #175cd3; background: #f8fafc; }
 .path-browser-entry-icon { flex: 0 0 auto; min-width: 32px; color: #667085; font-size: 11px; }
 .path-browser-entry-name { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.path-browser-enter { flex: 0 0 auto; margin-left: auto; color: #175cd3; font-size: 11px; font-weight: 600; }
 .path-browser-select { flex: 0 0 auto; padding: 6px 9px; font-size: 11px; }
 .path-browser-empty { margin: 0; padding: 22px 0; text-align: center; }
 @media (max-width: 560px) {
