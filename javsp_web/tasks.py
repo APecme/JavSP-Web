@@ -345,6 +345,17 @@ def get_task(task_id: str) -> dict | None:
     return next((task for task in list_tasks() if task["id"] == task_id), None)
 
 
+def active_schedule_task_ids(schedule_id: str) -> list[str]:
+    """Return unfinished tasks created by one scheduled rule."""
+    with _lock:
+        return [
+            str(task["id"])
+            for task in load_tasks()
+            if str(task.get("schedule_id") or "") == schedule_id
+            and (task.get("status") in {"queued", "running"} or task.get("image_retry_running"))
+        ]
+
+
 def get_cover_path(task_id: str, index: int) -> Path | None:
     task = next((item for item in load_tasks() if item.get("id") == task_id), None)
     if not task or index < 0:

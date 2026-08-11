@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import errno
 from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
@@ -9,6 +10,27 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 class QbittorrentError(RuntimeError):
     pass
+
+
+def _connection_error(base_url: str, exc: Exception, *, api: bool = False) -> QbittorrentError:
+    """Make container network errors actionable instead of implying bad credentials."""
+    host = (urlparse(base_url).hostname or "").lower()
+    reason = getattr(exc, "reason", exc)
+    err_no = getattr(reason, "errno", None)
+    prefix = "qBittorrent API 请求失败" if api else "无法连接 qBittorrent"
+    detail = f"{prefix}：{exc}"
+    if host in {"127.0.0.1", "::1", "localhost"}:
+        return QbittorrentError(
+            f"{detail}。127.0.0.1 指向运行 JavSP WEB 的设备；Docker 部署时它指向 JavSP WEB 容器，并不是 qBittorrent。"
+            "请使用同一 Docker 网络中的 qBittorrent 服务名（例如 http://qbittorrent:8080）、可访问的域名，"
+            "或已配置 host-gateway 的 http://host.docker.internal:端口。"
+        )
+    if err_no in {errno.EHOSTUNREACH, errno.ENETUNREACH, errno.ECONNREFUSED, errno.ETIMEDOUT}:
+        return QbittorrentError(
+            f"{detail}。连接由部署 JavSP WEB 的服务器或容器发起，而不是浏览器发起。"
+            "请确认该运行环境可路由到此地址、qBittorrent Web UI 监听了可访问接口，并放行对应防火墙/反向代理规则。"
+        )
+    return QbittorrentError(detail)
 
 
 def _base_url(settings: dict) -> str:
@@ -42,7 +64,7 @@ def _open(settings: dict):
         detail = exc.read().decode("utf-8", errors="replace").strip()
         raise QbittorrentError(f"qBittorrent 拒绝登录（HTTP {exc.code}）：{detail or '请检查 Web UI 地址、用户名和反向代理设置'}") from exc
     except (URLError, TimeoutError) as exc:
-        raise QbittorrentError(f"无法连接 qBittorrent：{exc}") from exc
+        raise _connection_error(base_url, exc) from exc
     if result == "Fails.":
         raise QbittorrentError("qBittorrent 用户名或密码错误")
     # Some HTTPS reverse proxies strip the qB login body while preserving SID.
@@ -64,7 +86,7 @@ def _request(opener, url: str, headers: dict[str, str], *, data: dict | None = N
         detail = exc.read().decode("utf-8", errors="replace").strip()
         raise QbittorrentError(f"qBittorrent API 请求失败（HTTP {exc.code}）：{detail or '请检查认证方式与 Web UI 地址'}") from exc
     except (URLError, TimeoutError) as exc:
-        raise QbittorrentError(f"qBittorrent API 请求失败：{exc}") from exc
+        raise _connection_error(url, exc, api=True) from exc
 
 
 def test_connection(settings: dict) -> dict:

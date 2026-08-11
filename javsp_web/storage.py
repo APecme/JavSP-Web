@@ -381,6 +381,30 @@ def claim_auto_scrape_schedule_run(schedule_id: str, minute_key: str) -> dict[st
         return claimed
 
 
+def skip_auto_scrape_schedule_run(schedule_id: str, minute_key: str, result: str) -> dict[str, Any] | None:
+    """Record a skipped run and reserve its minute so the scheduler will not retry it."""
+    ensure_seed_data()
+    with _lock:
+        stored = _read_json(AUTO_SCRAPE_SCHEDULES_FILE, [])
+        source = stored.get("schedules", []) if isinstance(stored, dict) else stored
+        for item in source:
+            if not isinstance(item, dict) or str(item.get("id") or "") != schedule_id:
+                continue
+            if str(item.get("last_run_key") or "") == minute_key:
+                return None
+            timestamp = now_iso()
+            item["last_run_key"] = minute_key
+            item["last_run_at"] = timestamp
+            item["last_result"] = result[:500]
+            runs = item.get("runs") if isinstance(item.get("runs"), list) else []
+            runs.append({"id": minute_key, "started_at": timestamp, "result": item["last_result"], "task_ids": []})
+            item["runs"] = runs
+            item["updated_at"] = timestamp
+            _write_json(AUTO_SCRAPE_SCHEDULES_FILE, {"schedules": source})
+            return _normalize_auto_scrape_schedule(item)
+    return None
+
+
 def record_auto_scrape_schedule_result(schedule_id: str, result: str, task_ids: list[str] | None = None) -> None:
     ensure_seed_data()
     with _lock:

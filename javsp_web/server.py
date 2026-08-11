@@ -37,6 +37,7 @@ from .storage import (
     now_iso,
     read_config,
     record_auto_scrape_schedule_result,
+    skip_auto_scrape_schedule_run,
     load_auto_scrape_history,
     save_preset,
     save_qbittorrent_settings,
@@ -52,7 +53,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
-from .tasks import cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, retry_task_images
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, retry_task_images
 
 
 ensure_seed_data()
@@ -72,6 +73,7 @@ app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
 IS_DOCKER = Path("/.dockerenv").exists() or os.environ.get("JAVSP_WEB_DOCKER") == "1"
 CONTAINER_BROWSE_ROOT = Path("/")
 VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
+_auto_scrape_run_lock = threading.RLock()
 
 
 class LoginBody(BaseModel):
@@ -1126,24 +1128,33 @@ def _find_auto_scrape_schedule(schedule_id: str) -> tuple[int, dict | None]:
 
 
 def _run_auto_scrape_schedule(schedule_id: str, run_key: str) -> tuple[dict, list[dict]]:
-    claimed = claim_auto_scrape_schedule_run(schedule_id, run_key)
-    if not claimed:
-        raise ValueError("无法创建定时自动刮削运行记录")
-    try:
-        created = create_tasks(
-            str(claimed["input_directory"]),
-            str(claimed["preset_id"]),
-            source="schedule",
-            schedule_id=str(claimed["id"]),
-        )
-    except ValueError as exc:
-        record_auto_scrape_schedule_result(str(claimed["id"]), f"执行失败：{exc}")
-        raise
-    except Exception as exc:  # noqa: BLE001
-        record_auto_scrape_schedule_result(str(claimed["id"]), f"执行异常：{exc}")
-        raise
-    record_auto_scrape_schedule_result(str(claimed["id"]), f"已创建 {len(created)} 个任务", [str(task["id"]) for task in created])
-    return claimed, created
+    # A slow scrape must not cause the same cron rule to pile up new batches.
+    # The lock also closes the small race between the active-task check and creation.
+    with _auto_scrape_run_lock:
+        active_ids = active_schedule_task_ids(schedule_id)
+        if active_ids:
+            skipped = skip_auto_scrape_schedule_run(schedule_id, run_key, "上一次定时刮削尚未完成，已跳过本次运行")
+            if not skipped:
+                raise ValueError("本次定时运行已处理")
+            return skipped, []
+        claimed = claim_auto_scrape_schedule_run(schedule_id, run_key)
+        if not claimed:
+            raise ValueError("无法创建定时自动刮削运行记录")
+        try:
+            created = create_tasks(
+                str(claimed["input_directory"]),
+                str(claimed["preset_id"]),
+                source="schedule",
+                schedule_id=str(claimed["id"]),
+            )
+        except ValueError as exc:
+            record_auto_scrape_schedule_result(str(claimed["id"]), f"执行失败：{exc}")
+            raise
+        except Exception as exc:  # noqa: BLE001
+            record_auto_scrape_schedule_result(str(claimed["id"]), f"执行异常：{exc}")
+            raise
+        record_auto_scrape_schedule_result(str(claimed["id"]), f"已创建 {len(created)} 个任务", [str(task["id"]) for task in created])
+        return claimed, created
 
 
 @app.get("/api/auto-scrape-schedules")
@@ -1205,7 +1216,8 @@ def run_auto_scrape_schedule_now(schedule_id: str, _: dict = Depends(require_adm
         claimed, created = _run_auto_scrape_schedule(schedule_id, f"manual-{uuid.uuid4().hex}")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"schedule_id": schedule_id, "run_id": claimed["last_run_key"], "count": len(created), "task_ids": [task["id"] for task in created]}
+    skipped = not created and claimed.get("last_result") == "上一次定时刮削尚未完成，已跳过本次运行"
+    return {"schedule_id": schedule_id, "run_id": claimed["last_run_key"], "count": len(created), "task_ids": [task["id"] for task in created], "skipped": skipped, "message": claimed.get("last_result", "")}
 
 
 @app.delete("/api/auto-scrape-schedules/{schedule_id}")

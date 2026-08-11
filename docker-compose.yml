@@ -8,6 +8,8 @@ services:
     environment:
       JAVSP_WEB_HOST: 0.0.0.0
       JAVSP_WEB_PORT: 8090
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - ./video:/video

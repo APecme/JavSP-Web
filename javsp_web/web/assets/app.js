@@ -1088,7 +1088,7 @@ function editDownloader(downloader) {
   $('#downloader-dialog-title').textContent = downloader?.id ? '编辑下载器' : '添加下载器';
   $('#downloader-id').value = downloader?.id || '';
   $('#downloader-name').value = downloader?.name || '';
-  $('#downloader-url').value = downloader?.url || 'http://127.0.0.1:8080';
+  $('#downloader-url').value = downloader?.url || '';
   $('#downloader-username').value = downloader?.username || '';
   $('#downloader-password').value = '';
   $('#downloader-password').placeholder = downloader?.password_set ? '留空则保留已保存的密码' : '请输入 qBittorrent 密码';
@@ -1254,7 +1254,7 @@ function ensureMediaSettingsUi() {
     settingsPanel.insertAdjacentHTML('afterbegin', '<div id="media-server-panel" class="panel narrow"><div class="panel-heading"><div><h2>媒体服务器</h2><p class="muted">连接 Emby 或 Jellyfin，可手动同步媒体库，并在刮削完成后自动扫描。</p></div><button class="button primary" id="add-media-server" type="button">添加媒体服务器</button></div><div id="media-server-list" class="media-server-list"></div></div>');
   }
   if (!$('#media-server-dialog')) {
-    document.body.insertAdjacentHTML('beforeend', '<dialog id="media-server-dialog" class="app-dialog"><form method="dialog" id="media-server-form" class="dialog-form"><div class="dialog-heading"><h2 id="media-server-dialog-title">添加媒体服务器</h2><button class="dialog-close" value="cancel">关闭</button></div><input id="media-server-id" type="hidden"><div class="dialog-content"><label>名称<input id="media-server-name" maxlength="80" required></label><label>类型<select id="media-server-type"><option value="emby">Emby</option><option value="jellyfin">Jellyfin</option></select></label><label>服务地址<input id="media-server-url" type="url" placeholder="http://127.0.0.1:8096" required></label><label>外部播放地址<input id="media-server-external-url" type="url" placeholder="https://media.example.com"></label><label>API 密钥<input id="media-server-api-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"></label><label class="check-label"><input id="media-server-auto-scan" type="checkbox">刮削任务完成后自动扫描媒体库</label></div><span id="media-server-message" class="form-error dialog-message"></span><div class="dialog-actions"><button class="button secondary" id="sync-media-server" type="button">同步媒体库</button><button class="button danger" id="delete-media-server" type="button">删除</button><button class="button primary" value="default">保存</button></div></form></dialog>');
+    document.body.insertAdjacentHTML('beforeend', '<dialog id="media-server-dialog" class="app-dialog"><form method="dialog" id="media-server-form" class="dialog-form"><div class="dialog-heading"><h2 id="media-server-dialog-title">添加媒体服务器</h2><button class="dialog-close" type="button" data-dialog-close>关闭</button></div><input id="media-server-id" type="hidden"><div class="dialog-content"><label>名称<input id="media-server-name" maxlength="80" required></label><label>类型<select id="media-server-type"><option value="emby">Emby</option><option value="jellyfin">Jellyfin</option></select></label><label>服务地址<input id="media-server-url" type="url" placeholder="http://127.0.0.1:8096" required></label><label>外部播放地址<input id="media-server-external-url" type="url" placeholder="https://media.example.com"></label><label>API 密钥<input id="media-server-api-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"></label><label class="check-label"><input id="media-server-auto-scan" type="checkbox">刮削任务完成后自动扫描媒体库</label></div><span id="media-server-message" class="form-error dialog-message"></span><div class="dialog-actions"><button class="button secondary" id="sync-media-server" type="button">同步媒体库</button><button class="button danger" id="delete-media-server" type="button">删除</button><button class="button secondary" type="button" data-dialog-close>取消</button><button class="button primary" value="default">保存</button></div></form></dialog>');
   }
   const mediaContent = $('#media-server-dialog')?.querySelector('.dialog-content');
   if (mediaContent && !$('#probe-media-server')) mediaContent.insertAdjacentHTML('beforeend', '<button class="button secondary" id="probe-media-server" type="button">验证并读取媒体库</button><label>管理的媒体库<select id="media-server-libraries" multiple size="4"></select></label><label>自动扫描延迟（秒）<input id="media-server-auto-scan-delay" type="number" min="0" max="86400" step="1" value="0"></label>');
@@ -1315,6 +1315,11 @@ async function probeMediaLibraries(showMessage = true) {
 $('#probe-media-server')?.addEventListener('click', () => probeMediaLibraries(true));
 
 document.addEventListener('click', (event) => {
+  const closeButton = event.target.closest('[data-dialog-close]');
+  if (closeButton) {
+    closeButton.closest('dialog')?.close();
+    return;
+  }
   const viewAutoScrapeHistoryButton = event.target.closest('[data-view-auto-scrape-history]');
   if (viewAutoScrapeHistoryButton) openAutoScrapeHistory(viewAutoScrapeHistoryButton.dataset.viewAutoScrapeHistory);
   const runAutoScrapeScheduleButton = event.target.closest('[data-run-auto-scrape-schedule]');
