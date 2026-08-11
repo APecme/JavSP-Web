@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, formValues: {}, presetMode: null, logScroll: {}, logOpen: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/video' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -422,12 +422,9 @@ async function loadPathTools() {
     tools.classList.remove('hidden');
     const nativeButtons = tools.querySelectorAll('.native-path-button');
     nativeButtons.forEach((button) => button.classList.toggle('hidden', runtime.docker));
-    const dockerOptions = $('#docker-path-options');
-    dockerOptions.classList.toggle('hidden', !runtime.docker);
-    if (runtime.docker) {
-      const options = await api('/api/path/options');
-      dockerOptions.innerHTML = '<option value="">从 /video 选择路径</option>' + options.map((item) => `<option value="${escapeHtml(item.path)}">${item.kind === 'directory' ? '目录 · ' : '文件 · '}${escapeHtml(item.path)}</option>`).join('');
-    }
+    $('#docker-path-browser')?.classList.toggle('hidden', !runtime.docker);
+    $('#docker-schedule-path-browser')?.classList.toggle('hidden', !runtime.docker);
+    $('.native-schedule-path-button')?.classList.toggle('hidden', Boolean(runtime.docker));
   } catch (error) {
     console.error(error);
   }
@@ -440,6 +437,48 @@ async function selectNativePath(kind) {
   } catch (error) {
     $('#task-message').textContent = error.message;
   }
+}
+
+function setPathTarget(path) {
+  const target = state.pathBrowser.target === 'schedule' ? $('#auto-scrape-schedule-directory') : $('#input-directory');
+  if (target) target.value = path;
+}
+
+function renderDockerPathBrowser(data) {
+  const current = $('#path-browser-current');
+  const list = $('#path-browser-list');
+  const up = $('#path-browser-up');
+  const choose = $('#path-browser-choose');
+  if (!current || !list || !up || !choose) return;
+  state.pathBrowser.currentPath = data.path;
+  current.textContent = data.path;
+  up.disabled = !data.parent;
+  up.dataset.parentPath = data.parent || '';
+  choose.classList.toggle('hidden', !['directory', 'any'].includes(state.pathBrowser.kind));
+  const entries = data.entries || [];
+  list.innerHTML = entries.length ? entries.map((item) => {
+    const canSelect = state.pathBrowser.kind === 'any' || state.pathBrowser.kind === item.kind;
+    return `<div class="path-browser-row"><button class="path-browser-entry" type="button" data-path-browser-enter="${escapeHtml(item.path)}" data-path-browser-kind="${escapeHtml(item.kind)}"><span class="path-browser-entry-icon">${item.kind === 'directory' ? '目录' : '文件'}</span><span class="path-browser-entry-name">${escapeHtml(item.name)}</span></button>${canSelect ? `<button class="button secondary path-browser-select" type="button" data-path-browser-select="${escapeHtml(item.path)}">选择</button>` : ''}</div>`;
+  }).join('') : '<p class="muted path-browser-empty">此文件夹中没有可用的子目录或视频文件。</p>';
+}
+
+async function loadDockerPathBrowser(path = state.pathBrowser.currentPath) {
+  const message = $('#path-browser-message');
+  if (message) message.textContent = '';
+  try {
+    const data = await api(`/api/path/browse?path=${encodeURIComponent(path)}`);
+    renderDockerPathBrowser(data);
+  } catch (error) {
+    if (message) message.textContent = error.message;
+  }
+}
+
+async function openDockerPathBrowser(kind, target) {
+  state.pathBrowser = { kind, target, currentPath: '/video' };
+  $('#path-browser-title').textContent = kind === 'directory' ? '选择 Docker 文件夹' : (kind === 'file' ? '选择 Docker 视频文件' : '选择 Docker 路径');
+  $('#path-browser-subtitle').textContent = kind === 'directory' ? '进入文件夹后可选择当前目录，或继续浏览下一级。' : (kind === 'file' ? '进入文件夹后选择一个视频文件。' : '可选择文件夹，也可进入文件夹选择视频文件。');
+  $('#path-browser-dialog').showModal();
+  await loadDockerPathBrowser('/video');
 }
 
 function confirmAction({ title, text, confirmLabel = '确认', danger = false, run }) {
@@ -738,7 +777,32 @@ $('#action-confirm-form').addEventListener('submit', async (event) => {
   }
 });
 document.querySelectorAll('.native-path-button').forEach((button) => button.addEventListener('click', () => selectNativePath(button.dataset.pathKind)));
-$('#docker-path-options').addEventListener('change', (event) => { if (event.target.value) $('#input-directory').value = event.target.value; });
+$('#docker-path-browser')?.addEventListener('click', () => openDockerPathBrowser('any', 'manual'));
+$('#docker-schedule-path-browser')?.addEventListener('click', () => openDockerPathBrowser('directory', 'schedule'));
+$('#path-browser-up')?.addEventListener('click', () => {
+  const parent = $('#path-browser-up').dataset.parentPath;
+  if (parent) loadDockerPathBrowser(parent);
+});
+$('#path-browser-list')?.addEventListener('click', (event) => {
+  const select = event.target.closest('[data-path-browser-select]');
+  if (select) {
+    setPathTarget(select.dataset.pathBrowserSelect);
+    $('#path-browser-dialog').close();
+    return;
+  }
+  const entry = event.target.closest('[data-path-browser-enter]');
+  if (!entry) return;
+  if (entry.dataset.pathBrowserKind === 'directory') loadDockerPathBrowser(entry.dataset.pathBrowserEnter);
+  else if (state.pathBrowser.kind !== 'directory') {
+    setPathTarget(entry.dataset.pathBrowserEnter);
+    $('#path-browser-dialog').close();
+  }
+});
+$('#path-browser-choose')?.addEventListener('click', (event) => {
+  event.preventDefault();
+  if (['directory', 'any'].includes(state.pathBrowser.kind)) setPathTarget(state.pathBrowser.currentPath);
+  $('#path-browser-dialog').close();
+});
 $('#preset-mode').addEventListener('change', setPresetMode);
 document.querySelectorAll('[data-preset-tab]').forEach((button) => button.addEventListener('click', () => setPresetTab(button.dataset.presetTab)));
 $('#new-preset').addEventListener('click', newPreset);
@@ -1133,6 +1197,7 @@ function editAutoScrapeSchedule(schedule = null) {
   renderAutoScrapeSchedulePresets(schedule?.preset_id || 'default');
   $('#delete-auto-scrape-schedule').classList.toggle('hidden', !schedule);
   $('.native-schedule-path-button').classList.toggle('hidden', Boolean(state.runtime?.docker));
+  $('#docker-schedule-path-browser')?.classList.toggle('hidden', !state.runtime?.docker);
   $('#auto-scrape-schedule-dialog').showModal();
 }
 
@@ -1392,6 +1457,7 @@ $('.native-schedule-path-button').addEventListener('click', async () => {
   } catch (error) { message.textContent = error.message; }
 });
 $('#auto-scrape-schedule-form').addEventListener('submit', async (event) => {
+  if (event.submitter?.value !== 'default') return;
   event.preventDefault();
   const id = $('#auto-scrape-schedule-id').value;
   const message = $('#auto-scrape-schedule-message');

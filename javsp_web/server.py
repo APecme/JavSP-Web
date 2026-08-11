@@ -10,7 +10,7 @@ from typing import Literal
 
 import yaml
 from croniter import croniter
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Response, status
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -60,6 +60,8 @@ app = FastAPI(title="JavSP WEB", version=__version__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
 app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
 IS_DOCKER = Path("/.dockerenv").exists() or os.environ.get("JAVSP_WEB_DOCKER") == "1"
+DOCKER_VIDEO_ROOT = Path("/video")
+VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 
 
 class LoginBody(BaseModel):
@@ -193,28 +195,65 @@ def select_path(body: PathSelectBody, _: dict = Depends(current_user)) -> dict:
 
 @app.get("/api/path/options")
 def path_options(_: dict = Depends(current_user)) -> list[dict]:
+    """Compatibility endpoint kept for older Web clients.
+
+    It intentionally exposes only the first level. New clients use
+    ``/api/path/browse`` to navigate one directory at a time.
+    """
     if not IS_DOCKER:
         return []
-    root = Path("/video")
+    root = DOCKER_VIDEO_ROOT
     if not root.exists():
         return []
-    extensions = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
     options = [{"path": "/video", "kind": "directory"}]
     try:
-        for item in sorted(root.rglob("*"), key=lambda path: str(path).lower()):
-            try:
-                relative = item.relative_to(root)
-            except ValueError:
-                continue
-            if len(relative.parts) > 4 or (item.is_file() and item.suffix.lower() not in extensions):
-                continue
-            if item.is_dir() or item.is_file():
-                options.append({"path": "/video/" + relative.as_posix(), "kind": "directory" if item.is_dir() else "file"})
-            if len(options) >= 500:
-                break
+        for item in sorted(root.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold())):
+            if item.is_dir() or (item.is_file() and item.suffix.lower() in VIDEO_EXTENSIONS):
+                options.append({"path": item.as_posix(), "kind": "directory" if item.is_dir() else "file"})
     except OSError:
         return options
     return options
+
+
+def _docker_video_path(path: str | None) -> Path:
+    """Resolve a browser path while keeping Docker browsing inside /video."""
+    root = DOCKER_VIDEO_ROOT.resolve()
+    requested = str(path or root).strip()
+    requested_path = Path(requested)
+    candidate = requested_path if requested_path.is_absolute() else root / requested_path
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="路径必须位于 /video 目录内") from exc
+    return resolved
+
+
+@app.get("/api/path/browse")
+def browse_path(path: str = Query(default="/video", max_length=2048), _: dict = Depends(current_user)) -> dict:
+    if not IS_DOCKER:
+        raise HTTPException(status_code=400, detail="当前部署方式不需要浏览容器路径")
+    current = _docker_video_path(path)
+    if not current.exists() or not current.is_dir():
+        raise HTTPException(status_code=400, detail="目录不存在或不可访问")
+    root = DOCKER_VIDEO_ROOT.resolve()
+    entries: list[dict] = []
+    try:
+        children = sorted(current.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold()))
+        for item in children:
+            resolved = item.resolve()
+            try:
+                resolved.relative_to(root)
+            except ValueError:
+                continue
+            if item.is_dir():
+                entries.append({"name": item.name, "path": resolved.as_posix(), "kind": "directory"})
+            elif item.is_file() and item.suffix.lower() in VIDEO_EXTENSIONS:
+                entries.append({"name": item.name, "path": resolved.as_posix(), "kind": "file"})
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=f"无法读取目录: {exc}") from exc
+    parent = root if current != root else None
+    return {"path": current.as_posix(), "parent": parent.as_posix() if parent else None, "entries": entries}
 
 
 @app.get("/health")
