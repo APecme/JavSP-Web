@@ -22,7 +22,7 @@
       <p id="login-error" class="form-error" role="alert"></p>
     </form>
     <p class="hint">首次登录：admin / admin，请在系统设置中修改。</p>
-    <p id="login-version" class="app-version auth-version">v1.1.05</p>
+    <p id="login-version" class="app-version auth-version">v1.1.06</p>
   </main>
   <script>
     fetch('/api/public-info').then((response) => response.ok ? response.json() : null).then((info) => { if (info && info.version) document.querySelector('#login-version').textContent = `v${info.version}`; }).catch(() => {});

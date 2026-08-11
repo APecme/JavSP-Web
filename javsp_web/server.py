@@ -70,7 +70,7 @@ async def disable_asset_cache(request, call_next):
 
 app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
 IS_DOCKER = Path("/.dockerenv").exists() or os.environ.get("JAVSP_WEB_DOCKER") == "1"
-DOCKER_VIDEO_ROOT = Path("/video")
+CONTAINER_BROWSE_ROOT = Path("/")
 VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 
 
@@ -212,10 +212,10 @@ def path_options(_: dict = Depends(current_user)) -> list[dict]:
     """
     if not IS_DOCKER:
         return []
-    root = DOCKER_VIDEO_ROOT
+    root = CONTAINER_BROWSE_ROOT
     if not root.exists():
         return []
-    options = [{"path": "/video", "kind": "directory"}]
+    options = [{"path": "/", "kind": "directory"}]
     try:
         for item in sorted(root.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold())):
             if item.is_dir() or (item.is_file() and item.suffix.lower() in VIDEO_EXTENSIONS):
@@ -225,9 +225,9 @@ def path_options(_: dict = Depends(current_user)) -> list[dict]:
     return options
 
 
-def _docker_video_path(path: str | None) -> Path:
-    """Resolve a browser path while keeping Docker browsing inside /video."""
-    root = DOCKER_VIDEO_ROOT.resolve()
+def _container_browse_path(path: str | None) -> Path:
+    """Resolve an absolute or root-relative path inside the container."""
+    root = CONTAINER_BROWSE_ROOT.resolve()
     requested = str(path or root).strip()
     requested_path = Path(requested)
     candidate = requested_path if requested_path.is_absolute() else root / requested_path
@@ -235,18 +235,18 @@ def _docker_video_path(path: str | None) -> Path:
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="路径必须位于 /video 目录内") from exc
+        raise HTTPException(status_code=400, detail="路径必须位于容器文件系统内") from exc
     return resolved
 
 
 @app.get("/api/path/browse")
-def browse_path(path: str = Query(default="/video", max_length=2048), _: dict = Depends(current_user)) -> dict:
+def browse_path(path: str = Query(default="/", max_length=2048), _: dict = Depends(current_user)) -> dict:
     if not IS_DOCKER:
         raise HTTPException(status_code=400, detail="当前部署方式不需要浏览容器路径")
-    current = _docker_video_path(path)
+    current = _container_browse_path(path)
     if not current.exists() or not current.is_dir():
         raise HTTPException(status_code=400, detail="目录不存在或不可访问")
-    root = DOCKER_VIDEO_ROOT.resolve()
+    root = CONTAINER_BROWSE_ROOT.resolve()
     entries: list[dict] = []
     try:
         children = sorted(current.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold()))

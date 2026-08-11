@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/video' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -476,11 +476,11 @@ async function loadDockerPathBrowser(path = state.pathBrowser.currentPath) {
 }
 
 async function openDockerPathBrowser(kind, target) {
-  state.pathBrowser = { kind, target, currentPath: '/video' };
-  $('#path-browser-title').textContent = kind === 'directory' ? '选择 Docker 文件夹' : (kind === 'file' ? '选择 Docker 视频文件' : '选择 Docker 路径');
+  state.pathBrowser = { kind, target, currentPath: '/' };
+  $('#path-browser-title').textContent = kind === 'directory' ? '选择容器文件夹' : (kind === 'file' ? '选择容器视频文件' : '选择容器路径');
   $('#path-browser-subtitle').textContent = kind === 'directory' ? '进入文件夹后可选择当前目录，或继续浏览下一级。' : (kind === 'file' ? '进入文件夹后选择一个视频文件。' : '可选择文件夹，也可进入文件夹选择视频文件。');
   $('#path-browser-dialog').showModal();
-  await loadDockerPathBrowser('/video');
+  await loadDockerPathBrowser('/');
 }
 
 function confirmAction({ title, text, confirmLabel = '确认', danger = false, run }) {

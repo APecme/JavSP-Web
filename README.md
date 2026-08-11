@@ -41,7 +41,7 @@ docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
   apecme/javsp-web:latest
 ```
 
-将 `D:\Videos` 替换为实际影片目录，然后访问 `http://127.0.0.1:8090/login`。Docker 版中填写路径时使用容器路径，例如 `/video/Movies`。
+将 `D:\Videos` 替换为实际影片目录，然后访问 `http://127.0.0.1:8090/login`。Docker 版中填写路径时使用实际挂载的容器路径，例如 `/video/Movies` 或 `/mnt/movies`。
 
 ### Docker Compose
 
@@ -66,7 +66,7 @@ services:
 docker compose up -d
 ```
 
-影片放入 `./video`，或将 `./video` 改为本机的实际影片目录。网页中使用容器路径，例如 `/video/Movies`。
+影片放入 `./video`，或将 `./video` 改为本机的实际影片目录。网页中使用实际挂载的容器路径，例如 `/video/Movies` 或 `/mnt/movies`。
 
 ## 使用
 
