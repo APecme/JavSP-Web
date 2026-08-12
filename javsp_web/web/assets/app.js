@@ -1504,7 +1504,7 @@ function ensureMediaSettingsUi() {
     document.body.insertAdjacentHTML('beforeend', '<dialog id="media-server-dialog" class="app-dialog"><form method="dialog" id="media-server-form" class="dialog-form"><div class="dialog-heading"><h2 id="media-server-dialog-title">添加媒体服务器</h2><button class="dialog-close" type="button" data-dialog-close>关闭</button></div><input id="media-server-id" type="hidden"><div class="dialog-content"><label>名称<input id="media-server-name" maxlength="80" required></label><label>类型<select id="media-server-type"><option value="emby">Emby</option><option value="jellyfin">Jellyfin</option></select></label><label>服务地址<input id="media-server-url" type="url" placeholder="http://127.0.0.1:8096" required></label><label>外部播放地址<input id="media-server-external-url" type="url" placeholder="https://media.example.com"></label><label>API 密钥<input id="media-server-api-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"></label><label class="check-label"><input id="media-server-auto-scan" type="checkbox">刮削任务完成后自动扫描媒体库</label></div><span id="media-server-message" class="form-error dialog-message"></span><div class="dialog-actions"><button class="button secondary" id="sync-media-server" type="button">同步媒体库</button><button class="button danger" id="delete-media-server" type="button">删除</button><button class="button secondary" type="button" data-dialog-close>取消</button><button class="button primary" value="default">保存</button></div></form></dialog>');
   }
   const mediaContent = $('#media-server-dialog')?.querySelector('.dialog-content');
-  if (mediaContent && !$('#probe-media-server')) mediaContent.insertAdjacentHTML('beforeend', '<button class="button secondary" id="probe-media-server" type="button">验证并读取媒体库</button><label>管理的媒体库<select id="media-server-libraries" multiple size="4"></select></label><label>自动扫描延迟（秒）<input id="media-server-auto-scan-delay" type="number" min="0" max="86400" step="1" value="0"></label>');
+  if (mediaContent && !$('#probe-media-server')) mediaContent.insertAdjacentHTML('beforeend', '<button class="button secondary" id="probe-media-server" type="button">验证并读取媒体库</button><fieldset class="media-library-fieldset"><legend>管理的媒体库</legend><div id="media-server-libraries" class="media-library-options"><span class="muted">验证连接后选择要管理的媒体库</span></div></fieldset><label>自动扫描延迟（秒）<input id="media-server-auto-scan-delay" type="number" min="0" max="86400" step="1" value="0"></label>');
 }
 
 function renderMediaServers() {
@@ -1530,8 +1530,7 @@ function editMediaServer(server) {
   $('#media-server-api-key').value = '';
   $('#media-server-auto-scan').checked = Boolean(server.auto_scan);
   $('#media-server-auto-scan-delay').value = server.auto_scan_delay || 0;
-  $('#media-server-libraries').innerHTML = '';
-  (server.available_libraries || []).forEach((library) => { $('#media-server-libraries').add(new Option(library.name, library.id, false, (server.libraries || []).includes(library.id))); });
+  renderMediaLibraryOptions(server.available_libraries || [], server.libraries || []);
   $('#media-server-message').textContent = '';
   $('#delete-media-server').hidden = !server.id;
   $('#sync-media-server').hidden = !server.id;
@@ -1545,7 +1544,20 @@ document.addEventListener('change', (event) => {
 });
 
 function mediaServerPayload() {
-  return { server_id: $('#media-server-id').value || null, name: $('#media-server-name').value.trim(), type: $('#media-server-type').value, url: $('#media-server-url').value.trim(), external_url: $('#media-server-external-url').value.trim(), api_key: $('#media-server-api-key').value, auto_scan: $('#media-server-auto-scan').checked, auto_scan_delay: Number($('#media-server-auto-scan-delay').value) || 0, libraries: Array.from($('#media-server-libraries').selectedOptions).map((option) => option.value) };
+  return { server_id: $('#media-server-id').value || null, name: $('#media-server-name').value.trim(), type: $('#media-server-type').value, url: $('#media-server-url').value.trim(), external_url: $('#media-server-external-url').value.trim(), api_key: $('#media-server-api-key').value, auto_scan: $('#media-server-auto-scan').checked, auto_scan_delay: Number($('#media-server-auto-scan-delay').value) || 0, libraries: selectedMediaLibraryIds() };
+}
+
+function selectedMediaLibraryIds() {
+  return Array.from(document.querySelectorAll('#media-server-libraries [data-media-library]:checked')).map((input) => input.value);
+}
+
+function renderMediaLibraryOptions(libraries, selected = []) {
+  const target = $('#media-server-libraries');
+  if (!target) return;
+  const selectedIds = new Set(selected);
+  target.innerHTML = libraries.length
+    ? libraries.map((library) => `<label class="media-library-option"><input type="checkbox" data-media-library value="${escapeHtml(library.id)}"${selectedIds.has(library.id) ? ' checked' : ''}><span>${escapeHtml(library.name)}</span></label>`).join('')
+    : '<span class="muted">验证连接后选择要管理的媒体库</span>';
 }
 
 async function probeMediaLibraries(showMessage = true) {
@@ -1561,9 +1573,7 @@ async function probeMediaLibraries(showMessage = true) {
   if (showMessage && message) message.textContent = '正在连接媒体服务器并读取媒体库…';
   try {
     const result = await api('/api/media-servers/libraries', { method: 'POST', body: JSON.stringify(payload) });
-    const select = $('#media-server-libraries');
-    const selected = new Set(Array.from(select.selectedOptions).map((option) => option.value));
-    select.innerHTML = (result.libraries || []).map((library) => `<option value="${escapeHtml(library.id)}"${selected.has(library.id) ? ' selected' : ''}>${escapeHtml(library.name)}</option>`).join('');
+    renderMediaLibraryOptions(result.libraries || [], selectedMediaLibraryIds());
     if (showMessage && message) message.textContent = `连接成功，读取到 ${(result.libraries || []).length} 个媒体库`;
   } catch (error) {
     if (showMessage && message) message.textContent = error.message;

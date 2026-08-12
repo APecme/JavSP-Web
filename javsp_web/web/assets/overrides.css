@@ -54,7 +54,11 @@
 .view[data-panel="downloads"] > .panel.narrow { max-width: none; }
 .view[data-panel="settings"] > .panel.narrow .media-server-row { max-width: 1100px; }
 .view[data-panel="settings"] > .panel.narrow .media-server-list { max-width: 1100px; }
-select[multiple] { min-height: 104px; }
+.media-library-fieldset { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.media-library-fieldset legend { padding: 0; color: #344054; font-size: 14px; font-weight: 600; }
+.media-library-options { display: grid; gap: 6px; max-height: 180px; overflow: auto; padding: 9px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; }
+.media-library-option { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 8px; margin: 0; color: #344054; cursor: pointer; }
+.media-library-option input { width: auto; min-height: 0; margin: 0; }
 .download-auto-scrape { display: grid; gap: 12px; padding: 14px; border: 1px solid #b2ccff; border-radius: 6px; background: #eff8ff; }
 .download-auto-scrape > strong { color: #175cd3; font-size: 13px; }
 .download-auto-scrape-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
