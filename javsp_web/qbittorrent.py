@@ -97,6 +97,8 @@ def list_downloads(settings: dict) -> list[dict]:
             "progress": round(float(item.get("progress", 0) or 0) * 100, 1),
             "state": item.get("state", ""),
             "size": int(item.get("size", 0) or 0),
+            "added_on": int(item.get("added_on", 0) or 0),
+            "completed_on": int(item.get("completion_on", 0) or 0),
             "download_speed": int(item.get("dlspeed", 0) or 0),
             "upload_speed": int(item.get("upspeed", 0) or 0),
             "ratio": float(item.get("ratio", 0) or 0),

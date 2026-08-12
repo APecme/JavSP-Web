@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -1015,14 +1015,107 @@ function formatBytes(value) {
   return `${(number / (1024 ** unit)).toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
+function formatDownloadDate(timestamp) {
+  const value = Number(timestamp) || 0;
+  return value > 0 ? new Date(value * 1000).toLocaleString() : '未完成';
+}
+
+function populateDownloadStates(downloads) {
+  const select = $('#download-filter-state');
+  if (!select) return;
+  const selected = select.value;
+  const states = [...new Set(downloads.map((item) => String(item.state || '').trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  select.innerHTML = `<option value="">全部状态</option>${states.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}`;
+  select.value = states.includes(selected) ? selected : '';
+}
+
+function downloadInDateRange(timestamp, from, to) {
+  if (!from && !to) return true;
+  const value = Number(timestamp) || 0;
+  if (!value) return false;
+  const date = new Date(value * 1000);
+  if (from && date < new Date(`${from}T00:00:00`)) return false;
+  return !to || date <= new Date(`${to}T23:59:59.999`);
+}
+
+function filteredDownloads(downloads) {
+  const name = ($('#download-filter-name')?.value || '').trim().toLocaleLowerCase();
+  const tags = ($('#download-filter-tags')?.value || '').trim().toLocaleLowerCase();
+  const category = ($('#download-filter-category')?.value || '').trim().toLocaleLowerCase();
+  const state = $('#download-filter-state')?.value || '';
+  const minSize = Number($('#download-filter-size-min')?.value);
+  const maxSize = Number($('#download-filter-size-max')?.value);
+  const addedFrom = $('#download-filter-added-from')?.value || '';
+  const addedTo = $('#download-filter-added-to')?.value || '';
+  const completedFrom = $('#download-filter-completed-from')?.value || '';
+  const completedTo = $('#download-filter-completed-to')?.value || '';
+  const sortBy = $('#download-sort-by')?.value || 'added_on';
+  const direction = $('#download-sort-direction')?.value === 'asc' ? 1 : -1;
+  return downloads.filter((item) => {
+    const sizeMib = (Number(item.size) || 0) / (1024 * 1024);
+    if (name && !String(item.name || '').toLocaleLowerCase().includes(name)) return false;
+    if (tags && !String(item.tags || '').toLocaleLowerCase().includes(tags)) return false;
+    if (category && !String(item.category || '').toLocaleLowerCase().includes(category)) return false;
+    if (state && item.state !== state) return false;
+    if ($('#download-filter-size-min')?.value !== '' && sizeMib < minSize) return false;
+    if ($('#download-filter-size-max')?.value !== '' && sizeMib > maxSize) return false;
+    if (!downloadInDateRange(item.added_on, addedFrom, addedTo)) return false;
+    return downloadInDateRange(item.completed_on, completedFrom, completedTo);
+  }).sort((left, right) => {
+    const a = sortBy === 'name' || sortBy === 'tags' || sortBy === 'state' || sortBy === 'category' ? String(left[sortBy] || '').localeCompare(String(right[sortBy] || '')) : (Number(left[sortBy]) || 0) - (Number(right[sortBy]) || 0);
+    return a * direction;
+  });
+}
+
+function renderDownloadSummary(downloads) {
+  const target = $('#download-summary');
+  if (!target) return;
+  const downloadSpeed = downloads.reduce((total, item) => total + (Number(item.download_speed) || 0), 0);
+  const uploadSpeed = downloads.reduce((total, item) => total + (Number(item.upload_speed) || 0), 0);
+  target.innerHTML = `<span>任务 ${downloads.length}</span><span>下载 ${formatBytes(downloadSpeed)}/s</span><span>上传 ${formatBytes(uploadSpeed)}/s</span>`;
+}
+
+function renderDownloadRows(downloads, active) {
+  const target = $('#download-list');
+  const filtered = filteredDownloads(downloads);
+  const summary = $('#download-filter-summary');
+  if (summary) summary.textContent = `显示 ${filtered.length} / ${downloads.length} 个已接管任务`;
+  target.classList.remove('empty');
+  target.innerHTML = filtered.length ? filtered.map((item) => `<article class="download-row managed-download"><div class="download-name"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.state || '未知状态')} · ${formatBytes(item.size)} · ${escapeHtml(item.category || '未分类')}</span><span>标签：${escapeHtml(item.tags || '无')} · 分享率 ${Number(item.ratio || 0).toFixed(2)}</span><span>添加：${escapeHtml(formatDownloadDate(item.added_on))} · 完成：${escapeHtml(formatDownloadDate(item.completed_on))}</span></div><div class="download-progress"><b>${item.progress}%</b><i><em style="width:${Math.max(0, Math.min(100, item.progress))}%"></em></i></div><div class="download-speeds"><span>下行 ${formatBytes(item.download_speed)}/s</span><span>上行 ${formatBytes(item.upload_speed)}/s</span></div><button class="icon-button remove-download" type="button" data-remove-download="${escapeHtml(item.hash)}" data-downloader-id="${escapeHtml(active.id)}" title="删除种子但保留文件">删除种子</button></article>`).join('') : '<div class="task-list empty">没有符合当前筛选条件的已接管下载任务</div>';
+}
+
+function ensureDownloadFilters() {
+  const filters = document.querySelectorAll('#download-filter-bar input, #download-filter-bar select');
+  filters.forEach((control) => {
+    if (control.dataset.bound) return;
+    control.dataset.bound = 'true';
+    control.addEventListener('input', () => renderDownloadRows(state.activeDownloads || [], state.activeDownloader || {}));
+    control.addEventListener('change', () => renderDownloadRows(state.activeDownloads || [], state.activeDownloader || {}));
+  });
+  $('#download-filter-reset')?.addEventListener('click', () => {
+    document.querySelectorAll('#download-filter-bar input').forEach((control) => { control.value = ''; });
+    $('#download-filter-state').value = '';
+    $('#download-sort-by').value = 'added_on';
+    $('#download-sort-direction').value = 'desc';
+    renderDownloadRows(state.activeDownloads || [], state.activeDownloader || {});
+  }, { once: true });
+}
+
 async function loadDownloads() {
   const target = $('#download-list');
   if (!target) return;
+  const clearDownloadPresentation = () => {
+    state.activeDownloads = [];
+    state.activeDownloader = null;
+    if ($('#download-summary')) $('#download-summary').innerHTML = '';
+    if ($('#download-filter-summary')) $('#download-filter-summary').textContent = '';
+  };
   try {
     const result = await api('/api/downloads');
     const downloaders = result.downloaders || [];
     renderDownloaderTabs(downloaders);
     if (!downloaders.length) {
+      clearDownloadPresentation();
       target.classList.add('empty');
       target.textContent = '尚未添加下载器';
       return;
@@ -1031,18 +1124,24 @@ async function loadDownloads() {
     const active = downloaders.find((downloader) => downloader.id === state.activeDownloaderId) || downloaders[0];
     renderDownloaderTabs(downloaders);
     if (active.error) {
+      clearDownloadPresentation();
       target.classList.add('empty');
       target.textContent = `${active.name}：${active.error}`;
       return;
     }
     if (!result.takeover_enabled) {
+      clearDownloadPresentation();
       target.classList.add('empty');
       target.textContent = '尚未启用下载任务接管';
       return;
     }
     const downloads = (active.items || []).filter((item) => item.managed);
-    target.classList.remove('empty');
-    target.innerHTML = downloads.length ? downloads.map((item) => `<article class="download-row managed-download"><div class="download-name"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.state || '未知状态')} · ${formatBytes(item.size)} · ${escapeHtml(item.category || '未分类')}</span><span>标签：${escapeHtml(item.tags || '无')} · 分享率 ${Number(item.ratio || 0).toFixed(2)}</span></div><div class="download-progress"><b>${item.progress}%</b><i><em style="width:${Math.max(0, Math.min(100, item.progress))}%"></em></i></div><div class="download-speeds"><span>下行 ${formatBytes(item.download_speed)}/s</span><span>上行 ${formatBytes(item.upload_speed)}/s</span></div><button class="icon-button remove-download" type="button" data-remove-download="${escapeHtml(item.hash)}" data-downloader-id="${escapeHtml(active.id)}" title="删除种子但保留文件">删除种子</button></article>`).join('') : '<div class="task-list empty">没有符合当前接管标签或分类的下载任务</div>';
+    state.activeDownloads = downloads;
+    state.activeDownloader = active;
+    ensureDownloadFilters();
+    populateDownloadStates(downloads);
+    renderDownloadSummary(downloads);
+    renderDownloadRows(downloads, active);
   } catch (error) {
     target.classList.add('empty');
     target.textContent = error.message;
