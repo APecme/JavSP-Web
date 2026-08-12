@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -429,7 +429,7 @@ function renderOverview() {
 
 async function loadTasks() {
   const pageScroll = window.scrollY;
-  try { rememberLogScroll(); state.tasks = await api('/api/tasks'); renderOverview(); renderTasks(); } catch (error) { console.error(error); }
+  try { rememberLogScroll(); state.tasks = await api('/api/tasks'); syncTaskExpansion(state.tasks); renderOverview(); renderTasks(); } catch (error) { console.error(error); }
   window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
 }
 
@@ -869,9 +869,34 @@ function taskDisplayName(task) {
   return task.title || task.file_name || task.name || task.id;
 }
 
+function imageProgressSummary(task) {
+  const images = task.progress?.images || {};
+  const cover = images.cover_done ? '封面已下载' : (images.failed ? '封面失败' : '封面等待中');
+  const total = Number(images.fanart_total) || 0;
+  const done = Math.min(Number(images.fanart_done) || 0, total);
+  return total ? `${cover} · 剧照 ${done}/${total}` : cover;
+}
+
+function syncTaskExpansion(tasks) {
+  state.taskOpen ||= {};
+  state.taskStatus ||= {};
+  (tasks || []).forEach((task) => {
+    const key = String(task.id);
+    const previous = state.taskStatus[key];
+    if (task.status === 'running' && previous !== 'running') {
+      state.taskOpen[key] = true;
+      state.taskOpen[`schedule-${key}`] = true;
+    } else if (previous === 'running' && task.status !== 'running') {
+      state.taskOpen[key] = false;
+      state.taskOpen[`schedule-${key}`] = false;
+    }
+    state.taskStatus[key] = task.status;
+  });
+}
+
 function taskCard(task) {
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
-  const expanded = state.taskOpen?.[task.id] ?? ['queued', 'running'].includes(task.status);
+  const expanded = state.taskOpen?.[task.id] ?? task.status === 'running';
   const lines = (task.log_tail || []).join('\n');
   const rawLog = lines ? `<details class="task-raw-log" data-task-details="${escapeHtml(task.id)}"><summary>查看日志 (${task.log_tail.length} 行)</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(task.id)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(task.id)}">复制日志</button></div></details>` : '';
   const active = ['queued', 'running'].includes(task.status);
@@ -881,7 +906,7 @@ function taskCard(task) {
   const actions = `<div class="form-actions task-actions">${retryImages}</div>`;
   const stopButton = active ? `<button class="button secondary task-stop" type="button" onclick="cancelTask('${escapeHtml(task.id)}')">停止任务</button>` : '';
   const deleteButton = `<button class="task-delete" type="button" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ' title="删除任务"'}>删除</button>`;
-  return `<article class="task-card task-card-collapsible" data-task-card="${escapeHtml(task.id)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta">${titleMeta}<span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${stopButton}${deleteButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(task.id)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expanded ? '-' : '+'}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(task.id)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${rawLog}${actions}</div></article>`;
+  return `<article class="task-card task-card-collapsible" data-task-card="${escapeHtml(task.id)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta">${titleMeta}<span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${stopButton}${deleteButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(task.id)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expanded ? '-' : '+'}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(task.id)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${rawLog}${actions}</div></article>`;
 }
 
 function rememberTaskCards() {
@@ -1166,6 +1191,7 @@ async function loadAutoScrapeSchedules() {
     state.autoScrapeSchedules = await api('/api/auto-scrape-schedules');
     renderAutoScrapeSchedules();
     renderAutoScrapeRunButtons();
+    if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeRun) await refreshAutoScrapeRun();
   } catch (error) {
     target.classList.add('empty');
     target.textContent = error.message;
@@ -1187,25 +1213,36 @@ function renderAutoScrapeRunButtons() {
 function scheduleRunTaskMarkup(task) {
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
   const logKey = `schedule-${task.id}`;
-  const expanded = state.taskOpen?.[logKey] ?? ['queued', 'running'].includes(task.status);
+  const expanded = state.taskOpen?.[logKey] ?? task.status === 'running';
   const lines = (task.log_tail || []).join('\n');
   const log = lines ? `<details class="task-raw-log" data-task-details="${escapeHtml(logKey)}"><summary>查看日志 (${task.log_tail.length} 行)</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(logKey)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(logKey)}">复制日志</button></div></details>` : '<p class="muted">任务尚未输出日志。</p>';
-  return `<article class="task-card task-card-collapsible schedule-run-task" data-task-card="${escapeHtml(logKey)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span><button class="task-toggle" type="button" data-task-toggle="${escapeHtml(logKey)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expanded ? '-' : '+'}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(logKey)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${log}</div></article>`;
+  return `<article class="task-card task-card-collapsible schedule-run-task" data-task-card="${escapeHtml(logKey)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span><button class="task-toggle" type="button" data-task-toggle="${escapeHtml(logKey)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expanded ? '-' : '+'}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(logKey)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${log}</div></article>`;
+}
+
+async function refreshAutoScrapeRun() {
+  const active = state.activeAutoScrapeRun;
+  const dialog = $('#auto-scrape-run-dialog');
+  if (!active || !dialog?.open) return;
+  const schedule = state.autoScrapeSchedules.find((item) => item.id === active.scheduleId);
+  const run = schedule?.runs?.find((item) => item.id === active.runId);
+  if (!schedule || !run) return;
+  rememberLogScroll();
+  rememberTaskCards();
+  $('#auto-scrape-run-title').textContent = `${schedule.name} - 任务日志`;
+  $('#auto-scrape-run-subtitle').textContent = `${run.started_at ? run.started_at.replace('T', ' ') : ''} · ${run.result || '正在读取任务'}`;
+  const results = await Promise.all(run.task_ids.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
+  if (!dialog.open || state.activeAutoScrapeRun?.runId !== active.runId) return;
+  const tasks = results.filter(Boolean);
+  syncTaskExpansion(tasks);
+  $('#auto-scrape-run-content').innerHTML = tasks.length ? tasks.map(scheduleRunTaskMarkup).join('') : '<p class="muted">相关任务已被删除，无法查看日志。</p>';
+  restoreLogScroll();
 }
 
 async function openAutoScrapeRun(scheduleId, runId) {
-  const schedule = state.autoScrapeSchedules.find((item) => item.id === scheduleId);
-  const run = schedule?.runs?.find((item) => item.id === runId);
-  if (!schedule || !run) return;
   state.activeAutoScrapeRun = { scheduleId, runId };
-  $('#auto-scrape-run-title').textContent = `${schedule.name} - 任务日志`;
-  $('#auto-scrape-run-subtitle').textContent = `${run.started_at ? run.started_at.replace('T', ' ') : ''} · ${run.result || '正在读取任务'}`;
   $('#auto-scrape-run-content').innerHTML = '<p class="muted">正在读取任务日志…</p>';
   $('#auto-scrape-run-dialog').showModal();
-  const results = await Promise.all(run.task_ids.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
-  if (!$('#auto-scrape-run-dialog').open || state.activeAutoScrapeRun?.runId !== runId) return;
-  const tasks = results.filter(Boolean);
-  $('#auto-scrape-run-content').innerHTML = tasks.length ? tasks.map(scheduleRunTaskMarkup).join('') : '<p class="muted">相关任务已被删除，无法查看日志。</p>';
+  await refreshAutoScrapeRun();
 }
 
 function openAutoScrapeHistory(scheduleId) {
@@ -1218,6 +1255,8 @@ function openAutoScrapeHistory(scheduleId) {
   $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(run.started_at ? run.started_at.replace('T', ' ') : run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p></div>${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}</article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
   $('#auto-scrape-run-dialog').showModal();
 }
+
+$('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; });
 
 function renderAutoScrapeSchedulePresets(selectedId = 'default') {
   const select = $('#auto-scrape-schedule-preset');
