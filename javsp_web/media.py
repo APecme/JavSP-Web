@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 import os
+import socket
+import struct
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import requests
@@ -9,14 +11,27 @@ import requests
 from .storage import list_media_servers
 
 
+def _docker_host_gateway() -> str | None:
+    """Return Docker's current bridge gateway without relying on a DNS alias."""
+    try:
+        with open("/proc/net/route", encoding="ascii") as routes:
+            for line in routes.readlines()[1:]:
+                fields = line.split()
+                if len(fields) >= 3 and fields[1] == "00000000":
+                    return socket.inet_ntoa(struct.pack("<L", int(fields[2], 16)))
+    except (OSError, ValueError, struct.error):
+        return None
+    return None
+
+
 def _service_url(server: dict) -> str:
-    """Resolve localhost from a Dockerized service to the Compose host gateway."""
+    """Resolve Docker-local localhost to the container's host bridge gateway."""
     value = str(server.get("url") or "").strip().rstrip("/")
     in_docker = os.path.exists("/.dockerenv") or os.environ.get("JAVSP_WEB_DOCKER") == "1"
     parsed = urlsplit(value)
     if not in_docker or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
         return value
-    host = "host.docker.internal"
+    host = _docker_host_gateway() or "host.docker.internal"
     if parsed.port:
         host = f"{host}:{parsed.port}"
     return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment)).rstrip("/")

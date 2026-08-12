@@ -1523,7 +1523,7 @@ function editMediaServer(server) {
   server = server || {};
   $('#media-server-dialog-title').textContent = server.id ? '编辑媒体服务器' : '添加媒体服务器';
   $('#media-server-id').value = server.id || '';
-  $('#media-server-name').value = server.name || '';
+  $('#media-server-name').value = server.name || 'Emby';
   $('#media-server-type').value = server.type || 'emby';
   $('#media-server-url').value = server.url || '';
   $('#media-server-external-url').value = server.external_url || '';
@@ -1538,6 +1538,11 @@ function editMediaServer(server) {
   $('#media-server-dialog').showModal();
   if (server.id) probeMediaLibraries(false);
 }
+
+document.addEventListener('change', (event) => {
+  if (event.target.id !== 'media-server-type' || $('#media-server-id')?.value) return;
+  $('#media-server-name').value = event.target.value === 'jellyfin' ? 'Jellyfin' : 'Emby';
+});
 
 function mediaServerPayload() {
   return { server_id: $('#media-server-id').value || null, name: $('#media-server-name').value.trim(), type: $('#media-server-type').value, url: $('#media-server-url').value.trim(), external_url: $('#media-server-external-url').value.trim(), api_key: $('#media-server-api-key').value, auto_scan: $('#media-server-auto-scan').checked, auto_scan_delay: Number($('#media-server-auto-scan-delay').value) || 0, libraries: Array.from($('#media-server-libraries').selectedOptions).map((option) => option.value) };
