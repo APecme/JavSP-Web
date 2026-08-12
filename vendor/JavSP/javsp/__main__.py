@@ -517,21 +517,24 @@ def RunNormalMode(all_movies):
                 raise
             if not cover_dl:
                 progress_event('images', done=0, total=1, kind='cover', status='failed', error='未能下载有效封面')
-            check_step(cover_dl, '下载封面图片失败')
-            progress_event('images', done=1 if cover_dl else 0, total=1, kind='cover', status='completed')
-            cover, pic_path = cover_dl
-            # 确保实际下载的封面的url与即将写入到movie.info中的一致
-            if cover != movie.info.cover:
-                movie.info.cover = cover
-            # 根据实际下载的封面的格式更新fanart/poster等图片的文件名
-            if pic_path != movie.fanart_file:
-                movie.fanart_file = pic_path
-                actual_ext = os.path.splitext(pic_path)[1]
-                movie.poster_file = os.path.splitext(movie.poster_file)[0] + actual_ext
+                # 图片源可能暂时不可访问，但元数据和文件整理仍可完成。
+                # 保留结构化失败事件，由 JavSP WEB 提供后续图片重试。
+                logger.warning('下载封面图片失败，已跳过封面处理并继续整理影片')
+                inner_bar.update()
+            else:
+                progress_event('images', done=1, total=1, kind='cover', status='completed')
+                cover, pic_path = cover_dl
+                # 确保实际下载的封面的url与即将写入到movie.info中的一致
+                if cover != movie.info.cover:
+                    movie.info.cover = cover
+                # 根据实际下载的封面的格式更新fanart/poster等图片的文件名
+                if pic_path != movie.fanart_file:
+                    movie.fanart_file = pic_path
+                    actual_ext = os.path.splitext(pic_path)[1]
+                    movie.poster_file = os.path.splitext(movie.poster_file)[0] + actual_ext
 
-            process_poster(movie)
-
-            check_step(True)
+                process_poster(movie)
+                check_step(True)
 
             if Cfg().summarizer.extra_fanarts.enabled:
                 scrape_interval = Cfg().summarizer.extra_fanarts.scrap_interval.total_seconds()

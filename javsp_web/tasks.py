@@ -359,14 +359,20 @@ def list_tasks() -> list[dict]:
             item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
             item["log_tail"] = _display_log_lines(cleaned_logs)[-_MAX_DISPLAY_LOG_LINES:]
             if item.get("status") == "succeeded":
-                for stage in item["progress"]["stages"].values():
+                for key in ("concurrent", "summary"):
+                    stage = item["progress"]["stages"][key]
                     stage["percent"] = 100
                     if not stage["total"]:
                         stage["done"], stage["total"] = 1, 1
                 images = item["progress"]["images"]
-                images["cover_done"] = max(images["cover_done"], 1)
-                if images["fanart_total"]:
-                    images["fanart_done"] = images["fanart_total"]
+                image_stage = item["progress"]["stages"]["images"]
+                if not images["failed"]:
+                    image_stage["percent"] = 100
+                    if not image_stage["total"]:
+                        image_stage["done"], image_stage["total"] = 1, 1
+                    images["cover_done"] = max(images["cover_done"], 1)
+                    if images["fanart_total"]:
+                        images["fanart_done"] = images["fanart_total"]
             output = image_progress.get("output") or {}
             item["cover_count"] = len(_cover_paths(item.get("input_directory", ""), output))
             item["fanart_count"] = len(_fanart_paths(item.get("input_directory", ""), output))
