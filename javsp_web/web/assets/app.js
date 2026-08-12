@@ -1508,21 +1508,22 @@ function mediaServerPayload() {
 
 async function probeMediaLibraries(showMessage = true) {
   const button = $('#probe-media-server');
-  if (button) button.disabled = true;
+  const message = $('#media-server-message');
+  const original = button?.textContent || '验证并读取媒体库';
+  if (button) { button.disabled = true; button.textContent = '正在验证…'; }
+  if (showMessage && message) message.textContent = '正在连接媒体服务器并读取媒体库…';
   try {
     const result = await api('/api/media-servers/libraries', { method: 'POST', body: JSON.stringify(mediaServerPayload()) });
     const select = $('#media-server-libraries');
     const selected = new Set(Array.from(select.selectedOptions).map((option) => option.value));
     select.innerHTML = (result.libraries || []).map((library) => `<option value="${escapeHtml(library.id)}"${selected.has(library.id) ? ' selected' : ''}>${escapeHtml(library.name)}</option>`).join('');
-    if (showMessage) $('#media-server-message').textContent = `已连接，读取到 ${(result.libraries || []).length} 个媒体库`;
+    if (showMessage && message) message.textContent = `连接成功，读取到 ${(result.libraries || []).length} 个媒体库`;
   } catch (error) {
-    if (showMessage) $('#media-server-message').textContent = error.message;
+    if (showMessage && message) message.textContent = error.message;
   } finally {
-    if (button) button.disabled = false;
+    if (button) { button.disabled = false; button.textContent = original; }
   }
 }
-
-$('#probe-media-server')?.addEventListener('click', () => probeMediaLibraries(true));
 
 document.addEventListener('click', (event) => {
   const closeButton = event.target.closest('[data-dialog-close]');
@@ -1596,6 +1597,12 @@ document.addEventListener('click', (event) => {
   }
   const addMedia = event.target.closest('#add-media-server');
   if (addMedia) editMediaServer(null);
+  const probeMedia = event.target.closest('#probe-media-server');
+  if (probeMedia) {
+    event.preventDefault();
+    probeMediaLibraries(true);
+    return;
+  }
   const editMedia = event.target.closest('[data-edit-media-server]');
   if (editMedia) editMediaServer(state.mediaServers.find((server) => server.id === editMedia.dataset.editMediaServer));
   const syncMedia = event.target.closest('[data-sync-media-server]');
@@ -1773,16 +1780,21 @@ document.addEventListener('submit', async (event) => {
   } catch (error) { message.textContent = error.message; }
 });
 
-$('#media-server-dialog')?.addEventListener('click', (event) => {
-  if (event.target.id !== 'sync-media-server') return;
+document.addEventListener('click', (event) => {
+  const syncButton = event.target.closest('#media-server-dialog #sync-media-server');
+  if (!syncButton) return;
   const id = $('#media-server-id').value;
   if (!id) return;
   const message = $('#media-server-message');
-  event.target.disabled = true;
-  api(`/api/media-servers/${encodeURIComponent(id)}/sync`, { method: 'POST' }).then((result) => { message.textContent = result.message || '媒体库扫描已启动'; }).catch((error) => { message.textContent = error.message; }).finally(() => { event.target.disabled = false; });
+  const original = syncButton.textContent;
+  syncButton.disabled = true;
+  syncButton.textContent = '正在同步…';
+  api(`/api/media-servers/${encodeURIComponent(id)}/sync`, { method: 'POST' }).then((result) => { message.textContent = result.message || '媒体库扫描已启动'; }).catch((error) => { message.textContent = error.message; }).finally(() => { syncButton.disabled = false; syncButton.textContent = original; });
 });
 
-$('#media-server-dialog')?.querySelector('#delete-media-server')?.addEventListener('click', () => {
+document.addEventListener('click', (event) => {
+  const deleteButton = event.target.closest('#media-server-dialog #delete-media-server');
+  if (!deleteButton) return;
   const id = $('#media-server-id').value;
   if (!id) return;
   const server = state.mediaServers.find((item) => item.id === id);
