@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -1020,49 +1020,43 @@ function formatDownloadDate(timestamp) {
   return value > 0 ? new Date(value * 1000).toLocaleString() : '未完成';
 }
 
-function populateDownloadStates(downloads) {
-  const select = $('#download-filter-state');
-  if (!select) return;
-  const selected = select.value;
-  const states = [...new Set(downloads.map((item) => String(item.state || '').trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
-  select.innerHTML = `<option value="">全部状态</option>${states.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}`;
-  select.value = states.includes(selected) ? selected : '';
+function formatEta(seconds) {
+  const value = Number(seconds) || 0;
+  if (value <= 0 || value >= 8640000) return '∞';
+  const units = [[86400, '天'], [3600, '时'], [60, '分']];
+  const parts = [];
+  let remaining = value;
+  units.forEach(([unit, suffix]) => {
+    const amount = Math.floor(remaining / unit);
+    if (amount && parts.length < 2) parts.push(`${amount}${suffix}`);
+    remaining %= unit;
+  });
+  return parts.length ? parts.join(' ') : `${remaining}秒`;
 }
 
-function downloadInDateRange(timestamp, from, to) {
-  if (!from && !to) return true;
-  const value = Number(timestamp) || 0;
-  if (!value) return false;
-  const date = new Date(value * 1000);
-  if (from && date < new Date(`${from}T00:00:00`)) return false;
-  return !to || date <= new Date(`${to}T23:59:59.999`);
+function populateDownloadFilters(downloads) {
+  [['#download-filter-category', 'category', '全部分类'], ['#download-filter-tags', 'tags', '全部标签']].forEach(([selector, key, allLabel]) => {
+    const select = $(selector);
+    if (!select) return;
+    const selected = select.value;
+    const values = [...new Set(downloads.flatMap((item) => String(item[key] || '').split(',').map((value) => value.trim()).filter(Boolean)))].sort((left, right) => left.localeCompare(right));
+    select.innerHTML = `<option value="">${allLabel}</option>${values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}`;
+    select.value = values.includes(selected) ? selected : '';
+  });
 }
 
 function filteredDownloads(downloads) {
   const name = ($('#download-filter-name')?.value || '').trim().toLocaleLowerCase();
-  const tags = ($('#download-filter-tags')?.value || '').trim().toLocaleLowerCase();
-  const category = ($('#download-filter-category')?.value || '').trim().toLocaleLowerCase();
-  const state = $('#download-filter-state')?.value || '';
-  const minSize = Number($('#download-filter-size-min')?.value);
-  const maxSize = Number($('#download-filter-size-max')?.value);
-  const addedFrom = $('#download-filter-added-from')?.value || '';
-  const addedTo = $('#download-filter-added-to')?.value || '';
-  const completedFrom = $('#download-filter-completed-from')?.value || '';
-  const completedTo = $('#download-filter-completed-to')?.value || '';
-  const sortBy = $('#download-sort-by')?.value || 'added_on';
-  const direction = $('#download-sort-direction')?.value === 'asc' ? 1 : -1;
+  const tags = $('#download-filter-tags')?.value || '';
+  const category = $('#download-filter-category')?.value || '';
+  const sortBy = state.downloadSort?.key || 'added_on';
+  const direction = state.downloadSort?.direction === 'asc' ? 1 : -1;
   return downloads.filter((item) => {
-    const sizeMib = (Number(item.size) || 0) / (1024 * 1024);
     if (name && !String(item.name || '').toLocaleLowerCase().includes(name)) return false;
-    if (tags && !String(item.tags || '').toLocaleLowerCase().includes(tags)) return false;
-    if (category && !String(item.category || '').toLocaleLowerCase().includes(category)) return false;
-    if (state && item.state !== state) return false;
-    if ($('#download-filter-size-min')?.value !== '' && sizeMib < minSize) return false;
-    if ($('#download-filter-size-max')?.value !== '' && sizeMib > maxSize) return false;
-    if (!downloadInDateRange(item.added_on, addedFrom, addedTo)) return false;
-    return downloadInDateRange(item.completed_on, completedFrom, completedTo);
+    if (tags && !String(item.tags || '').split(',').map((value) => value.trim()).includes(tags)) return false;
+    return !category || item.category === category;
   }).sort((left, right) => {
-    const a = sortBy === 'name' || sortBy === 'tags' || sortBy === 'state' || sortBy === 'category' ? String(left[sortBy] || '').localeCompare(String(right[sortBy] || '')) : (Number(left[sortBy]) || 0) - (Number(right[sortBy]) || 0);
+    const a = ['name', 'tags', 'state', 'category'].includes(sortBy) ? String(left[sortBy] || '').localeCompare(String(right[sortBy] || '')) : (Number(left[sortBy]) || 0) - (Number(right[sortBy]) || 0);
     return a * direction;
   });
 }
@@ -1081,7 +1075,11 @@ function renderDownloadRows(downloads, active) {
   const summary = $('#download-filter-summary');
   if (summary) summary.textContent = `显示 ${filtered.length} / ${downloads.length} 个已接管任务`;
   target.classList.remove('empty');
-  target.innerHTML = filtered.length ? filtered.map((item) => `<article class="download-row managed-download"><div class="download-name"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.state || '未知状态')} · ${formatBytes(item.size)} · ${escapeHtml(item.category || '未分类')}</span><span>标签：${escapeHtml(item.tags || '无')} · 分享率 ${Number(item.ratio || 0).toFixed(2)}</span><span>添加：${escapeHtml(formatDownloadDate(item.added_on))} · 完成：${escapeHtml(formatDownloadDate(item.completed_on))}</span></div><div class="download-progress"><b>${item.progress}%</b><i><em style="width:${Math.max(0, Math.min(100, item.progress))}%"></em></i></div><div class="download-speeds"><span>下行 ${formatBytes(item.download_speed)}/s</span><span>上行 ${formatBytes(item.upload_speed)}/s</span></div><button class="icon-button remove-download" type="button" data-remove-download="${escapeHtml(item.hash)}" data-downloader-id="${escapeHtml(active.id)}" title="删除种子但保留文件">删除种子</button></article>`).join('') : '<div class="task-list empty">没有符合当前筛选条件的已接管下载任务</div>';
+  const columns = [['name', '名称'], ['size', '选定大小'], ['progress', '进度'], ['state', '状态'], ['seeds', '种子'], ['peers', '用户'], ['download_speed', '下载速度'], ['upload_speed', '上传速度'], ['eta', '剩余时间'], ['ratio', '比率'], ['popularity', '流行度'], ['category', '分类'], ['tags', '标签'], ['added_on', '添加于'], ['completed_on', '完成于']];
+  const sortMark = (key) => state.downloadSort?.key === key ? `<span class="download-sort-mark">${state.downloadSort.direction === 'asc' ? '↑' : '↓'}</span>` : '';
+  const head = columns.map(([key, label]) => `<th><button class="download-column-sort" type="button" data-download-sort="${key}">${label}${sortMark(key)}</button></th>`).join('');
+  const rows = filtered.map((item) => `<tr><td class="download-name-cell" title="${escapeHtml(item.name)}"><span class="download-state-dot ${escapeHtml(String(item.state || '').toLowerCase())}"></span>${escapeHtml(item.name)}</td><td>${formatBytes(item.size)}</td><td><div class="download-progress-cell"><b>${item.progress}%</b><i><em style="width:${Math.max(0, Math.min(100, item.progress))}%"></em></i></div></td><td>${escapeHtml(item.state || '未知')}</td><td>${Number(item.seeds) || 0}</td><td>${Number(item.peers) || 0}</td><td>${formatBytes(item.download_speed)}/s</td><td>${formatBytes(item.upload_speed)}/s</td><td>${escapeHtml(formatEta(item.eta))}</td><td>${Number(item.ratio || 0).toFixed(2)}</td><td>${Number(item.popularity || 0).toFixed(2)}</td><td>${escapeHtml(item.category || '')}</td><td>${escapeHtml(item.tags || '')}</td><td>${escapeHtml(formatDownloadDate(item.added_on))}</td><td>${escapeHtml(formatDownloadDate(item.completed_on))}</td><td><button class="download-row-remove" type="button" data-remove-download="${escapeHtml(item.hash)}" data-downloader-id="${escapeHtml(active.id)}" title="删除种子但保留文件">删除</button></td></tr>`).join('');
+  target.innerHTML = `<div class="download-table-wrap"><table class="download-table"><thead><tr>${head}<th aria-label="操作"></th></tr></thead><tbody>${rows || '<tr><td class="download-table-empty" colspan="16">没有符合当前筛选条件的已接管下载任务</td></tr>'}</tbody></table></div>`;
 }
 
 function ensureDownloadFilters() {
@@ -1094,9 +1092,9 @@ function ensureDownloadFilters() {
   });
   $('#download-filter-reset')?.addEventListener('click', () => {
     document.querySelectorAll('#download-filter-bar input').forEach((control) => { control.value = ''; });
-    $('#download-filter-state').value = '';
-    $('#download-sort-by').value = 'added_on';
-    $('#download-sort-direction').value = 'desc';
+    $('#download-filter-category').value = '';
+    $('#download-filter-tags').value = '';
+    state.downloadSort = { key: 'added_on', direction: 'desc' };
     renderDownloadRows(state.activeDownloads || [], state.activeDownloader || {});
   }, { once: true });
 }
@@ -1139,7 +1137,7 @@ async function loadDownloads() {
     state.activeDownloads = downloads;
     state.activeDownloader = active;
     ensureDownloadFilters();
-    populateDownloadStates(downloads);
+    populateDownloadFilters(downloads);
     renderDownloadSummary(downloads);
     renderDownloadRows(downloads, active);
   } catch (error) {
@@ -1624,6 +1622,12 @@ document.addEventListener('click', (event) => {
   if (downloadTab) {
     state.activeDownloaderId = downloadTab.dataset.downloadTab;
     loadDownloads();
+  }
+  const downloadSort = event.target.closest('[data-download-sort]');
+  if (downloadSort) {
+    const key = downloadSort.dataset.downloadSort;
+    state.downloadSort = state.downloadSort?.key === key ? { key, direction: state.downloadSort.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: ['name', 'tags', 'state', 'category'].includes(key) ? 'asc' : 'desc' };
+    renderDownloadRows(state.activeDownloads || [], state.activeDownloader || {});
   }
   const downloaderEdit = event.target.closest('[data-downloader-edit]');
   if (downloaderEdit) editDownloader(state.downloaders.find((downloader) => downloader.id === downloaderEdit.dataset.downloaderEdit));
