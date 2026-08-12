@@ -707,17 +707,10 @@ def _retry_task_images(task: dict, progress: dict) -> None:
                 _append_task_event(task, "images", kind="fanart", done=fanart_done, total=len(preview_pics), status="failed", current=index + 1, error=str(exc))
 
         if errors:
-            task["status"] = "failed"
-            task["error"] = "图片重新下载失败"
             _append_task_event(task, "image_retry", status="failed", error="；".join(errors[-3:]))
         else:
-            task["status"] = "succeeded"
-            task["return_code"] = 0
-            task["error"] = None
             _append_task_event(task, "image_retry", status="completed")
     except Exception as exc:  # noqa: BLE001
-        task["status"] = "failed"
-        task["error"] = "图片重新下载失败"
         _append_task_event(task, "image_retry", status="failed", error=str(exc))
     finally:
         task["image_retry_running"] = False
