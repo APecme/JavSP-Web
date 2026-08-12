@@ -1,3 +1,3 @@
 """JavSP WEB control plane."""
 
-__version__ = "1.1.28"
+__version__ = "1.1.29"

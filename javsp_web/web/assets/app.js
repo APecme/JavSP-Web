@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -463,7 +463,21 @@ function renderOverview() {
   const latest = state.tasks[0];
   $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
   const completed = state.tasks.filter((task) => task.status === 'succeeded' && task.cover_count > 0).slice(0, 24);
+  const availableIds = new Set(completed.map((task) => task.id));
+  state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => availableIds.has(id)));
+  const selectedCount = state.selectedOverviewTasks.size;
+  const toolbar = completed.length ? `<div class="overview-cover-toolbar"><label class="check-label"><input id="overview-select-all" type="checkbox"${selectedCount && selectedCount === completed.length ? ' checked' : ''}>选择全部</label><span class="muted">已选择 ${selectedCount} 项</span><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>` : '';
   $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => `<figure class="overview-cover"><img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(task.name || '')}"><figcaption>${escapeHtml(task.name || task.id)}</figcaption></figure>`).join('')}</div>` : '<div class="task-list empty">还没有已完成的封面</div>';
+  if (completed.length) {
+    $('#overview-tasks').insertAdjacentHTML('afterbegin', toolbar);
+    $('#overview-tasks').querySelectorAll('.overview-cover').forEach((card) => {
+      const task = completed.find((item) => card.querySelector(`img[src*="/api/tasks/${encodeURIComponent(item.id)}/cover/"]`));
+      if (!task) return;
+      const selected = state.selectedOverviewTasks.has(task.id);
+      card.classList.toggle('selected', selected);
+      card.insertAdjacentHTML('afterbegin', `<label class="overview-cover-select"><input type="checkbox" data-overview-select="${escapeHtml(task.id)}"${selected ? ' checked' : ''} aria-label="选择封面"></label>`);
+    });
+  }
 }
 
 async function loadTasks() {
@@ -576,7 +590,7 @@ function deleteTask(id) {
 async function deleteTaskInDialog(id) {
   const task = state.tasks.find((item) => item.id === id);
   state.pendingDeleteTask = id;
-  $('#task-delete-text').textContent = `确定删除任务“${task?.name || id}”及其日志吗？`;
+  $('#task-delete-text').textContent = `确定删除任务“${task?.name || id}”的刮削记录和日志吗？只删除 JavSP WEB 记录，不删除视频、NFO、封面或剧照文件。`;
   $('#task-delete-message').textContent = '';
   $('#task-delete-dialog').showModal();
 }
@@ -786,6 +800,38 @@ $('#task-form').addEventListener('submit', async (event) => {
 $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) deleteTaskInDialog(button.dataset.deleteTask); });
+document.addEventListener('change', (event) => {
+  const checkbox = event.target.closest('[data-overview-select]');
+  if (checkbox) {
+    if (checkbox.checked) state.selectedOverviewTasks.add(checkbox.dataset.overviewSelect);
+    else state.selectedOverviewTasks.delete(checkbox.dataset.overviewSelect);
+    renderOverview();
+    return;
+  }
+  if (event.target.id === 'overview-select-all') {
+    const completed = state.tasks.filter((task) => task.status === 'succeeded' && task.cover_count > 0).slice(0, 24);
+    if (event.target.checked) completed.forEach((task) => state.selectedOverviewTasks.add(task.id));
+    else state.selectedOverviewTasks.clear();
+    renderOverview();
+  }
+});
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('#overview-delete-selected');
+  if (!button || button.disabled || !state.selectedOverviewTasks.size) return;
+  const ids = [...state.selectedOverviewTasks];
+  confirmAction({
+    title: '删除刮削记录',
+    text: `确定删除选中的 ${ids.length} 条刮削记录吗？只删除 JavSP WEB 中的任务记录和封面墙展示，不删除视频、NFO、封面或剧照文件。`,
+    confirmLabel: '删除记录',
+    danger: true,
+    run: async () => {
+      for (const id of ids) await api(`/api/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      ids.forEach((id) => state.selectedOverviewTasks.delete(id));
+      await loadTasks();
+      showToast(`已删除 ${ids.length} 条刮削记录`);
+    },
+  });
+});
 document.addEventListener('click', async (event) => {
   const variable = event.target.closest('[data-insert-naming-variable]');
   if (variable) {
