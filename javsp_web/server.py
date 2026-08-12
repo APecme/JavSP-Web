@@ -51,7 +51,7 @@ from .storage import (
     verify_password,
     write_config,
 )
-from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, test_connection
+from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_transfer_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
 from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, retry_task_images
 from .timeutils import local_now, timezone_name
@@ -162,6 +162,8 @@ class QbittorrentManagementBody(BaseModel):
     ratio_limit: float = Field(default=-1, ge=-1, le=100000)
     seeding_time_limit: int = Field(default=-1, ge=-1, le=10_000_000)
     inactive_seeding_time_limit: int = Field(default=-1, ge=-1, le=10_000_000)
+    download_limit_kib: int = Field(default=-1, ge=-1, le=10_000_000)
+    upload_limit_kib: int = Field(default=-1, ge=-1, le=10_000_000)
     auto_remove: bool = False
     auto_scrape_enabled: bool = False
     auto_scrape_tags: str = Field(default="", max_length=512)
@@ -891,6 +893,8 @@ def _public_qbittorrent_management(settings: dict) -> dict:
         "ratio_limit": settings.get("ratio_limit", -1),
         "seeding_time_limit": settings.get("seeding_time_limit", -1),
         "inactive_seeding_time_limit": settings.get("inactive_seeding_time_limit", -1),
+        "download_limit_kib": settings.get("download_limit_kib", -1),
+        "upload_limit_kib": settings.get("upload_limit_kib", -1),
         "auto_remove": bool(settings.get("auto_remove")),
         # Keep the legacy values in responses for clients from older packaged builds.
         "auto_scrape_enabled": bool(first_rule.get("enabled")),
@@ -1266,6 +1270,11 @@ def _qbittorrent_management_worker() -> None:
                         downloads = list_downloads(settings)
                         managed = [item for item in downloads if _managed_download(item, management)]
                         if management.get("takeover_enabled"):
+                            set_transfer_limits(
+                                settings,
+                                int(management.get("download_limit_kib", -1)),
+                                int(management.get("upload_limit_kib", -1)),
+                            )
                             for item in managed:
                                 set_share_limits(settings, item["hash"], management)
                             _auto_remove_downloads(settings, managed, management)

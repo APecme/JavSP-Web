@@ -1091,6 +1091,8 @@ function downloadManagementPayload() {
     takeover_enabled: $('#download-takeover-enabled').checked,
     takeover_tags: $('#download-takeover-tags').value.trim(),
     takeover_category: $('#download-takeover-category').value.trim(),
+    download_limit_kib: Number($('#download-download-limit').value),
+    upload_limit_kib: Number($('#download-upload-limit').value),
     ratio_limit: Number($('#download-ratio-limit').value),
     seeding_time_limit: Number($('#download-seeding-time-limit').value),
     inactive_seeding_time_limit: Number($('#download-inactive-seeding-time-limit').value),
@@ -1106,6 +1108,8 @@ async function loadDownloadManagement() {
     $('#download-takeover-enabled').checked = Boolean(settings.takeover_enabled);
     $('#download-takeover-tags').value = settings.takeover_tags || '';
     $('#download-takeover-category').value = settings.takeover_category || '';
+    $('#download-download-limit').value = settings.download_limit_kib ?? -1;
+    $('#download-upload-limit').value = settings.upload_limit_kib ?? -1;
     $('#download-ratio-limit').value = settings.ratio_limit ?? -1;
     $('#download-seeding-time-limit').value = settings.seeding_time_limit ?? -1;
     $('#download-inactive-seeding-time-limit').value = settings.inactive_seeding_time_limit ?? -1;

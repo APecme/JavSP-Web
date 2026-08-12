@@ -81,7 +81,7 @@ docker compose up -d
 
 ### 下载器和媒体库
 
-- 在“系统设置”添加 qBittorrent 下载器，测试连接后可在“下载管理”设置接管、做种和下载完成自动刮削规则。连接由 JavSP WEB 服务端发起：Docker 中的 `127.0.0.1` 是 JavSP WEB 容器本身；同一 Docker 网络请填写 qBittorrent 服务名，例如 `http://qbittorrent:8080`；qBittorrent 在 Docker 宿主机时可填写 `http://host.docker.internal:端口`；跨服务器时填写服务端可访问的域名或 IP。宿主机局域网 IP 出现路由拒绝时，JavSP WEB 会自动尝试同端口的 `host.docker.internal`。
+- 在“系统设置”添加 qBittorrent 下载器，测试连接后可在“下载管理”设置接管、下载/上传限速、做种和下载完成自动刮削规则。
 - 在“系统设置”添加 Emby 或 Jellyfin，选择要同步的媒体库，并按需开启刮削完成后的自动扫描。
 - Docker 环境使用路径映射，将下载器保存路径转换为容器内可访问的路径。
 - 定时规则不会重叠执行。同一规则上一次刮削仍在排队、运行或重试图片时，下一次触发会跳过并写入运行记录。

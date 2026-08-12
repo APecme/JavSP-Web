@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-import errno
 from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 
@@ -12,37 +11,8 @@ class QbittorrentError(RuntimeError):
     pass
 
 
-def _connection_error(base_url: str, exc: Exception, *, api: bool = False) -> QbittorrentError:
-    """Make container network errors actionable instead of implying bad credentials."""
-    host = (urlparse(base_url).hostname or "").lower()
-    reason = getattr(exc, "reason", exc)
-    err_no = getattr(reason, "errno", None)
-    prefix = "qBittorrent API 请求失败" if api else "无法连接 qBittorrent"
-    detail = f"{prefix}：{exc}"
-    if host in {"127.0.0.1", "::1", "localhost"}:
-        return QbittorrentError(
-            f"{detail}。127.0.0.1 指向运行 JavSP WEB 的设备；Docker 部署时它指向 JavSP WEB 容器，并不是 qBittorrent。"
-            "请使用同一 Docker 网络中的 qBittorrent 服务名（例如 http://qbittorrent:8080）、可访问的域名，"
-            "或已配置 host-gateway 的 http://host.docker.internal:端口。"
-        )
-    if err_no in {errno.EHOSTUNREACH, errno.ENETUNREACH, errno.ECONNREFUSED, errno.ETIMEDOUT}:
-        return QbittorrentError(
-            f"{detail}。连接由部署 JavSP WEB 的服务器或容器发起，而不是浏览器发起。"
-            "请确认该运行环境可路由到此地址、qBittorrent Web UI 监听了可访问接口，并放行对应防火墙/反向代理规则。"
-        )
-    return QbittorrentError(detail)
-
-
-def _host_gateway_url(base_url: str) -> str | None:
-    """Use Docker's host gateway when a host-LAN address is hairpin-blocked."""
-    parsed = urlparse(base_url)
-    host = (parsed.hostname or "").lower()
-    if host in {"127.0.0.1", "::1", "localhost", "host.docker.internal"}:
-        return None
-    netloc = "host.docker.internal"
-    if parsed.port:
-        netloc += f":{parsed.port}"
-    return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+def _connection_error(*_: object, **__: object) -> QbittorrentError:
+    return QbittorrentError("无法连接 qBittorrent，请检查服务地址后重试")
 
 
 def _base_url(settings: dict) -> str:
@@ -76,22 +46,7 @@ def _open(settings: dict):
         detail = exc.read().decode("utf-8", errors="replace").strip()
         raise QbittorrentError(f"qBittorrent 拒绝登录（HTTP {exc.code}）：{detail or '请检查 Web UI 地址、用户名和反向代理设置'}") from exc
     except (URLError, TimeoutError) as exc:
-        gateway_url = _host_gateway_url(base_url)
-        if not gateway_url:
-            raise _connection_error(base_url, exc) from exc
-        # Docker hosts can reject a container's connection to their LAN IP
-        # (hairpin routing), while host-gateway remains reachable.
-        gateway_headers = {**headers, "Referer": f"{gateway_url}/", "Origin": gateway_url}
-        gateway_request = Request(f"{gateway_url}/api/v2/auth/login", data=payload, headers=gateway_headers, method="POST")
-        try:
-            with opener.open(gateway_request, timeout=8) as response:
-                result = response.read().decode("utf-8", errors="replace").strip()
-            base_url, headers = gateway_url, gateway_headers
-        except (URLError, TimeoutError) as gateway_exc:
-            raise QbittorrentError(
-                f"{_connection_error(base_url, exc)} 同时已尝试 Docker 宿主机网关 {gateway_url}，仍无法连接：{gateway_exc}。"
-                "请确认 qBittorrent Web UI 监听 0.0.0.0（而非仅 127.0.0.1），且 Docker 容器与 qB 所在网络之间允许访问该端口。"
-            ) from gateway_exc
+        raise _connection_error(base_url, exc) from exc
     if result == "Fails.":
         raise QbittorrentError("qBittorrent 用户名或密码错误")
     # Some HTTPS reverse proxies strip the qB login body while preserving SID.
@@ -164,6 +119,15 @@ def set_share_limits(settings: dict, torrent_hash: str, rule: dict) -> None:
         "seedingTimeLimit": rule.get("seeding_time_limit", -1),
         "inactiveSeedingTimeLimit": rule.get("inactive_seeding_time_limit", -1),
     })
+
+
+def set_transfer_limits(settings: dict, download_limit_kib: int, upload_limit_kib: int) -> None:
+    """Set qBittorrent global transfer limits. Negative values mean unlimited."""
+    base_url, opener, headers = _open(settings)
+    download_bytes = 0 if download_limit_kib < 0 else download_limit_kib * 1024
+    upload_bytes = 0 if upload_limit_kib < 0 else upload_limit_kib * 1024
+    _request(opener, f"{base_url}/api/v2/transfer/setDownloadLimit", headers, data={"limit": download_bytes})
+    _request(opener, f"{base_url}/api/v2/transfer/setUploadLimit", headers, data={"limit": upload_bytes})
 
 
 def delete_torrent(settings: dict, torrent_hash: str) -> None:
