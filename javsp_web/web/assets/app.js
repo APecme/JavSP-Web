@@ -169,9 +169,9 @@ function isNamingRulePath(path) {
   ].includes(path);
 }
 
-function namingRuleHelp() {
-  const variables = NAMING_RULE_VARIABLES.map(([name, label]) => `<button type="button" class="naming-rule-variable" data-copy-naming-variable="{${name}}" title="${escapeHtml(label)}">{${name}}</button>`).join('');
-  return `<span class="naming-rule-help" tabindex="0"><span class="naming-rule-popover"><strong>可用命名变量</strong><span class="naming-rule-variable-list">${variables}</span><small>点击变量名复制到剪贴板</small></span></span>`;
+function namingRuleHelp(targetPath) {
+  const variables = NAMING_RULE_VARIABLES.map(([name, label]) => `<button type="button" class="naming-rule-variable" data-insert-naming-variable="{${name}}" data-naming-target="${escapeHtml(targetPath)}"><code>{${name}}</code><span>${escapeHtml(label)}</span></button>`).join('');
+  return `<span class="naming-rule-help" tabindex="0"><span class="naming-rule-popover"><strong>可用命名变量</strong><span class="naming-rule-variable-list">${variables}</span><small>点击变量会插入到当前模板的光标位置。</small></span></span>`;
 }
 
 function translatorEngineControl(value) {
@@ -225,7 +225,10 @@ function renderConfigFields() {
       const control = sourcePath === 'translator.engine' ? translatorEngineControl(value) : (boolean ? `<select class="config-field-input" data-config-path="${sourcePath}"><option value="true"${value ? ' selected' : ''}>是</option><option value="false"${value ? '' : ' selected'}>否</option></select>` : (complex ? `<textarea class="config-field-input" data-config-path="${sourcePath}" spellcheck="false">${escapeHtml(inputValue)}</textarea>` : `<input class="config-field-input" data-config-path="${sourcePath}" value="${escapeHtml(inputValue)}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ''}>`));
       const description = fieldDescription(sourcePath, value);
       const note = fieldNote(sourcePath, value);
-      const ruleControl = isNamingRulePath(sourcePath) ? `<div class="naming-rule-control">${control}${namingRuleHelp()}</div>` : control;
+      const outputDirectoryPicker = sourcePath === 'summarizer.path.output_folder_pattern'
+        ? `<button class="button secondary config-directory-picker" type="button" data-select-output-directory="${sourcePath}">选择路径</button>`
+        : '';
+      const ruleControl = isNamingRulePath(sourcePath) ? `<div class="naming-rule-control">${control}${outputDirectoryPicker}${namingRuleHelp(sourcePath)}</div>` : control;
       return `<label class="config-field"><span class="config-field-name">${escapeHtml(fieldLabel(sourcePath))} <small>(${escapeHtml(sourcePath)})</small></span>${ruleControl}${description ? `<small class="config-description">说明：${escapeHtml(description)}</small>` : ''}${note ? `<em>备注：${escapeHtml(note)}</em>` : ''}</label>`;
     }).join('') || '<p class="muted">此分类暂无可编辑项。</p>';
     if (tab.id === 'scanner') {
@@ -440,7 +443,11 @@ async function selectNativePath(kind) {
 }
 
 function setPathTarget(path) {
-  const target = state.pathBrowser.target === 'schedule' ? $('#auto-scrape-schedule-directory') : $('#input-directory');
+  const target = state.pathBrowser.target === 'schedule'
+    ? $('#auto-scrape-schedule-directory')
+    : (state.pathBrowser.target === 'preset-output-directory'
+      ? document.querySelector('[data-config-path="summarizer.path.output_folder_pattern"]')
+      : $('#input-directory'));
   if (target) target.value = path;
 }
 
@@ -722,25 +729,33 @@ $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) deleteTaskInDialog(button.dataset.deleteTask); });
 document.addEventListener('click', async (event) => {
-  const button = event.target.closest('[data-copy-naming-variable]');
-  if (!button) return;
+  const variable = event.target.closest('[data-insert-naming-variable]');
+  if (variable) {
+    const target = document.querySelector(`[data-config-path="${variable.dataset.namingTarget}"]`);
+    if (!target) return;
+    const token = variable.dataset.insertNamingVariable;
+    const start = Number.isInteger(target.selectionStart) ? target.selectionStart : target.value.length;
+    const end = Number.isInteger(target.selectionEnd) ? target.selectionEnd : start;
+    target.value = `${target.value.slice(0, start)}${token}${target.value.slice(end)}`;
+    target.focus();
+    target.setSelectionRange(start + token.length, start + token.length);
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  const directoryPicker = event.target.closest('[data-select-output-directory]');
+  if (!directoryPicker) return;
+  const target = document.querySelector(`[data-config-path="${directoryPicker.dataset.selectOutputDirectory}"]`);
+  if (!target) return;
+  if (state.runtime?.docker) {
+    await openDockerPathBrowser('directory', 'preset-output-directory');
+    return;
+  }
   try {
-    await navigator.clipboard.writeText(button.dataset.copyNamingVariable);
-    const original = button.textContent;
-    button.textContent = '已复制';
-    setTimeout(() => { button.textContent = original; }, 1200);
-  } catch {
-    const input = document.createElement('textarea');
-    input.value = button.dataset.copyNamingVariable;
-    input.style.position = 'fixed';
-    input.style.opacity = '0';
-    document.body.appendChild(input);
-    input.select();
-    const copied = document.execCommand('copy');
-    input.remove();
-    const original = button.dataset.copyNamingVariable;
-    button.textContent = copied ? '已复制' : '复制失败';
-    setTimeout(() => { button.textContent = original; }, 1200);
+    const selected = await api('/api/path/select', { method: 'POST', body: JSON.stringify({ kind: 'directory' }) });
+    if (selected.path) target.value = selected.path;
+  } catch (error) {
+    const message = $('#preset-message');
+    if (message) message.textContent = error.message;
   }
 });
 document.addEventListener('change', (event) => {
