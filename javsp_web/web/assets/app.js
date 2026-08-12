@@ -283,13 +283,15 @@ function escapeHtml(value) {
 }
 
 function showToast(message, tone = 'success') {
-  let container = $('#toast-container');
+  const host = document.querySelector('dialog[open]') || document.body;
+  let container = host.querySelector(':scope > #toast-container');
   if (!container) {
+    document.querySelectorAll('#toast-container').forEach((item) => item.remove());
     container = document.createElement('div');
     container.id = 'toast-container';
     container.className = 'toast-container';
     container.setAttribute('aria-live', 'polite');
-    document.body.appendChild(container);
+    host.appendChild(container);
   }
   const toast = document.createElement('div');
   toast.className = `toast ${tone}`;
@@ -965,7 +967,7 @@ function filteredTasks() {
   const from = $('#task-filter-date-from')?.value;
   const to = $('#task-filter-date-to')?.value;
   return state.tasks.filter((task) => {
-    if (task.source && task.source !== 'manual') return false;
+    if (task.source && task.source !== 'manual' && !task.image_retry_running) return false;
     const metadata = task.progress?.metadata || {};
     const values = {
       path: task.input_directory || '', title: task.title || metadata.title || '', dvdid: metadata.dvdid || '',
@@ -990,7 +992,7 @@ function renderTasks() {
   rememberTaskCards();
   const tasks = filteredTasks();
   $('#task-table').innerHTML = tasks.length ? tasks.map(taskCard).join('') : '<div class="task-list empty">没有符合当前筛选条件的任务</div>';
-  const manualTaskCount = state.tasks.filter((task) => !task.source || task.source === 'manual').length;
+  const manualTaskCount = state.tasks.filter((task) => !task.source || task.source === 'manual' || task.image_retry_running).length;
   $('#task-filter-summary').textContent = `显示 ${tasks.length} / ${manualTaskCount} 个手动任务`;
   restoreLogScroll();
 }
@@ -1015,14 +1017,17 @@ function openTaskDetail(taskId) {
     const target = $('#task-media-overlay');
     if (!target) return;
     const playable = (result.links || []).filter((link) => link.found && link.play_url);
-    target.innerHTML = playable.map((link) => `<a class="media-play-button" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener" title="在 ${escapeHtml(link.name)} 中播放">播放</a>`).join('');
+    const searchable = (result.links || []).filter((link) => link.search_url);
+    target.innerHTML = playable.length
+      ? playable.map((link) => `<a class="media-play-button" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener" title="在 ${escapeHtml(link.name)} 中播放">播放</a>`).join('')
+      : searchable.map((link) => `<a class="media-play-button media-search-button" href="${escapeHtml(link.search_url)}" target="_blank" rel="noopener" title="在 ${escapeHtml(link.name)} 中搜索">搜索</a>`).join('');
   }).catch(() => {});
   $('#task-detail-content').insertAdjacentHTML('beforeend', '<section id="task-media-links" class="task-media-links"><h3>媒体库播放</h3><p class="muted">正在查找匹配的媒体条目…</p></section>');
   api(`/api/tasks/${encodeURIComponent(task.id)}/media-links`).then((result) => {
     const target = $('#task-media-links');
     if (!target) return;
     const links = result.links || [];
-    target.innerHTML = links.length ? `<h3>媒体库播放</h3><div class="media-link-list">${links.map((link) => link.found && link.play_url ? `<a class="button secondary" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中播放</a>` : (link.search_url ? `<a class="button secondary" href="${escapeHtml(link.search_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中搜索</a>` : `<span class="muted">${escapeHtml(link.name)}：${escapeHtml(link.error || '未找到匹配条目')}</span>`)).join('')}</div>` : '<h3>媒体库播放</h3><p class="muted">尚未配置媒体服务器。</p>';
+    target.innerHTML = links.length ? `<h3>媒体库播放</h3><div class="media-link-list">${links.map((link) => link.found && link.play_url ? `<a class="button secondary" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中播放</a>` : (link.search_url ? `<a class="button secondary" href="${escapeHtml(link.search_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中打开媒体库</a>` : `<span class="muted">${escapeHtml(link.name)}：${escapeHtml(link.error || '未找到匹配条目')}</span>`)).join('')}</div>` : '<h3>媒体库播放</h3><p class="muted">尚未配置媒体服务器。</p>';
   }).catch(() => { const target = $('#task-media-links'); if (target) target.innerHTML = '<h3>媒体库播放</h3><p class="muted">暂时无法读取媒体服务器。</p>'; });
 }
 
@@ -1041,11 +1046,10 @@ function overviewCoverCard(task) {
   const total = Number(images.fanart_total) || Number(task.fanart_count) || 0;
   const fanart = Math.min(Number(task.fanart_count) || 0, total || Number(task.fanart_count) || 0);
   const coverState = coverReady ? '封面已下载' : (images.failed ? '封面下载失败' : '封面未生成');
-  const imageState = total ? `${coverState} · 剧照 ${fanart}/${total}` : `${coverState} · 剧照 ${Number(task.fanart_count) || 0} 张`;
   const artwork = coverReady
     ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
     : artworkPlaceholder('overview-cover-placeholder', images.failed ? '图片下载失败' : '封面未下载');
-  return `<article class="overview-cover-card"><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span></button><div class="overview-cover-status">${escapeHtml(imageState)}</div></article>`;
+  return `<article class="overview-cover-card"><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span></button></article>`;
 }
 
 function artworkPlaceholder(className, label) {
@@ -1698,8 +1702,10 @@ document.addEventListener('click', (event) => {
     api(`/api/tasks/${encodeURIComponent(retryImages.dataset.retryTaskImages)}/images/retry`, { method: 'POST' }).then(async () => {
       state.taskOpen ||= {};
       state.taskOpen[retryImages.dataset.retryTaskImages] = true;
-      showToast('已开始重新下载封面与剧照，可在手动刮削查看日志');
       await loadTasks();
+      $('#task-detail-dialog')?.close();
+      showView('scrape');
+      showToast('已开始重新下载封面与剧照，正在显示任务日志');
     }).catch((error) => {
       retryImages.disabled = false;
       retryImages.textContent = error.message;
@@ -1890,6 +1896,12 @@ const sidebarToggle = $('#sidebar-toggle');
 if (sidebarToggle) {
   sidebarToggle.addEventListener('click', () => setSidebarCollapsed(!document.querySelector('.app-shell').classList.contains('sidebar-collapsed')));
   setSidebarCollapsed(localStorage.getItem('javsp-web.sidebar-collapsed') === '1');
+}
+
+const downloadPolicyDetails = $('#download-policy-details');
+if (downloadPolicyDetails) {
+  downloadPolicyDetails.open = localStorage.getItem('javsp-web.download-policy-open') === '1';
+  downloadPolicyDetails.addEventListener('toggle', () => localStorage.setItem('javsp-web.download-policy-open', downloadPolicyDetails.open ? '1' : '0'));
 }
 
 (async () => {

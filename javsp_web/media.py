@@ -84,17 +84,17 @@ def _search_server(server: dict, task: dict) -> dict | None:
     terms = [term for term in terms if term]
     if not terms:
         return None
+    library_ids = [str(value) for value in server.get("libraries") or [] if str(value).strip()] or [None]
     for term in terms:
-        response = requests.get(
-            f"{_service_url(server)}/Items",
-            params=_params(server, SearchTerm=term, IncludeItemTypes="Movie,Video", Recursive="true", Limit=10),
-            headers=_headers(server),
-            timeout=20,
-        )
-        response.raise_for_status()
-        items = response.json().get("Items") or []
-        if items:
-            return items[0]
+        for library_id in library_ids:
+            params = _params(server, SearchTerm=term, IncludeItemTypes="Movie,Video", Recursive="true", Limit=10)
+            if library_id:
+                params["ParentId"] = library_id
+            response = requests.get(f"{_service_url(server)}/Items", params=params, headers=_headers(server), timeout=20)
+            response.raise_for_status()
+            items = response.json().get("Items") or []
+            if items:
+                return items[0]
     return None
 
 

@@ -212,6 +212,42 @@ def _progress_from_logs(lines: list[str]) -> dict:
     return {"stages": stages, "crawlers": crawlers, "crawler_details": crawler_details, "metadata": metadata, "images": images, "image_sources": image_sources, "output": output}
 
 
+def _task_progress(task: dict, lines: list[str]) -> dict:
+    """Combine recent log progress with artwork data retained on the task itself."""
+    progress = _progress_from_logs(lines)
+    sources = task.get("image_sources")
+    if isinstance(sources, dict) and (sources.get("cover_urls") or sources.get("preview_pics")):
+        progress["image_sources"] = {
+            "cover_urls": list(sources.get("cover_urls") or []),
+            "preview_pics": list(sources.get("preview_pics") or []),
+        }
+    output = task.get("image_output")
+    if isinstance(output, dict) and output.get("fanart_file"):
+        progress["output"] = {key: str(output.get(key) or "") for key in {"save_dir", "fanart_file", "poster_file"}}
+    return progress
+
+
+def _capture_task_artwork_event(task: dict, line: str) -> bool:
+    """Persist image URLs and output targets before old log lines are trimmed."""
+    marker = line.find("JAVSP_PROGRESS ")
+    if marker < 0:
+        return False
+    try:
+        event = json.loads(line[marker + len("JAVSP_PROGRESS "):])
+    except json.JSONDecodeError:
+        return False
+    if event.get("stage") == "image_sources":
+        task["image_sources"] = {
+            "cover_urls": [str(url) for url in event.get("cover_urls") or [] if url],
+            "preview_pics": [str(url) for url in event.get("preview_pics") or [] if url],
+        }
+        return True
+    if event.get("stage") == "output":
+        task["image_output"] = {key: str(event.get(key) or "") for key in {"save_dir", "fanart_file", "poster_file"}}
+        return True
+    return False
+
+
 def _progress_event_message(event: dict) -> str | None:
     stage = event.get("stage")
     status = event.get("status")
@@ -347,7 +383,7 @@ def list_tasks() -> list[dict]:
             item["file_name"] = _task_name(item.get("input_directory", ""))
             item["size_bytes"] = _file_size(item.get("input_directory", ""))
             cleaned_logs = _clean_log_lines((_logs.get(item["id"]) or item.get("log_tail") or [])[-_MAX_LOG_LINES:])
-            item["progress"] = _progress_from_logs(cleaned_logs)
+            item["progress"] = _task_progress(item, cleaned_logs)
             image_progress = item["progress"]
             item["title"] = item["progress"]["metadata"].get("title") or ""
             item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
@@ -404,7 +440,7 @@ def get_cover_path(task_id: str, index: int) -> Path | None:
     task = next((item for item in load_tasks() if item.get("id") == task_id), None)
     if not task or index < 0:
         return None
-    progress = _progress_from_logs(_clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:]))
+    progress = _task_progress(task, _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:]))
     paths = _cover_paths(task.get("input_directory", ""), progress.get("output") or {})
     return paths[index] if index < len(paths) else None
 
@@ -413,7 +449,7 @@ def get_fanart_path(task_id: str, index: int) -> Path | None:
     task = next((item for item in load_tasks() if item.get("id") == task_id), None)
     if not task or index < 0:
         return None
-    progress = _progress_from_logs(_clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:]))
+    progress = _task_progress(task, _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:]))
     paths = _fanart_paths(task.get("input_directory", ""), progress.get("output") or {})
     return paths[index] if index < len(paths) else None
 
@@ -583,8 +619,9 @@ def _run_task(task: dict) -> None:
             logs.append(line)
             _logs[task["id"]] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
             task["log_tail"] = _logs[task["id"]]
-            task["progress"] = _progress_from_logs(task["log_tail"])
-            if len(logs) % 20 == 0:
+            artwork_changed = _capture_task_artwork_event(task, line)
+            task["progress"] = _task_progress(task, task["log_tail"])
+            if artwork_changed or len(logs) % 20 == 0:
                 _persist(task)
         code = process.wait()
         task["return_code"] = code
@@ -605,7 +642,7 @@ def _run_task(task: dict) -> None:
     finally:
         task["finished_at"] = now_iso()
         task["log_tail"] = _clean_log_lines(_logs.get(task["id"], []))[-_MAX_LOG_LINES:]
-        task["progress"] = _progress_from_logs(task["log_tail"])
+        task["progress"] = _task_progress(task, task["log_tail"])
         _processes.pop(task["id"], None)
         _cancelled_tasks.discard(task["id"])
         _persist(task)
@@ -632,7 +669,8 @@ def _append_task_event(task: dict, stage: str, **payload: object) -> None:
     logs.append(line)
     _logs[task["id"]] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
     task["log_tail"] = _logs[task["id"]]
-    task["progress"] = _progress_from_logs(task["log_tail"])
+    _capture_task_artwork_event(task, line)
+    task["progress"] = _task_progress(task, task["log_tail"])
 
 
 def _download_retry_image(url: str, destination: Path) -> None:
@@ -724,7 +762,7 @@ def retry_task_images(task_id: str) -> bool:
         if not task or task.get("status") == "running" or task.get("image_retry_running"):
             return False
         raw_logs = _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:])
-        progress = _progress_from_logs(raw_logs)
+        progress = _task_progress(task, raw_logs)
         sources = progress["image_sources"]
         output = progress["output"]
         has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
