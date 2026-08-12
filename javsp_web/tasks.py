@@ -35,6 +35,7 @@ _IMAGE_TRANSFER_RE = re.compile(r"^(?:Downloading extrafanart \d+ from url:|[^\s
 _NATIVE_PROGRESS_LOG_RE = re.compile(r"^已下载剧照\s+\d+/\d+:")
 _MAX_LOG_LINES = 5000
 _MAX_DISPLAY_LOG_LINES = 1500
+_BYTE_SIZE_RE = re.compile(r"^\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>[kmgtpe]?i?b)?\s*$", re.IGNORECASE)
 
 
 def _decode_output(raw: bytes) -> str:
@@ -77,6 +78,41 @@ def _preset_task_concurrency(preset_id: str) -> int:
         return max(1, min(32, int(preset.get("task_concurrency", 1))))
     except (TypeError, ValueError):
         return 1
+
+
+def _preset_config_data(preset_id: str) -> tuple[dict, dict]:
+    preset = get_preset(preset_id) or get_preset("default")
+    if not preset:
+        raise ValueError("没有可用的刮削预设")
+    try:
+        data = load_base_config()
+        if preset.get("mode") == "yaml":
+            preset_data = yaml.safe_load(preset.get("content", "")) or {}
+            data = _deep_merge(data, preset_data)
+        else:
+            data = _deep_merge(data, preset.get("form") or {})
+    except yaml.YAMLError as exc:
+        raise ValueError(f"预设 YAML 格式错误: {exc}") from exc
+    try:
+        validate_config_data(data)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    return data, preset
+
+
+def _minimum_size_bytes(config_data: dict) -> int:
+    value = (config_data.get("scanner") or {}).get("minimum_size", 0)
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    match = _BYTE_SIZE_RE.match(str(value))
+    if not match:
+        raise ValueError("预设中的最小匹配文件大小无效")
+    units = {"": 1, "b": 1, "kb": 1000, "mb": 1000**2, "gb": 1000**3, "tb": 1000**4, "pb": 1000**5,
+             "kib": 1024, "mib": 1024**2, "gib": 1024**3, "tib": 1024**4, "pib": 1024**5}
+    unit = (match.group("unit") or "").lower()
+    if unit not in units:
+        raise ValueError("预设中的最小匹配文件大小无效")
+    return int(float(match.group("value")) * units[unit])
 
 
 def _clean_log_lines(lines: list[str]) -> list[str]:
@@ -381,22 +417,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def _build_task_config(task_id: str, input_directory: str, preset_id: str) -> tuple[Path, str]:
-    preset = get_preset(preset_id) or get_preset("default")
-    if not preset:
-        raise ValueError("没有可用的刮削预设")
-    try:
-        data = load_base_config()
-        if preset.get("mode") == "yaml":
-            preset_data = yaml.safe_load(preset.get("content", "")) or {}
-            data = _deep_merge(data, preset_data)
-        else:
-            data = _deep_merge(data, preset.get("form") or {})
-    except yaml.YAMLError as exc:
-        raise ValueError(f"预设 YAML 格式错误: {exc}") from exc
-    try:
-        validate_config_data(data)
-    except ValueError as exc:
-        raise ValueError(str(exc)) from exc
+    data, preset = _preset_config_data(preset_id)
     scanner = data.setdefault("scanner", {})
     scanner["input_directory"] = input_directory
     scanner["manual"] = False
@@ -420,6 +441,10 @@ def create_task(
         raise ValueError("输入路径不存在")
     if not os.path.isdir(input_directory) and not os.path.isfile(input_directory):
         raise ValueError("输入路径不是目录或文件")
+    config_data, _ = _preset_config_data(preset_id)
+    minimum_size = _minimum_size_bytes(config_data)
+    if os.path.isfile(input_directory) and os.path.getsize(input_directory) < minimum_size:
+        raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
     task_id = uuid.uuid4().hex[:12]
     task = {
         "id": task_id,
@@ -457,21 +482,28 @@ def create_tasks(
     input_path = Path(os.path.abspath(os.path.expanduser(input_directory.strip())))
     if not input_path.exists():
         raise ValueError("输入路径不存在")
+    config_data, _ = _preset_config_data(preset_id)
+    minimum_size = _minimum_size_bytes(config_data)
     concurrency = _preset_task_concurrency(preset_id)
     batch_id = uuid.uuid4().hex[:12]
     if input_path.is_file():
+        if input_path.stat().st_size < minimum_size:
+            raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
         return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id)]
     if not input_path.is_dir():
         raise ValueError("输入路径不是目录或文件")
     try:
         video_files = sorted(
-            (item for item in input_path.rglob("*") if item.is_file() and item.suffix.lower() in _VIDEO_EXTENSIONS),
+            (
+                item for item in input_path.rglob("*")
+                if item.is_file() and item.suffix.lower() in _VIDEO_EXTENSIONS and item.stat().st_size >= minimum_size
+            ),
             key=lambda item: str(item).lower(),
         )
     except OSError as exc:
         raise ValueError(f"无法读取输入目录: {exc}") from exc
     if not video_files:
-        raise ValueError("输入目录中未找到支持的影片文件")
+        raise ValueError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
     return [
         create_task(str(video), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id)
         for video in video_files

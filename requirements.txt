@@ -14,6 +14,7 @@ pycryptodome>=3.20,<4
 lxml[html-clean]>=5.2,<7
 confz>=2,<3
 pydantic-extra-types>=2.9,<3
+packaging>=24,<26
 pendulum>=3,<4
 slimeface>=2024.9.27
 croniter>=3.0,<7
