@@ -753,6 +753,27 @@ def cancel_task(task_id: str) -> bool:
         return True
 
 
+def recover_interrupted_tasks() -> int:
+    """Mark tasks left running by a previous service process as cancelled."""
+    with _queue_condition:
+        tasks = load_tasks()
+        changed = 0
+        for task in tasks:
+            if task.get("status") != "running":
+                continue
+            task["status"] = "cancelled"
+            task["finished_at"] = now_iso()
+            task["error"] = "服务重启后任务已中止"
+            logs = _logs.setdefault(str(task.get("id") or ""), list(task.get("log_tail") or []))
+            logs.append("服务重启，任务已中止")
+            task["log_tail"] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
+            changed += 1
+        if changed:
+            save_tasks(tasks)
+            _queue_condition.notify_all()
+        return changed
+
+
 def delete_task(task_id: str) -> bool:
     with _lock:
         if task_id in _processes:

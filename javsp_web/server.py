@@ -53,11 +53,12 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, retry_task_images
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, recover_interrupted_tasks, retry_task_images
 from .timeutils import local_now, timezone_name
 
 
 ensure_seed_data()
+recover_interrupted_tasks()
 app = FastAPI(title="JavSP WEB", version=__version__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
