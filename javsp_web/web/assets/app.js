@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -430,6 +430,7 @@ function renderOverview() {
 async function loadTasks() {
   const pageScroll = window.scrollY;
   try { rememberLogScroll(); state.tasks = await api('/api/tasks'); syncTaskExpansion(state.tasks); renderOverview(); renderTasks(); } catch (error) { console.error(error); }
+  if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
   window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
 }
 
@@ -1192,6 +1193,7 @@ async function loadAutoScrapeSchedules() {
     renderAutoScrapeSchedules();
     renderAutoScrapeRunButtons();
     if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeRun) await refreshAutoScrapeRun();
+    if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
   } catch (error) {
     target.classList.add('empty');
     target.textContent = error.message;
@@ -1239,24 +1241,52 @@ async function refreshAutoScrapeRun() {
 }
 
 async function openAutoScrapeRun(scheduleId, runId) {
+  state.activeAutoScrapeHistory = null;
   state.activeAutoScrapeRun = { scheduleId, runId };
   $('#auto-scrape-run-content').innerHTML = '<p class="muted">正在读取任务日志…</p>';
   $('#auto-scrape-run-dialog').showModal();
   await refreshAutoScrapeRun();
 }
 
+function autoScrapeRunCounts(run) {
+  const taskIds = Array.isArray(run.task_ids) ? run.task_ids.map(String) : [];
+  const taskById = new Map(state.tasks.map((task) => [String(task.id), task]));
+  const counts = { total: taskIds.length, succeeded: 0, failed: 0, running: 0, queued: 0 };
+  taskIds.forEach((taskId) => {
+    const status = taskById.get(taskId)?.status;
+    if (status === 'succeeded') counts.succeeded += 1;
+    else if (status === 'failed' || status === 'cancelled') counts.failed += 1;
+    else if (status === 'running') counts.running += 1;
+    else if (status === 'queued') counts.queued += 1;
+  });
+  return counts;
+}
+
+function autoScrapeRunCountsMarkup(run) {
+  const counts = autoScrapeRunCounts(run);
+  if (!counts.total) return '<span class="muted">没有创建任务</span>';
+  return `<div class="auto-scrape-run-counts" aria-label="任务统计"><span class="run-total">已创建 ${counts.total} 个任务</span><span class="run-success">已完成 ${counts.succeeded}</span><span class="run-failed">失败 ${counts.failed}</span><span class="run-running">运行中 ${counts.running}</span><span class="run-queued">排队中 ${counts.queued}</span></div>`;
+}
+
+function renderAutoScrapeHistory(scheduleId) {
+  const schedule = state.autoScrapeSchedules.find((item) => item.id === scheduleId);
+  if (!schedule) return;
+  const runs = Array.isArray(schedule.runs) ? schedule.runs.slice().reverse() : [];
+  $('#auto-scrape-run-title').textContent = `${schedule.name} - 全部运行记录`;
+  $('#auto-scrape-run-subtitle').textContent = `已保存 ${runs.length} 次定时或立即运行记录`;
+  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(run.started_at ? run.started_at.replace('T', ' ') : run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p>${autoScrapeRunCountsMarkup(run)}</div>${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}</article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
+}
+
 function openAutoScrapeHistory(scheduleId) {
   const schedule = state.autoScrapeSchedules.find((item) => item.id === scheduleId);
   if (!schedule) return;
   state.activeAutoScrapeRun = null;
-  const runs = Array.isArray(schedule.runs) ? schedule.runs.slice().reverse() : [];
-  $('#auto-scrape-run-title').textContent = `${schedule.name} - 全部运行记录`;
-  $('#auto-scrape-run-subtitle').textContent = `已保存 ${runs.length} 次定时或立即运行记录`;
-  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(run.started_at ? run.started_at.replace('T', ' ') : run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p></div>${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}</article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
+  state.activeAutoScrapeHistory = scheduleId;
+  renderAutoScrapeHistory(scheduleId);
   $('#auto-scrape-run-dialog').showModal();
 }
 
-$('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; });
+$('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; state.activeAutoScrapeHistory = null; });
 
 function renderAutoScrapeSchedulePresets(selectedId = 'default') {
   const select = $('#auto-scrape-schedule-preset');

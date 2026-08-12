@@ -206,6 +206,12 @@ select[multiple] { min-height: 104px; }
 .auto-scrape-history-row > div { min-width: 0; }
 .auto-scrape-history-row strong { display: block; color: #101828; font-size: 13px; }
 .auto-scrape-history-row .muted { overflow-wrap: anywhere; }
+.auto-scrape-run-counts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.auto-scrape-run-counts span { padding: 3px 7px; border-radius: 4px; background: #f2f4f7; color: #475467; font-weight: 600; }
+.auto-scrape-run-counts .run-total { background: #eff8ff; color: #175cd3; }
+.auto-scrape-run-counts .run-success { background: #ecfdf3; color: #027a48; }
+.auto-scrape-run-counts .run-failed { background: #fef3f2; color: #b42318; }
+.auto-scrape-run-counts .run-running { background: #fff6ed; color: #b54708; }
 
 @media (max-width: 640px) {
   .auto-scrape-schedule-row { flex-direction: column; gap: 12px; }
