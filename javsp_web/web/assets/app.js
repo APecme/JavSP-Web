@@ -261,6 +261,23 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
 
+function showToast(message, tone = 'success') {
+  let container = $('#toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    container.setAttribute('aria-live', 'polite');
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast ${tone}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  window.setTimeout(() => { toast.classList.add('leaving'); }, 2800);
+  window.setTimeout(() => { toast.remove(); }, 3200);
+}
+
 function showView(view) {
   document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
@@ -663,8 +680,9 @@ async function savePreset() {
     const saved = await api(path, { method: state.editingPreset ? 'PUT' : 'POST', body: JSON.stringify(payload) });
     state.editingPreset = saved.id;
     message.textContent = '预设已保存';
+    showToast(`预设“${saved.name}”已保存`, 'success');
     await loadPresets();
-  } catch (error) { message.textContent = error.message; }
+  } catch (error) { message.textContent = error.message; showToast(error.message, 'error'); }
 }
 
 $('#delete-preset').addEventListener('click', () => {

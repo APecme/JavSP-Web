@@ -8,7 +8,6 @@ import subprocess
 import sys
 import threading
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -17,6 +16,7 @@ from PIL import Image, ImageOps
 
 from .storage import DATA_DIR, IS_FROZEN, VENDOR_DIR, get_preset, load_tasks, read_config, save_tasks
 from .config_validation import load_base_config, validate_config_data
+from .timeutils import now_iso
 
 
 _lock = threading.RLock()
@@ -35,10 +35,6 @@ _IMAGE_TRANSFER_RE = re.compile(r"^(?:Downloading extrafanart \d+ from url:|[^\s
 _NATIVE_PROGRESS_LOG_RE = re.compile(r"^已下载剧照\s+\d+/\d+:")
 _MAX_LOG_LINES = 5000
 _MAX_DISPLAY_LOG_LINES = 1500
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _decode_output(raw: bytes) -> str:
@@ -430,7 +426,7 @@ def create_task(
         "name": _task_name(input_directory),
         "input_directory": input_directory,
         "status": "queued",
-        "created_at": _utc_now(),
+        "created_at": now_iso(),
         "started_at": None,
         "finished_at": None,
         "return_code": None,
@@ -507,7 +503,7 @@ def _run_task(task: dict) -> None:
         _batch_running[batch_id] = _batch_running.get(batch_id, 0) + 1
         acquired_slot = True
     task["status"] = "running"
-    task["started_at"] = _utc_now()
+    task["started_at"] = now_iso()
     _persist(task)
     command = [sys.executable, "--run-javsp", "-c", task["config_path"]] if IS_FROZEN else [sys.executable, "-m", "javsp", "-c", task["config_path"]]
     env = os.environ.copy()
@@ -563,7 +559,7 @@ def _run_task(task: dict) -> None:
         task["error"] = str(exc)
         _logs.setdefault(task["id"], []).append(f"启动失败: {exc}")
     finally:
-        task["finished_at"] = _utc_now()
+        task["finished_at"] = now_iso()
         task["log_tail"] = _clean_log_lines(_logs.get(task["id"], []))[-_MAX_LOG_LINES:]
         task["progress"] = _progress_from_logs(task["log_tail"])
         _processes.pop(task["id"], None)
@@ -680,7 +676,7 @@ def _retry_task_images(task: dict, progress: dict) -> None:
         _append_task_event(task, "image_retry", status="failed", error=str(exc))
     finally:
         task["image_retry_running"] = False
-        task["image_retry_finished_at"] = _utc_now()
+        task["image_retry_finished_at"] = now_iso()
         _persist(task)
 
 
@@ -710,7 +706,7 @@ def cancel_task(task_id: str) -> bool:
         if process and process.poll() is None:
             process.terminate()
         task["status"] = "cancelled"
-        task["finished_at"] = _utc_now()
+        task["finished_at"] = now_iso()
         task["error"] = None
         _logs.setdefault(task_id, list(task.get("log_tail") or [])).append("任务已停止")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]

@@ -4,7 +4,7 @@ import json
 import errno
 from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, urlunparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 
@@ -31,6 +31,18 @@ def _connection_error(base_url: str, exc: Exception, *, api: bool = False) -> Qb
             "请确认该运行环境可路由到此地址、qBittorrent Web UI 监听了可访问接口，并放行对应防火墙/反向代理规则。"
         )
     return QbittorrentError(detail)
+
+
+def _host_gateway_url(base_url: str) -> str | None:
+    """Use Docker's host gateway when a host-LAN address is hairpin-blocked."""
+    parsed = urlparse(base_url)
+    host = (parsed.hostname or "").lower()
+    if host in {"127.0.0.1", "::1", "localhost", "host.docker.internal"}:
+        return None
+    netloc = "host.docker.internal"
+    if parsed.port:
+        netloc += f":{parsed.port}"
+    return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
 
 
 def _base_url(settings: dict) -> str:
@@ -64,7 +76,22 @@ def _open(settings: dict):
         detail = exc.read().decode("utf-8", errors="replace").strip()
         raise QbittorrentError(f"qBittorrent 拒绝登录（HTTP {exc.code}）：{detail or '请检查 Web UI 地址、用户名和反向代理设置'}") from exc
     except (URLError, TimeoutError) as exc:
-        raise _connection_error(base_url, exc) from exc
+        gateway_url = _host_gateway_url(base_url)
+        if not gateway_url:
+            raise _connection_error(base_url, exc) from exc
+        # Docker hosts can reject a container's connection to their LAN IP
+        # (hairpin routing), while host-gateway remains reachable.
+        gateway_headers = {**headers, "Referer": f"{gateway_url}/", "Origin": gateway_url}
+        gateway_request = Request(f"{gateway_url}/api/v2/auth/login", data=payload, headers=gateway_headers, method="POST")
+        try:
+            with opener.open(gateway_request, timeout=8) as response:
+                result = response.read().decode("utf-8", errors="replace").strip()
+            base_url, headers = gateway_url, gateway_headers
+        except (URLError, TimeoutError) as gateway_exc:
+            raise QbittorrentError(
+                f"{_connection_error(base_url, exc)} 同时已尝试 Docker 宿主机网关 {gateway_url}，仍无法连接：{gateway_exc}。"
+                "请确认 qBittorrent Web UI 监听 0.0.0.0（而非仅 127.0.0.1），且 Docker 容器与 qB 所在网络之间允许访问该端口。"
+            ) from gateway_exc
     if result == "Fails.":
         raise QbittorrentError("qBittorrent 用户名或密码错误")
     # Some HTTPS reverse proxies strip the qB login body while preserving SID.

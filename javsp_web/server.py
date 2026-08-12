@@ -54,6 +54,7 @@ from .storage import (
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
 from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, retry_task_images
+from .timeutils import local_now, timezone_name
 
 
 ensure_seed_data()
@@ -180,7 +181,7 @@ class PathMappingsBody(BaseModel):
 
 @app.get("/api/runtime")
 def runtime(_: dict = Depends(current_user)) -> dict:
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": __version__}
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": __version__, "timezone": timezone_name()}
 
 
 @app.post("/api/path/select")
@@ -1096,7 +1097,7 @@ def remove_managed_download(downloader_id: str, torrent_hash: str, _: dict = Dep
 
 def _schedule_next_run(cron: str) -> str | None:
     try:
-        return croniter(cron, datetime.now()).get_next(datetime).isoformat(timespec="minutes")
+        return croniter(cron, local_now()).get_next(datetime).isoformat(timespec="minutes")
     except (TypeError, ValueError, KeyError):
         return None
 
@@ -1232,7 +1233,7 @@ def delete_auto_scrape_schedule(schedule_id: str, _: dict = Depends(require_admi
 
 def _auto_scrape_schedule_worker() -> None:
     while True:
-        now = datetime.now()
+        now = local_now()
         minute_key = now.strftime("%Y-%m-%dT%H:%M")
         for schedule in list_auto_scrape_schedules():
             if not schedule.get("enabled"):

@@ -7,11 +7,12 @@ import os
 import secrets
 import sys
 import threading
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from .timeutils import now_iso
 
 
 IS_FROZEN = getattr(sys, "frozen", False)
@@ -30,10 +31,6 @@ AUTO_SCRAPE_HISTORY_FILE = DATA_DIR / "auto-scrape-history.json"
 AUTO_SCRAPE_SCHEDULES_FILE = DATA_DIR / "auto-scrape-schedules.json"
 MEDIA_SERVERS_FILE = DATA_DIR / "media-servers.json"
 _lock = threading.RLock()
-
-
-def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _read_json(path: Path, fallback: Any) -> Any:

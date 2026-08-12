@@ -17,3 +17,4 @@ pydantic-extra-types>=2.9,<3
 pendulum>=3,<4
 slimeface>=2024.9.27
 croniter>=3.0,<7
+tzdata>=2025.1
