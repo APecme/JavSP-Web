@@ -121,13 +121,15 @@ def set_share_limits(settings: dict, torrent_hash: str, rule: dict) -> None:
     })
 
 
-def set_transfer_limits(settings: dict, download_limit_kib: int, upload_limit_kib: int) -> None:
-    """Set qBittorrent global transfer limits. Negative values mean unlimited."""
+def set_torrent_transfer_limits(settings: dict, torrent_hash: str, download_limit_kib: int, upload_limit_kib: int) -> None:
+    """Set transfer limits for one torrent. Negative values mean unlimited."""
     base_url, opener, headers = _open(settings)
     download_bytes = 0 if download_limit_kib < 0 else download_limit_kib * 1024
     upload_bytes = 0 if upload_limit_kib < 0 else upload_limit_kib * 1024
-    _request(opener, f"{base_url}/api/v2/transfer/setDownloadLimit", headers, data={"limit": download_bytes})
-    _request(opener, f"{base_url}/api/v2/transfer/setUploadLimit", headers, data={"limit": upload_bytes})
+    data = {"hashes": torrent_hash, "limit": download_bytes}
+    _request(opener, f"{base_url}/api/v2/torrents/setDownloadLimit", headers, data=data)
+    data["limit"] = upload_bytes
+    _request(opener, f"{base_url}/api/v2/torrents/setUploadLimit", headers, data=data)
 
 
 def delete_torrent(settings: dict, torrent_hash: str) -> None:
