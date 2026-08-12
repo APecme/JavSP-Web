@@ -45,6 +45,7 @@ from javsp.datatype import Movie, MovieInfo
 from javsp.web.base import download
 from javsp.web.exceptions import *
 from javsp.web.translate import translate_movie_info
+from javsp.network_preflight import warn_restricted_crawler_network
 
 from javsp.config import Cfg, CrawlerID
 from javsp.prompt import prompt
@@ -556,6 +557,7 @@ def RunNormalMode(all_movies):
                                 elapsed = time.strftime("%M:%S", time.gmtime((info or {}).get('elapsed') or 0))
                                 speed = get_fmt_size((info or {}).get('rate')) + '/s'
                                 logger.info(f"已下载剧照 {id + 1}/{len(movie.info.preview_pics)}: {width}x{height}, {filesize} [{elapsed}, {speed}]")
+                                progress_event('images', done=id + 1, total=len(movie.info.preview_pics), kind='fanart', status='completed', current=id + 1)
                             else:
                                 progress_event('images', done=id, total=len(movie.info.preview_pics), kind='fanart', status='failed', current=id + 1, error='下载的剧照文件无效')
                                 logger.warning(f"下载剧照 {id + 1}/{len(movie.info.preview_pics)} 失败，已跳过: {pic_url}")
@@ -681,6 +683,7 @@ def entry():
     logger.info(f'扫描影片文件：共找到 {movie_count} 部影片')
     if Cfg().scanner.manual:
         reviewMovieID(recognized, root)
+    warn_restricted_crawler_network()
     RunNormalMode(recognized + recognize_fail)
     progress_event('task', status='completed', total=movie_count)
 

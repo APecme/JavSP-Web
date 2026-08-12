@@ -396,14 +396,26 @@ function progressMarkup(task) {
   const metadata = progress.metadata || {};
   const metadataRows = [['番号', metadata.dvdid], ['标题', metadata.title], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date]].map(([label, value]) => `<div class="metadata-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const imageInfo = progress.images || {};
-  const imageBlocks = imageCountsMarkup({ coverDone: imageInfo.cover_done, fanartDone: imageInfo.fanart_done, fanartTotal: imageInfo.fanart_total });
+  const imageBlocks = imageCountsMarkup({ coverDone: imageInfo.cover_done, coverStatus: imageInfo.cover_status, fanartDone: imageInfo.fanart_done, fanartTotal: imageInfo.fanart_total, fanartStatus: imageInfo.fanart_status, fanartFailures: imageInfo.fanart_failures });
   return `<div class="scrape-progress stage-panels"><section class="progress-panel progress-concurrent"><div class="progress-panel-heading"><strong>并发任务</strong></div>${circle('concurrent', '并发任务')}<div class="crawler-units">${crawlerUnits || '<span class="muted">等待爬虫状态</span>'}</div></section><section class="progress-panel progress-summary"><div class="progress-panel-heading"><strong>汇总数据</strong></div>${circle('summary', '汇总数据')}<dl class="metadata-grid">${metadataRows}</dl></section><section class="progress-panel progress-images"><div class="progress-panel-heading"><strong>下载图片</strong></div>${circle('images', '下载图片')}${imageBlocks}</section></div>`;
 }
 
-function imageCountsMarkup({ coverDone = 0, fanartDone = 0, fanartTotal = 0 }) {
+function imageCountsMarkup({ coverDone = 0, coverStatus = 'pending', fanartDone = 0, fanartTotal = 0, fanartStatus = 'pending', fanartFailures = [] }) {
   const total = Math.max(0, Number(fanartTotal) || 0);
   const done = Math.min(Math.max(0, Number(fanartDone) || 0), total);
-  return `<div class="image-counts"><span class="image-kind">封面</span><i class="image-block ${coverDone ? 'done' : ''}" title="封面"></i><span class="image-kind">剧照</span>${Array.from({ length: total }, (_, index) => `<i class="image-block ${index < done ? 'done' : ''}" title="剧照 ${index + 1}"></i>`).join('') || '<em class="muted">暂无剧照</em>'}</div>`;
+  const failures = new Set((fanartFailures || []).map((value) => Number(value)));
+  const coverLabel = coverDone ? '封面已下载' : (coverStatus === 'failed' ? '封面下载失败' : (coverStatus === 'downloading' ? '正在下载封面' : '封面未下载'));
+  const coverClass = coverDone ? 'done' : (coverStatus === 'failed' ? 'failed' : (coverStatus === 'downloading' ? 'downloading' : ''));
+  const fanartBlocks = Array.from({ length: total }, (_, index) => {
+    const current = index + 1;
+    const failed = failures.has(current);
+    const completed = current <= done && !failed;
+    const downloading = !completed && !failed && fanartStatus === 'downloading' && current === done + 1;
+    const label = completed ? `剧照 ${current} 已下载` : (failed ? `剧照 ${current} 下载失败` : (downloading ? `正在下载剧照 ${current}` : `剧照 ${current} 未下载`));
+    return `<i class="image-block ${completed ? 'done' : ''}${failed ? ' failed' : ''}${downloading ? ' downloading' : ''}" title="${label}"></i>`;
+  }).join('');
+  const fanartLabel = total ? (fanartStatus === 'failed' ? `剧照下载失败（${done}/${total}）` : `剧照 ${done}/${total}`) : '暂无剧照';
+  return `<div class="image-counts"><span class="image-kind">封面</span><i class="image-block ${coverClass}" title="${coverLabel}"></i><em class="image-state ${coverClass}">${coverLabel}</em><span class="image-kind">剧照</span>${fanartBlocks || '<em class="muted">暂无剧照</em>'}<em class="image-state ${fanartStatus === 'failed' ? 'failed' : ''}">${fanartLabel}</em></div>`;
 }
 
 function rememberLogScroll() {
@@ -1002,12 +1014,19 @@ function openTaskDetail(taskId) {
   if (!task) return;
   const metadata = task.progress?.metadata || {};
   const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name]].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
-  const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.failed ? '封面下载失败' : '封面未下载');
+  const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const poster = `<div class="detail-poster-wrap">${posterImage}<div id="task-media-overlay" class="task-media-overlay"></div></div>`;
-  const fanarts = Array.from({ length: Math.min(task.fanart_count || 0, 24) }, (_, index) => `<img src="/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}" loading="lazy" alt="剧照 ${index + 1}">`).join('') || '<p class="muted">暂无剧照</p>';
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
-  const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, fanartDone: task.fanart_count, fanartTotal: expectedFanart });
+  const fanartFailures = imageInfo.fanart_failures || [];
+  const fanarts = expectedFanart
+    ? Array.from({ length: Math.min(expectedFanart, 24) }, (_, index) => {
+      if (index < Number(task.fanart_count || 0)) return `<img src="/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}" loading="lazy" alt="剧照 ${index + 1}">`;
+      const failed = fanartFailures.includes(index + 1);
+      return artworkPlaceholder('detail-fanart-empty', failed ? `剧照 ${index + 1} 下载失败` : `剧照 ${index + 1} 未下载`);
+    }).join('')
+    : '<p class="muted">暂无剧照</p>';
+  const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
@@ -1049,7 +1068,7 @@ function overviewCoverCard(task) {
   const coverState = coverReady ? '封面已下载' : (images.failed ? '封面下载失败' : '封面未生成');
   const artwork = coverReady
     ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
-    : artworkPlaceholder('overview-cover-placeholder', images.failed ? '图片下载失败' : '封面未下载');
+    : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   return `<article class="overview-cover-card"><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span></button></article>`;
 }
 

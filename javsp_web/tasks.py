@@ -148,7 +148,16 @@ def _progress_from_logs(lines: list[str]) -> dict:
     crawler_details: dict[str, dict] = {}
     stages = {"concurrent": {"percent": 0, "done": 0, "total": 0}, "summary": {"percent": 0, "done": 0, "total": 0}, "images": {"percent": 0, "done": 0, "total": 0}}
     metadata: dict[str, object] = {}
-    images = {"cover_done": 0, "fanart_done": 0, "fanart_total": 0, "failed": False, "errors": []}
+    images = {
+        "cover_done": 0,
+        "cover_status": "pending",
+        "fanart_done": 0,
+        "fanart_total": 0,
+        "fanart_status": "pending",
+        "fanart_failures": [],
+        "failed": False,
+        "errors": [],
+    }
     image_sources: dict[str, object] = {}
     output: dict[str, str] = {}
     for line in lines:
@@ -166,9 +175,17 @@ def _progress_from_logs(lines: list[str]) -> dict:
                 total = int(event.get("total", 0) or 0)
                 if event.get("kind") == "cover":
                     images["cover_done"] = min(done, 1)
+                    if event.get("status"):
+                        images["cover_status"] = str(event["status"])
                 elif event.get("kind") == "fanart":
                     images["fanart_done"] = max(images["fanart_done"], done)
                     images["fanart_total"] = max(images["fanart_total"], total)
+                    if event.get("status"):
+                        images["fanart_status"] = str(event["status"])
+                    if event.get("status") == "failed" and event.get("current"):
+                        current = int(event["current"])
+                        if current not in images["fanart_failures"]:
+                            images["fanart_failures"].append(current)
                 if event.get("status") == "failed":
                     images["failed"] = True
                     images["errors"].append({"kind": event.get("kind"), "current": event.get("current"), "error": str(event.get("error") or "图片下载失败")})
@@ -178,6 +195,9 @@ def _progress_from_logs(lines: list[str]) -> dict:
             elif stage == "image_retry" and event.get("status") == "running":
                 images["failed"] = False
                 images["errors"] = []
+                images["cover_status"] = "pending"
+                images["fanart_status"] = "pending"
+                images["fanart_failures"] = []
             elif stage == "crawler" and event.get("name"):
                 crawler_name = str(event["name"]).removeprefix("javsp.web.")
                 status_labels = {"success": "完成", "failed": "失败", "not_found": "未找到", "duplicate": "重复"}
@@ -271,12 +291,27 @@ def _progress_event_message(event: dict) -> str | None:
             return f"影片刮削失败: {event.get('error') or '未知错误'}"
     if stage == "task" and status == "completed":
         return f"全部任务完成，共处理 {event.get('total', 0)} 部影片"
+    if stage == "network_preflight":
+        sites = event.get("sites") or "已启用爬虫"
+        if status == "running":
+            return f"网络预检：正在检查 {sites} 所需的出口地区"
+        if status == "passed":
+            return f"网络预检通过：{sites} 的{event.get('route') or '当前'}出口地区满足已知限制"
+        if status == "warning":
+            return f"网络预检警告：{sites} 的 {event.get('routes') or '出口地区不满足已知限制'}，详见后续覆写提示"
     if stage == "crawler":
         name = str(event.get("name") or "").removeprefix("javsp.web.")
         labels = {"running": "开始抓取", "success": "抓取完成", "failed": "抓取失败", "not_found": "未找到影片", "duplicate": "发现重复结果"}
         if status == "retrying":
             return f"{name}: 网络异常，正在重试（{event.get('attempt', 0)}/{event.get('total', '?')}）"
-        return f"{name}: {labels.get(status, '抓取中')}" if name else None
+        if not name:
+            return None
+        message = f"{name}: {labels.get(status, '抓取中')}"
+        if status == "success" and event.get("url"):
+            return f"{message} · URL: {event['url']}"
+        if event.get("reason"):
+            return f"{message}: {event['reason']}"
+        return message
     if stage == "summary":
         return "开始汇总影片数据" if not event.get("done") else "影片数据汇总完成"
     if stage == "metadata":
