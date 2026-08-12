@@ -245,6 +245,13 @@ def _capture_task_artwork_event(task: dict, line: str) -> bool:
     if event.get("stage") == "output":
         task["image_output"] = {key: str(event.get(key) or "") for key in {"save_dir", "fanart_file", "poster_file"}}
         return True
+    if event.get("stage") == "file_organizer":
+        task["file_organizer"] = {
+            "original_files": [str(path) for path in event.get("original_files") or [] if path],
+            "organized_files": [str(path) for path in event.get("organized_files") or [] if path],
+            "generated_files": [str(path) for path in event.get("generated_files") or [] if path],
+        }
+        return True
     return False
 
 
@@ -418,11 +425,69 @@ def list_tasks() -> list[dict]:
                 and images_incomplete
                 and not item.get("image_retry_running")
             )
+            item["restore_available"] = _restore_plan(item) is not None
         return list(reversed(items))
 
 
 def get_task(task_id: str) -> dict | None:
     return next((task for task in list_tasks() if task["id"] == task_id), None)
+
+
+def _restore_plan(task: dict) -> dict | None:
+    organizer = task.get("file_organizer") if isinstance(task.get("file_organizer"), dict) else {}
+    original_files = [Path(path) for path in organizer.get("original_files") or []]
+    organized_files = [Path(path) for path in organizer.get("organized_files") or []]
+    generated_files = [Path(path) for path in organizer.get("generated_files") or []]
+    if not original_files or len(original_files) != len(organized_files) or any(not path.is_file() for path in organized_files):
+        return None
+    if all(not path.exists() for path in original_files):
+        mode = "move"
+    elif all(original.exists() and os.path.samefile(original, organized) for original, organized in zip(original_files, organized_files)):
+        mode = "hardlink"
+    else:
+        return None
+    return {"mode": mode, "original_files": original_files, "organized_files": organized_files, "generated_files": generated_files}
+
+
+def restore_task_files(task_id: str) -> bool:
+    with _lock:
+        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        if not task or task.get("status") in {"queued", "running"} or task.get("image_retry_running"):
+            return False
+        plan = _restore_plan(task)
+        if not plan:
+            return False
+        moved: list[tuple[Path, Path]] = []
+        try:
+            if plan["mode"] == "move":
+                for organized, original in zip(plan["organized_files"], plan["original_files"]):
+                    original.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(organized), str(original))
+                    moved.append((original, organized))
+            else:
+                for organized in plan["organized_files"]:
+                    organized.unlink()
+            output_root = Path((task.get("image_output") or {}).get("save_dir") or "")
+            removable = [path for path in plan["generated_files"] if path.is_file()]
+            if output_root.is_dir():
+                removable.extend(path for path in _fanart_paths("", {"save_dir": str(output_root)}) if path.is_file())
+            for path in dict.fromkeys(removable):
+                path.unlink(missing_ok=True)
+            fanart_dir = output_root / "extrafanart"
+            if fanart_dir.is_dir() and not any(fanart_dir.iterdir()):
+                fanart_dir.rmdir()
+            if output_root.is_dir() and not any(output_root.iterdir()):
+                output_root.rmdir()
+            task["restored_at"] = now_iso()
+            _logs.setdefault(task_id, list(task.get("log_tail") or [])).append("已还原原始影片文件并移除本次刮削生成文件")
+            task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+            _persist(task)
+            return True
+        except OSError:
+            for original, organized in reversed(moved):
+                if original.exists() and not organized.exists():
+                    shutil.move(str(original), str(organized))
+            return False
 
 
 def active_schedule_task_ids(schedule_id: str) -> list[str]:
@@ -769,6 +834,7 @@ def retry_task_images(task_id: str) -> bool:
         if not (has_image_source and output.get("fanart_file")):
             return False
         task["image_retry_running"] = True
+        task["image_retry_started_at"] = now_iso()
         _logs[task_id] = raw_logs
         _persist(task)
     threading.Thread(target=_retry_task_images, args=(task, progress), name=f"image-retry-{task_id}", daemon=True).start()

@@ -967,7 +967,7 @@ function filteredTasks() {
   const from = $('#task-filter-date-from')?.value;
   const to = $('#task-filter-date-to')?.value;
   return state.tasks.filter((task) => {
-    if (task.source && task.source !== 'manual' && !task.image_retry_running) return false;
+    if (task.source && task.source !== 'manual' && !task.image_retry_started_at) return false;
     const metadata = task.progress?.metadata || {};
     const values = {
       path: task.input_directory || '', title: task.title || metadata.title || '', dvdid: metadata.dvdid || '',
@@ -992,7 +992,7 @@ function renderTasks() {
   rememberTaskCards();
   const tasks = filteredTasks();
   $('#task-table').innerHTML = tasks.length ? tasks.map(taskCard).join('') : '<div class="task-list empty">没有符合当前筛选条件的任务</div>';
-  const manualTaskCount = state.tasks.filter((task) => !task.source || task.source === 'manual' || task.image_retry_running).length;
+  const manualTaskCount = state.tasks.filter((task) => !task.source || task.source === 'manual' || task.image_retry_started_at).length;
   $('#task-filter-summary').textContent = `显示 ${tasks.length} / ${manualTaskCount} 个手动任务`;
   restoreLogScroll();
 }
@@ -1009,9 +1009,10 @@ function openTaskDetail(taskId) {
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, fanartDone: task.fanart_count, fanartTotal: expectedFanart });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
+  const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
-  $('#task-detail-content').innerHTML = `<div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div><section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div>${retry}</section><section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
+  $('#task-detail-content').innerHTML = `<div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div><section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${retry}${restore}</div></section><section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
   $('#task-detail-dialog').showModal();
   api(`/api/tasks/${encodeURIComponent(task.id)}/media-links`).then((result) => {
     const target = $('#task-media-overlay');
@@ -1711,6 +1712,22 @@ document.addEventListener('click', (event) => {
       retryImages.textContent = error.message;
     });
   }
+  const restoreFiles = event.target.closest('[data-restore-task-files]');
+  if (restoreFiles) {
+    const task = state.tasks.find((item) => item.id === restoreFiles.dataset.restoreTaskFiles);
+    confirmAction({
+      title: '还原原始文件',
+      text: `将把“${taskDisplayName(task || {})}”移回原始位置，并删除本次刮削生成的 NFO、封面与剧照。此操作不可撤销。`,
+      confirmLabel: '确认还原',
+      danger: true,
+      run: async () => {
+        await api(`/api/tasks/${encodeURIComponent(restoreFiles.dataset.restoreTaskFiles)}/restore`, { method: 'POST' });
+        $('#task-detail-dialog')?.close();
+        await loadTasks();
+        showToast('已还原原始文件并移除刮削产物');
+      },
+    });
+  }
   const downloadTab = event.target.closest('[data-download-tab]');
   if (downloadTab) {
     state.activeDownloaderId = downloadTab.dataset.downloadTab;
@@ -1898,10 +1915,17 @@ if (sidebarToggle) {
   setSidebarCollapsed(localStorage.getItem('javsp-web.sidebar-collapsed') === '1');
 }
 
-const downloadPolicyDetails = $('#download-policy-details');
-if (downloadPolicyDetails) {
-  downloadPolicyDetails.open = localStorage.getItem('javsp-web.download-policy-open') === '1';
-  downloadPolicyDetails.addEventListener('toggle', () => localStorage.setItem('javsp-web.download-policy-open', downloadPolicyDetails.open ? '1' : '0'));
+const downloadPolicyToggle = $('#download-policy-toggle');
+const downloadPolicyContent = $('#download-policy-content');
+if (downloadPolicyToggle && downloadPolicyContent) {
+  const setDownloadPolicyExpanded = (expanded) => {
+    downloadPolicyContent.classList.toggle('hidden', !expanded);
+    downloadPolicyToggle.textContent = expanded ? '收起策略' : '展开策略';
+    downloadPolicyToggle.setAttribute('aria-expanded', String(expanded));
+    localStorage.setItem('javsp-web.download-policy-open', expanded ? '1' : '0');
+  };
+  setDownloadPolicyExpanded(localStorage.getItem('javsp-web.download-policy-open') === '1');
+  downloadPolicyToggle.addEventListener('click', () => setDownloadPolicyExpanded(downloadPolicyContent.classList.contains('hidden')));
 }
 
 (async () => {
