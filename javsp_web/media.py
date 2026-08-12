@@ -1,11 +1,25 @@
 from __future__ import annotations
 
 import time
-from urllib.parse import quote
+import os
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import requests
 
 from .storage import list_media_servers
+
+
+def _service_url(server: dict) -> str:
+    """Resolve localhost from a Dockerized service to the Compose host gateway."""
+    value = str(server.get("url") or "").strip().rstrip("/")
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("JAVSP_WEB_DOCKER") == "1"
+    parsed = urlsplit(value)
+    if not in_docker or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+        return value
+    host = "host.docker.internal"
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment)).rstrip("/")
 
 
 def _headers(server: dict) -> dict[str, str]:
@@ -28,14 +42,14 @@ def sync_media_server(server: dict) -> dict:
         params = _params(server)
         if library_id:
             params["LibraryId"] = library_id
-        response = requests.post(f"{server['url']}/Library/Refresh", params=params, headers=_headers(server), timeout=30)
+        response = requests.post(f"{_service_url(server)}/Library/Refresh", params=params, headers=_headers(server), timeout=30)
         response.raise_for_status()
     return {"id": server["id"], "name": server["name"], "ok": True, "message": "媒体库扫描已启动"}
 
 
 def list_media_libraries(server: dict) -> list[dict]:
     response = requests.get(
-        f"{server['url']}/Library/VirtualFolders",
+        f"{_service_url(server)}/Library/VirtualFolders",
         params=_params(server),
         headers=_headers(server),
         timeout=20,
@@ -57,7 +71,7 @@ def _search_server(server: dict, task: dict) -> dict | None:
         return None
     for term in terms:
         response = requests.get(
-            f"{server['url']}/Items",
+            f"{_service_url(server)}/Items",
             params=_params(server, SearchTerm=term, IncludeItemTypes="Movie,Video", Recursive="true", Limit=10),
             headers=_headers(server),
             timeout=20,

@@ -253,8 +253,29 @@ async function api(path, options = {}) {
   const response = await fetch(path, { credentials: 'include', ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   if (response.status === 401) { location.href = '/login'; throw new Error('登录已过期'); }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.detail || '请求失败');
+  if (!response.ok) throw new Error(formatApiError(data.detail, response.status));
   return data;
+}
+
+function formatApiError(detail, status) {
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const labels = { name: '名称', type: '类型', url: '服务地址', external_url: '外部播放地址', api_key: 'API 密钥', libraries: '管理的媒体库' };
+    const messages = detail.map((item) => {
+      if (!item || typeof item !== 'object') return String(item || '');
+      const field = Array.isArray(item.loc) ? item.loc.filter((part) => part !== 'body').at(-1) : '';
+      const label = labels[field] || field || '输入内容';
+      const message = String(item.msg || '格式不正确').replace(/^Field required$/i, '不能为空').replace(/^Input should be a valid URL.*$/i, '必须是有效的网址');
+      return `${label}${message.startsWith('不') || message.startsWith('必') ? '' : '：'}${message}`;
+    }).filter(Boolean);
+    if (messages.length) return messages.join('；');
+  }
+  if (detail && typeof detail === 'object') {
+    const message = detail.message || detail.error || detail.detail;
+    if (typeof message === 'string' && message.trim()) return message;
+    try { return JSON.stringify(detail); } catch (_) { return '请求失败'; }
+  }
+  return status === 422 ? '请检查填写的内容' : '请求失败';
 }
 
 function escapeHtml(value) {
@@ -872,9 +893,9 @@ function taskDisplayName(task) {
 
 function imageProgressSummary(task) {
   const images = task.progress?.images || {};
-  const cover = images.cover_done ? '封面已下载' : (images.failed ? '封面失败' : '封面等待中');
-  const total = Number(images.fanart_total) || 0;
-  const done = Math.min(Number(images.fanart_done) || 0, total);
+  const cover = Number(task.cover_count) > 0 ? '封面已下载' : (images.failed ? '封面失败' : '封面等待中');
+  const total = Number(images.fanart_total) || Number(task.fanart_count) || 0;
+  const done = Math.min(Number(task.fanart_count) || 0, total || Number(task.fanart_count) || 0);
   return total ? `${cover} · 剧照 ${done}/${total}` : cover;
 }
 
@@ -1003,8 +1024,24 @@ function renderOverview() {
   $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
   const latest = state.tasks[0];
   $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  const completed = state.tasks.filter((task) => task.status === 'succeeded' && task.cover_count > 0).slice(0, 24);
-  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => `<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}"><img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}"><span>${escapeHtml(taskDisplayName(task))}</span></button>`).join('')}</div>` : '<div class="task-list empty">还没有已完成的封面</div>';
+  const completed = state.tasks.filter((task) => task.status === 'succeeded').slice(0, 24);
+  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map(overviewCoverCard).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+}
+
+function overviewCoverCard(task) {
+  const images = task.progress?.images || {};
+  const coverReady = Number(task.cover_count) > 0;
+  const total = Number(images.fanart_total) || Number(task.fanart_count) || 0;
+  const fanart = Math.min(Number(task.fanart_count) || 0, total || Number(task.fanart_count) || 0);
+  const coverState = coverReady ? '封面已下载' : (images.failed ? '封面下载失败' : '封面未生成');
+  const imageState = total ? `${coverState} · 剧照 ${fanart}/${total}` : `${coverState} · 剧照 ${Number(task.fanart_count) || 0} 张`;
+  const artwork = coverReady
+    ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
+    : `<span class="overview-cover-placeholder">${images.failed ? '图片下载失败' : '未找到封面'}</span>`;
+  const retry = task.image_retry_available
+    ? `<button class="overview-image-retry" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面剧照</button>`
+    : (task.image_retry_running ? '<span class="overview-image-retry disabled">正在重新下载图片</span>' : '');
+  return `<article class="overview-cover-card"><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span></button><div class="overview-cover-status">${escapeHtml(imageState)}</div>${retry}</article>`;
 }
 
 function formatBytes(value) {
@@ -1510,10 +1547,15 @@ async function probeMediaLibraries(showMessage = true) {
   const button = $('#probe-media-server');
   const message = $('#media-server-message');
   const original = button?.textContent || '验证并读取媒体库';
+  const payload = mediaServerPayload();
+  if (!payload.name || !payload.url) {
+    if (showMessage && message) message.textContent = !payload.name ? '请填写媒体服务器名称' : '请填写服务地址';
+    return;
+  }
   if (button) { button.disabled = true; button.textContent = '正在验证…'; }
   if (showMessage && message) message.textContent = '正在连接媒体服务器并读取媒体库…';
   try {
-    const result = await api('/api/media-servers/libraries', { method: 'POST', body: JSON.stringify(mediaServerPayload()) });
+    const result = await api('/api/media-servers/libraries', { method: 'POST', body: JSON.stringify(payload) });
     const select = $('#media-server-libraries');
     const selected = new Set(Array.from(select.selectedOptions).map((option) => option.value));
     select.innerHTML = (result.libraries || []).map((library) => `<option value="${escapeHtml(library.id)}"${selected.has(library.id) ? ' selected' : ''}>${escapeHtml(library.name)}</option>`).join('');

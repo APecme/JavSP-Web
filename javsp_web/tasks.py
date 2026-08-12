@@ -349,12 +349,6 @@ def list_tasks() -> list[dict]:
             cleaned_logs = _clean_log_lines((_logs.get(item["id"]) or item.get("log_tail") or [])[-_MAX_LOG_LINES:])
             item["progress"] = _progress_from_logs(cleaned_logs)
             image_progress = item["progress"]
-            item["image_retry_available"] = bool(
-                image_progress["images"].get("failed")
-                and image_progress.get("image_sources", {}).get("cover_urls")
-                and image_progress.get("output", {}).get("fanart_file")
-                and not item.get("image_retry_running")
-            )
             item["title"] = item["progress"]["metadata"].get("title") or ""
             item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
             item["log_tail"] = _display_log_lines(cleaned_logs)[-_MAX_DISPLAY_LOG_LINES:]
@@ -376,6 +370,18 @@ def list_tasks() -> list[dict]:
             output = image_progress.get("output") or {}
             item["cover_count"] = len(_cover_paths(item.get("input_directory", ""), output))
             item["fanart_count"] = len(_fanart_paths(item.get("input_directory", ""), output))
+            sources = image_progress.get("image_sources", {})
+            has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
+            expected_fanart = len(sources.get("preview_pics") or [])
+            images_incomplete = (
+                bool(sources.get("cover_urls")) and not item["cover_count"]
+            ) or (expected_fanart and item["fanart_count"] < expected_fanart)
+            item["image_retry_available"] = bool(
+                has_image_source
+                and output.get("fanart_file")
+                and images_incomplete
+                and not item.get("image_retry_running")
+            )
         return list(reversed(items))
 
 
@@ -671,21 +677,22 @@ def _retry_task_images(task: dict, progress: dict) -> None:
     save_dir = Path(output.get("save_dir") or fanart_file.parent)
     try:
         _append_task_event(task, "image_retry", status="running")
-        _append_task_event(task, "images", kind="cover", done=0, total=1, status="downloading")
-        cover_downloaded = False
+        cover_downloaded = not cover_urls
         cover_errors: list[str] = []
-        for url in cover_urls:
-            try:
-                _download_retry_image(url, fanart_file)
-                _rebuild_retry_poster(fanart_file, poster_file)
-                cover_downloaded = True
-                _append_task_event(task, "images", kind="cover", done=1, total=1, status="completed")
-                break
-            except Exception as exc:  # noqa: BLE001
-                cover_errors.append(f"封面：{exc}")
-        if not cover_downloaded:
-            errors.extend(cover_errors or ["封面：未能下载有效封面"])
-            _append_task_event(task, "images", kind="cover", done=0, total=1, status="failed", error=cover_errors[-1] if cover_errors else "未能下载有效封面")
+        if cover_urls:
+            _append_task_event(task, "images", kind="cover", done=0, total=1, status="downloading")
+            for url in cover_urls:
+                try:
+                    _download_retry_image(url, fanart_file)
+                    _rebuild_retry_poster(fanart_file, poster_file)
+                    cover_downloaded = True
+                    _append_task_event(task, "images", kind="cover", done=1, total=1, status="completed")
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    cover_errors.append(f"封面：{exc}")
+            if not cover_downloaded:
+                errors.extend(cover_errors or ["封面：未能下载有效封面"])
+                _append_task_event(task, "images", kind="cover", done=0, total=1, status="failed", error=cover_errors[-1] if cover_errors else "未能下载有效封面")
 
         fanart_dir = save_dir / "extrafanart"
         fanart_done = 0
@@ -725,7 +732,10 @@ def retry_task_images(task_id: str) -> bool:
             return False
         raw_logs = _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:])
         progress = _progress_from_logs(raw_logs)
-        if not (progress["images"].get("failed") and progress["image_sources"].get("cover_urls") and progress["output"].get("fanart_file")):
+        sources = progress["image_sources"]
+        output = progress["output"]
+        has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
+        if not (has_image_source and output.get("fanart_file")):
             return False
         task["image_retry_running"] = True
         _logs[task_id] = raw_logs
