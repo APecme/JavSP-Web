@@ -821,22 +821,44 @@ def _task_proxy(task: dict) -> dict[str, str]:
 def _google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[str]:
     if not query:
         return []
-    response = requests.get(
-        f"https://www.google.com/search?tbm=isch&q={quote_plus(f'{query} cover')}",
-        headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)", "Accept-Language": "en-US,en;q=0.9"},
-        proxies=proxies,
-        timeout=20,
-    )
-    response.raise_for_status()
-    page = unescape(response.text).replace("\\u003d", "=").replace("\\u0026", "&").replace("\\/", "/")
     candidates: list[str] = []
-    for value in re.findall(r"https?://[^\"'\s<>]+", page):
-        value = value.rstrip("\\,;)")
-        if value.startswith(("https://encrypted-tbn0.gstatic.com/", "https://www.google.com/", "https://accounts.google.com/", "https://support.google.com/")) or value in candidates:
-            continue
-        candidates.append(value)
-        if len(candidates) == 12:
-            break
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)", "Accept-Language": "en-US,en;q=0.9"}
+    try:
+        response = requests.get(
+            f"https://www.google.com/search?tbm=isch&q={quote_plus(f'{query} cover')}",
+            headers=headers,
+            proxies=proxies,
+            timeout=20,
+        )
+        response.raise_for_status()
+        page = unescape(response.text).replace("\\u003d", "=").replace("\\u0026", "&").replace("\\/", "/")
+        for value in re.findall(r"https?://[^\"'\s<>]+", page):
+            value = value.rstrip("\\,;)")
+            if value.startswith(("https://encrypted-tbn0.gstatic.com/", "https://www.google.com/", "https://accounts.google.com/", "https://support.google.com/")) or value in candidates:
+                continue
+            candidates.append(value)
+            if len(candidates) == 12:
+                return candidates
+    except requests.RequestException:
+        pass
+
+    try:
+        response = requests.get(
+            f"https://www.bing.com/images/search?q={quote_plus(f'{query} cover')}",
+            headers=headers,
+            proxies=proxies,
+            timeout=20,
+        )
+        response.raise_for_status()
+        page = unescape(response.text).replace("\\u002f", "/").replace("\\u003a", ":")
+        for value in re.findall(r'(?i)\"murl\"\s*:\s*\"(https?://[^\"]+)\"', page):
+            value = value.replace("\\/", "/").replace("\\u0026", "&")
+            if value not in candidates:
+                candidates.append(value)
+            if len(candidates) == 12:
+                break
+    except requests.RequestException:
+        pass
     return candidates
 
 
@@ -879,7 +901,7 @@ def _search_google_cover(task: dict) -> None:
                 return
             except (OSError, requests.RequestException, ValueError):
                 continue
-        raise ValueError("Google 未返回可下载的图片结果")
+        raise ValueError("搜索引擎未返回可下载的图片结果")
     except (OSError, requests.RequestException, ValueError) as exc:
         _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面失败：{exc}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]

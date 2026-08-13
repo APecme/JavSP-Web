@@ -35,6 +35,8 @@ const FIELD_LABELS = {
   engine: '翻译引擎', fields: '翻译字段', title: '标题', plot: '剧情简介',
   interactive: '交互模式', check_update: '检查更新', auto_update: '自动更新',
 };
+FIELD_LABELS['summarizer.cover.google_search_fallback'] = 'Google 搜索封面兜底';
+
 const FIELD_NOTES = {
   input_directory: '手动刮削时会由任务路径覆盖。',
   ignored_id_pattern: '每行一个正则表达式。',
@@ -53,6 +55,7 @@ const FIELD_NOTES = {
   fields: '需要翻译的字段开关。',
 };
 const FIELD_DESCRIPTIONS = {
+  'summarizer.cover.google_search_fallback': '启用后，封面下载失败时使用 Google 图片搜索；如果 Google 只返回浏览器脚本页面，则自动尝试 Bing 图片结果。服务器需要能够通过预设中的代理访问搜索引擎。',
   'scanner.ignored_id_pattern': '推测番号前会忽略文件名中匹配的字符串；除非熟悉正则表达式，否则不要修改。',
   'scanner.input_directory': '要整理的影片目录。手动刮削任务会临时覆盖此值。',
   'scanner.filename_extensions': '这些扩展名的文件会被当作影片扫描。',
