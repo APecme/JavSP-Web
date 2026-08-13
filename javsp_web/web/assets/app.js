@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const FORM_TABS = [
@@ -482,7 +482,7 @@ function renderOverview() {
 
 async function loadTasks() {
   const pageScroll = window.scrollY;
-  try { rememberLogScroll(); state.tasks = await api('/api/tasks'); syncTaskExpansion(state.tasks); renderOverview(); renderTasks(); } catch (error) { console.error(error); }
+  try { rememberLogScroll(); state.tasks = await api('/api/tasks'); syncTaskExpansion(state.tasks); renderOverview(); renderTasks(); if ($('#task-detail-dialog')?.open && state.activeTaskDetail) openTaskDetail(state.activeTaskDetail); } catch (error) { console.error(error); }
   if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
   window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
 }
@@ -1059,6 +1059,7 @@ function renderTasks() {
 function openTaskDetail(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  state.activeTaskDetail = taskId;
   const metadata = task.progress?.metadata || {};
   const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name]].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
@@ -1075,12 +1076,13 @@ function openTaskDetail(taskId) {
     : '<p class="muted">暂无剧照</p>';
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
-  const googleCover = !task.cover_count ? `<button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : '使用 Google 搜索封面'}</button>` : '';
+  const googleStatus = task.google_cover_search_running ? '正在使用 Google 搜索封面' : (task.google_cover_search_status === 'failed' ? `Google 搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
+  const googleCover = !task.cover_count ? `<button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试 Google 搜索封面' : '使用 Google 搜索封面')}</button>${googleStatus ? `<span class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</span>` : ''}` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
   $('#task-detail-content').innerHTML = `<div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div><section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section><section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
-  $('#task-detail-dialog').showModal();
+  if (!$('#task-detail-dialog').open) $('#task-detail-dialog').showModal();
   api(`/api/tasks/${encodeURIComponent(task.id)}/media-links`).then((result) => {
     const target = $('#task-media-overlay');
     if (!target) return;
@@ -1492,10 +1494,10 @@ function autoScrapeRunCountsMarkup(run) {
 function renderAutoScrapeHistory(scheduleId) {
   const schedule = state.autoScrapeSchedules.find((item) => item.id === scheduleId);
   if (!schedule) return;
-  const runs = Array.isArray(schedule.runs) ? schedule.runs.slice().reverse() : [];
+  const runs = Array.isArray(schedule.runs) ? schedule.runs.slice().sort((left, right) => Date.parse(right.started_at || '') - Date.parse(left.started_at || '')) : [];
   $('#auto-scrape-run-title').textContent = `${schedule.name} - 全部运行记录`;
   $('#auto-scrape-run-subtitle').textContent = `已保存 ${runs.length} 次定时或立即运行记录`;
-  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(run.started_at ? run.started_at.replace('T', ' ') : run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p>${autoScrapeRunCountsMarkup(run)}</div>${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}</article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
+  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(formatLocalDateTime(run.started_at) || run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p>${autoScrapeRunCountsMarkup(run)}</div>${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}</article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
 }
 
 function openAutoScrapeHistory(scheduleId) {
@@ -1783,7 +1785,9 @@ document.addEventListener('click', (event) => {
   if (googleCover) {
     googleCover.disabled = true;
     googleCover.textContent = '正在搜索封面';
-    api(`/api/tasks/${encodeURIComponent(googleCover.dataset.googleCoverTask)}/cover/google-search`, { method: 'POST' }).then(() => window.setTimeout(loadTasks, 500)).catch((error) => {
+    api(`/api/tasks/${encodeURIComponent(googleCover.dataset.googleCoverTask)}/cover/google-search`, { method: 'POST' }).then(async () => {
+      await loadTasks();
+    }).catch((error) => {
       googleCover.disabled = false;
       googleCover.textContent = error.message;
     });
@@ -2020,3 +2024,10 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     if (document.querySelector('[data-panel="auto-scrape"]')?.classList.contains('active')) loadAutoScrapeSchedules();
   }, 5000);
 })();
+
+function formatLocalDateTime(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '';
+}
+
+$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; });

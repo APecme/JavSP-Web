@@ -466,7 +466,12 @@ def list_tasks() -> list[dict]:
                 and not item.get("image_retry_running")
             )
             item["restore_available"] = _restore_plan(item) is not None
-        return list(reversed(items))
+        active = [item for item in items if item.get("status") in {"queued", "running"}]
+        completed = [item for item in items if item.get("status") not in {"queued", "running"}]
+        # Keep the live queue in its recorded enqueue order even after _persist rewrites tasks.json.
+        active.sort(key=lambda item: str(item.get("created_at") or ""))
+        completed.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        return active + completed
 
 
 def get_task(task_id: str) -> dict | None:
@@ -811,10 +816,11 @@ def _google_image_candidates(query: str) -> list[str]:
         timeout=20,
     )
     response.raise_for_status()
+    page = unescape(response.text).replace("\\u003d", "=").replace("\\u0026", "&").replace("\\/", "/")
     candidates: list[str] = []
-    for value in re.findall(r'"(https?://[^"\\]+)"', response.text):
-        value = unescape(value).replace("\\u003d", "=").replace("\\u0026", "&").replace("\\/", "/")
-        if value.startswith("https://encrypted-tbn0.gstatic.com/") or value in candidates:
+    for value in re.findall(r"https?://[^\"'\s<>]+", page):
+        value = value.rstrip("\\,;)")
+        if value.startswith(("https://encrypted-tbn0.gstatic.com/", "https://www.google.com/", "https://accounts.google.com/", "https://support.google.com/")) or value in candidates:
             continue
         candidates.append(value)
         if len(candidates) == 12:
@@ -839,6 +845,11 @@ def _search_google_cover(task: dict) -> None:
         query = _task_cover_query(task)
         if not query:
             raise ValueError("未能从任务中识别影片番号")
+        task["google_cover_search_status"] = "running"
+        task["google_cover_search_error"] = ""
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用 Google 搜索封面：{query}")
+        task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+        _persist(task)
         for url in _google_image_candidates(query):
             try:
                 response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, timeout=30)
@@ -851,13 +862,16 @@ def _search_google_cover(task: dict) -> None:
                     image.convert("RGB").save(destination, "JPEG", quality=92)
                 _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面成功：{query}")
                 task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+                task["google_cover_search_status"] = "succeeded"
                 return
             except (OSError, requests.RequestException, ValueError):
                 continue
-        raise ValueError("Google 搜索未找到可用封面")
+        raise ValueError("Google 未返回图片搜索结果，请检查服务器是否可以直接访问 Google 图片搜索")
     except (OSError, requests.RequestException, ValueError) as exc:
         _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面失败：{exc}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+        task["google_cover_search_status"] = "failed"
+        task["google_cover_search_error"] = str(exc)
     finally:
         task["google_cover_search_running"] = False
         _persist(task)
@@ -869,6 +883,9 @@ def search_google_cover(task_id: str) -> bool:
         if not task or task.get("google_cover_search_running") or get_cover_path(task_id, 0):
             return False
         task["google_cover_search_running"] = True
+        task["google_cover_search_status"] = "queued"
+        task["google_cover_search_error"] = ""
+        task["google_cover_search_started_at"] = now_iso()
         _persist(task)
     threading.Thread(target=_search_google_cover, args=(task,), name=f"google-cover-{task_id}", daemon=True).start()
     return True
@@ -981,15 +998,20 @@ def recover_interrupted_tasks() -> int:
         tasks = load_tasks()
         changed = 0
         for task in tasks:
-            if task.get("status") != "running":
-                continue
-            task["status"] = "cancelled"
-            task["finished_at"] = now_iso()
-            task["error"] = "服务重启后任务已中止"
             logs = _logs.setdefault(str(task.get("id") or ""), list(task.get("log_tail") or []))
-            logs.append("服务重启，任务已中止")
+            if task.get("status") == "running":
+                task["status"] = "cancelled"
+                task["finished_at"] = now_iso()
+                task["error"] = "服务重启后任务已中止"
+                logs.append("服务重启，任务已中止")
+                changed += 1
+            if task.get("google_cover_search_running"):
+                task["google_cover_search_running"] = False
+                task["google_cover_search_status"] = "failed"
+                task["google_cover_search_error"] = "服务重启后搜索已中止，请重试"
+                logs.append("Google 搜索封面已因服务重启中止，请重试")
+                changed += 1
             task["log_tail"] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
-            changed += 1
         if changed:
             save_tasks(tasks)
             _queue_condition.notify_all()
