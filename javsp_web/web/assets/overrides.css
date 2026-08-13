@@ -50,6 +50,8 @@
 .image-block.failed { position: relative; background: #fef3f2; border-color: #f04438; }
 .image-block.failed::after { content: ""; position: absolute; width: 7px; height: 1px; left: 2px; top: 5px; background: #d92d20; transform: rotate(-45deg); }
 .image-block.downloading { background: #eff8ff; border-color: #2e90fa; animation: image-download-pulse 1.3s ease-in-out infinite; }
+.google-cover-action { display: grid; justify-items: start; gap: 5px; min-width: 0; }
+.google-cover-action .image-state { margin: 0; max-width: 360px; overflow-wrap: anywhere; line-height: 1.4; }
 .image-state { color: #667085; font-size: 11px; }
 .image-state.failed { color: #b42318; }
 @keyframes image-download-pulse { 50% { box-shadow: 0 0 0 3px #2e90fa24; } }

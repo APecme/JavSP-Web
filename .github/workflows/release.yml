@@ -1,9 +1,9 @@
-name: Release
+name: Publish beta Docker image
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       publish_latest:
@@ -13,7 +13,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   IMAGE_NAME: apecme/javsp-web
@@ -42,20 +42,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-  windows-release:
-    name: Build Windows release
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Build single-file EXE
-        shell: pwsh
-        run: .\build-windows.ps1
-      - name: Publish release asset
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/JavSP-Web.exe
-          generate_release_notes: true

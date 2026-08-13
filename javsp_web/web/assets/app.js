@@ -1077,7 +1077,7 @@ function openTaskDetail(taskId) {
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const googleStatus = task.google_cover_search_running ? '正在使用 Google 搜索封面' : (task.google_cover_search_status === 'failed' ? `Google 搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
-  const googleCover = !task.cover_count ? `<button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试 Google 搜索封面' : '使用 Google 搜索封面')}</button>${googleStatus ? `<span class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</span>` : ''}` : '';
+  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试 Google 搜索封面' : '使用 Google 搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
@@ -1453,7 +1453,11 @@ async function refreshAutoScrapeRun() {
   $('#auto-scrape-run-subtitle').textContent = `${run.started_at ? run.started_at.replace('T', ' ') : ''} · ${run.result || '正在读取任务'}`;
   const results = await Promise.all(run.task_ids.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
   if (!dialog.open || state.activeAutoScrapeRun?.runId !== active.runId) return;
-  const tasks = results.filter(Boolean);
+  const taskById = new Map(results.filter(Boolean).map((task) => [String(task.id), task]));
+  const tasks = run.task_ids.map(String).map((taskId) => taskById.get(taskId)).filter(Boolean).sort((left, right) => {
+    const byCreatedAt = Date.parse(left.created_at || '') - Date.parse(right.created_at || '');
+    return Number.isFinite(byCreatedAt) && byCreatedAt !== 0 ? byCreatedAt : String(left.id).localeCompare(String(right.id));
+  });
   syncTaskExpansion(tasks);
   $('#auto-scrape-run-content').innerHTML = tasks.length ? tasks.map(scheduleRunTaskMarkup).join('') : '<p class="muted">相关任务已被删除，无法查看日志。</p>';
   restoreLogScroll();

@@ -807,12 +807,24 @@ def _download_retry_image(url: str, destination: Path) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def _google_image_candidates(query: str) -> list[str]:
+def _task_proxy(task: dict) -> dict[str, str]:
+    """Use the same per-task proxy setting as the JavSP worker."""
+    config_path = Path(str(task.get("config_path") or ""))
+    try:
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        proxy = str((config.get("network") or {}).get("proxy_server") or "").strip()
+    except (OSError, yaml.YAMLError, AttributeError):
+        proxy = ""
+    return {"http": proxy, "https": proxy} if proxy else {}
+
+
+def _google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[str]:
     if not query:
         return []
     response = requests.get(
         f"https://www.google.com/search?tbm=isch&q={quote_plus(f'{query} cover')}",
         headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)", "Accept-Language": "en-US,en;q=0.9"},
+        proxies=proxies,
         timeout=20,
     )
     response.raise_for_status()
@@ -850,9 +862,10 @@ def _search_google_cover(task: dict) -> None:
         _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用 Google 搜索封面：{query}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
-        for url in _google_image_candidates(query):
+        proxies = _task_proxy(task)
+        for url in _google_image_candidates(query, proxies):
             try:
-                response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, timeout=30)
+                response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, proxies=proxies, timeout=30)
                 response.raise_for_status()
                 with Image.open(io.BytesIO(response.content)) as image:
                     image.verify()
@@ -866,7 +879,7 @@ def _search_google_cover(task: dict) -> None:
                 return
             except (OSError, requests.RequestException, ValueError):
                 continue
-        raise ValueError("Google 未返回图片搜索结果，请检查服务器是否可以直接访问 Google 图片搜索")
+        raise ValueError("Google 未返回可下载的图片结果")
     except (OSError, requests.RequestException, ValueError) as exc:
         _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面失败：{exc}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]

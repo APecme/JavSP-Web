@@ -463,7 +463,9 @@ def RunNormalMode(all_movies):
         total_step += 1
 
     return_movies = []
+    failed_movies = []
     for movie_index, movie in enumerate(outer_bar, start=1):
+        inner_bar = None
         try:
             # 初始化本次循环要整理影片任务
             filenames = [os.path.split(i)[1] for i in movie.files]
@@ -591,9 +593,13 @@ def RunNormalMode(all_movies):
             progress_event('movie', status='completed', index=movie_index, total=len(all_movies), title=movie.info.title)
         except Exception as e:
             progress_event('movie', status='failed', index=movie_index, total=len(all_movies), error=str(e))
-            raise
+            logger.error(f'影片刮削失败: {e}')
+            failed_movies.append(movie)
         finally:
-            inner_bar.close()
+            if inner_bar is not None:
+                inner_bar.close()
+    if failed_movies:
+        raise RuntimeError(f'{len(failed_movies)} 部影片刮削失败')
     return return_movies
 
 
@@ -726,7 +732,11 @@ def entry():
     if Cfg().scanner.manual:
         reviewMovieID(recognized, root)
     warn_restricted_crawler_network()
-    RunNormalMode(recognized + recognize_fail)
+    try:
+        RunNormalMode(recognized + recognize_fail)
+    except RuntimeError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
     progress_event('task', status='completed', total=movie_count)
 
     sys.exit(0)
