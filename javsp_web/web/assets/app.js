@@ -1,6 +1,8 @@
 const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
+const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
+const CRAWLER_IDS = ['airav','avsox','avwiki','dl_getchu','fanza','fc2','fc2fan','fc2ppvdb','gyutto','jav321','javbus','javdb','javlib','javmenu','mgstage','njav','prestige','arzon','arzon_iv'];
 const FORM_TABS = [
   { id: 'scanner', section: 'scanner', label: '扫描器', description: '负责识别影片文件、过滤目录和设置扫描规则。' },
   { id: 'network', section: 'network', label: '网络', description: '设置代理、重试次数和网络请求超时。' },
@@ -208,6 +210,17 @@ function renderConfigFields() {
     const container = $(`#preset-fields-${tab.id}`);
     if (!container) return;
     const values = state.formValues?.[tab.section] || {};
+    if (tab.id === 'crawler') {
+      const crawler = values || {};
+      const selection = crawler.selection || {};
+      const lists = Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
+        const selected = Array.isArray(selection[group]) ? selection[group] : [];
+        const options = CRAWLER_IDS.filter((id) => !selected.includes(id)).map((id) => `<option value="${id}">${id}</option>`).join('');
+        return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}爬虫</h3><div class="crawler-config-list">${selected.map((id, index) => `<div class="crawler-config-row"><select class="crawler-selection" data-group="${group}">${CRAWLER_IDS.map((option) => `<option value="${option}"${option === id ? ' selected' : ''}>${option}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up"${index ? '' : ' disabled'}>上移</button><button class="button secondary crawler-move" type="button" data-direction="down"${index === selected.length - 1 ? ' disabled' : ''}>下移</button><button class="button danger crawler-remove" type="button">删除</button></div>`).join('')}</div><div class="crawler-add"><select class="crawler-add-select"><option value="">添加爬虫</option>${options}</select><button class="button secondary crawler-add-button" type="button">添加</button></div></div>`;
+      }).join('');
+      container.innerHTML = `<div class="crawler-config-editor"><p class="muted">可调整每类影片的爬虫顺序、增删现有爬虫。爬虫名称仅允许内置模块。</p>${lists}</div>`;
+      return;
+    }
     const paths = [];
     const walk = (value, path) => {
       if (!pathMatchesTab(path, tab.prefixes)) return;
@@ -434,7 +447,7 @@ function restoreLogScroll() {
 function renderTasks() {
   rememberLogScroll();
   $('#task-table').innerHTML = state.tasks.length ? state.tasks.map(taskCard).join('') : '<div class="task-list empty">还没有任务记录</div>';
-  restoreLogScroll();
+  window.requestAnimationFrame(restoreLogScroll);
 }
 
 function renderOverview() {
@@ -485,7 +498,7 @@ function renderOverview() {
 
 async function loadTasks() {
   const pageScroll = window.scrollY;
-  try { rememberLogScroll(); state.tasks = await api('/api/tasks'); syncTaskExpansion(state.tasks); renderOverview(); renderTasks(); if ($('#task-detail-dialog')?.open && state.activeTaskDetail) openTaskDetail(state.activeTaskDetail); } catch (error) { console.error(error); }
+  try { rememberLogScroll(); state.tasks = await api('/api/tasks'); syncTaskExpansion(state.tasks); renderOverview(); renderTasks(); if ($('#task-detail-dialog')?.open && state.activeTaskDetail) openTaskDetail(state.activeTaskDetail); window.requestAnimationFrame(restoreLogScroll); } catch (error) { console.error(error); }
   if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
   window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
 }
@@ -818,7 +831,7 @@ document.addEventListener('change', (event) => {
     renderOverview();
   }
 });
-document.addEventListener('click', (event) => {
+document.addEventListener('click', async (event) => {
   const button = event.target.closest('#overview-delete-selected');
   if (!button || button.disabled || !state.selectedOverviewTasks.size) return;
   const ids = [...state.selectedOverviewTasks];
@@ -1461,6 +1474,10 @@ async function refreshAutoScrapeRun() {
     const byCreatedAt = Date.parse(left.created_at || '') - Date.parse(right.created_at || '');
     return Number.isFinite(byCreatedAt) && byCreatedAt !== 0 ? byCreatedAt : String(left.id).localeCompare(String(right.id));
   });
+  document.querySelectorAll('.crawler-config-group').forEach((group) => {
+    const key = group.dataset.crawlerGroup;
+    setPathValue(values, `crawler.selection.${key}`, [...group.querySelectorAll('.crawler-selection')].map((item) => item.value));
+  });
   syncTaskExpansion(tasks);
   $('#auto-scrape-run-content').innerHTML = tasks.length ? tasks.map(scheduleRunTaskMarkup).join('') : '<p class="muted">相关任务已被删除，无法查看日志。</p>';
   restoreLogScroll();
@@ -1674,7 +1691,7 @@ async function probeMediaLibraries(showMessage = true) {
   }
 }
 
-document.addEventListener('click', (event) => {
+document.addEventListener('click', async (event) => {
   const closeButton = event.target.closest('[data-dialog-close]');
   if (closeButton) {
     closeButton.closest('dialog')?.close();
@@ -1792,13 +1809,44 @@ document.addEventListener('click', (event) => {
   if (googleCover) {
     googleCover.disabled = true;
     googleCover.textContent = '正在搜索封面';
-    api(`/api/tasks/${encodeURIComponent(googleCover.dataset.googleCoverTask)}/cover/google-search`, { method: 'POST' }).then(async () => {
+    const taskId = googleCover.dataset.googleCoverTask;
+    api(`/api/tasks/${encodeURIComponent(taskId)}/cover/google-search`, { method: 'POST' }).then(async () => {
+      let result;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/google-candidates`);
+        if (!result.status || !['queued', 'running'].includes(result.status)) break;
+      }
+      const candidates = result?.candidates || [];
+      const dialog = $('#google-cover-dialog');
+      $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || '未找到可用图片');
+      $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="${escapeHtml(candidate.thumbnail_url || candidate.image_url)}" loading="lazy" alt="候选封面"><span>选择此封面</span></button>`).join('');
+      if (candidates.length && dialog && !dialog.open) dialog.showModal();
       await loadTasks();
     }).catch((error) => {
       googleCover.disabled = false;
       googleCover.textContent = error.message;
     });
   }
+  const coverOption = event.target.closest('[data-google-cover-select]');
+  if (coverOption) {
+    coverOption.disabled = true;
+    try {
+      await api(`/api/tasks/${encodeURIComponent(coverOption.dataset.googleCoverSelect)}/cover/google-select`, { method: 'POST', body: JSON.stringify({ candidate_id: coverOption.dataset.candidateId }) });
+      $('#google-cover-dialog')?.close();
+      await loadTasks();
+    } catch (error) { coverOption.disabled = false; $('#google-cover-message').textContent = error.message; }
+  }
+  const crawlerAdd = event.target.closest('.crawler-add-button');
+  if (crawlerAdd) {
+    const group = crawlerAdd.closest('.crawler-config-group');
+    const select = group?.querySelector('.crawler-add-select');
+    if (select?.value) { const row = document.createElement('div'); row.className = 'crawler-config-row'; row.innerHTML = `<select class="crawler-selection" data-group="${group.dataset.crawlerGroup}">${CRAWLER_IDS.map((id) => `<option value="${id}"${id === select.value ? ' selected' : ''}>${id}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up">上移</button><button class="button secondary crawler-move" type="button" data-direction="down">下移</button><button class="button danger crawler-remove" type="button">删除</button>`; group.querySelector('.crawler-config-list').append(row); select.value = ''; }
+  }
+  const crawlerRemove = event.target.closest('.crawler-remove');
+  if (crawlerRemove) { crawlerRemove.closest('.crawler-config-row')?.remove(); }
+  const crawlerMove = event.target.closest('.crawler-move');
+  if (crawlerMove) { const row = crawlerMove.closest('.crawler-config-row'); const list = row?.parentElement; if (row && list) { const sibling = crawlerMove.dataset.direction === 'up' ? row.previousElementSibling : row.nextElementSibling; if (sibling) crawlerMove.dataset.direction === 'up' ? list.insertBefore(row, sibling) : list.insertBefore(sibling, row); } }
   const restoreFiles = event.target.closest('[data-restore-task-files]');
   if (restoreFiles) {
     const task = state.tasks.find((item) => item.id === restoreFiles.dataset.restoreTaskFiles);

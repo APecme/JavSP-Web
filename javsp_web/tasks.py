@@ -885,6 +885,17 @@ def _search_google_cover(task: dict) -> None:
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
         proxies = _task_proxy(task)
+        urls = []
+        for url in _google_image_candidates(query, proxies):
+            if isinstance(url, str) and url.startswith(("http://", "https://")) and len(url) <= 4096 and url not in urls:
+                urls.append(url)
+        if not urls:
+            raise ValueError("搜索引擎未返回可用的图片结果")
+        task["google_cover_candidates"] = [{"id": f"image-{i + 1}", "image_url": url, "thumbnail_url": url} for i, url in enumerate(urls[:12])]
+        task["google_cover_search_status"] = "succeeded"
+        task["google_cover_search_running"] = False
+        _persist(task)
+        return
         for url in _google_image_candidates(query, proxies):
             try:
                 response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, proxies=proxies, timeout=30)
@@ -920,9 +931,47 @@ def search_google_cover(task_id: str) -> bool:
         task["google_cover_search_running"] = True
         task["google_cover_search_status"] = "queued"
         task["google_cover_search_error"] = ""
+        task["google_cover_candidates"] = []
         task["google_cover_search_started_at"] = now_iso()
         _persist(task)
     threading.Thread(target=_search_google_cover, args=(task,), name=f"google-cover-{task_id}", daemon=True).start()
+    return True
+
+
+def select_google_cover(task_id: str, candidate_id: str) -> bool:
+    with _lock:
+        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        if not task or task.get("google_cover_search_running") or get_cover_path(task_id, 0):
+            return False
+        candidate = next((item for item in task.get("google_cover_candidates") or [] if item.get("id") == candidate_id), None)
+        url = str(candidate.get("image_url") or "") if isinstance(candidate, dict) else ""
+        if not url.startswith(("http://", "https://")) or len(url) > 4096:
+            return False
+        task["google_cover_search_running"] = True
+        task["google_cover_search_status"] = "downloading"
+        _persist(task)
+
+    def download() -> None:
+        try:
+            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, proxies=_task_proxy(task), timeout=30)
+            response.raise_for_status()
+            with Image.open(io.BytesIO(response.content)) as image:
+                image.verify()
+            with Image.open(io.BytesIO(response.content)) as image:
+                destination = _TASK_COVERS_DIR / f"{task_id}.jpg"
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                image.convert("RGB").save(destination, "JPEG", quality=92)
+            task["google_cover_search_status"] = "selected"
+            task["google_cover_selected_id"] = candidate_id
+            task["google_cover_candidates"] = []
+        except (OSError, requests.RequestException, ValueError) as exc:
+            task["google_cover_search_status"] = "failed"
+            task["google_cover_search_error"] = f"图片下载失败：{exc}"
+        finally:
+            task["google_cover_search_running"] = False
+            _persist(task)
+
+    threading.Thread(target=download, name=f"google-cover-download-{task_id}", daemon=True).start()
     return True
 
 

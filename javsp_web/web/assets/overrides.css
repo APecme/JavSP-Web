@@ -1,4 +1,5 @@
 /* Late-loaded UI refinements for task filtering and liquid progress surfaces. */
+.app-shell [data-panel]{display:none}.app-shell [data-panel="overview"]{display:block}html[data-initial-view="scrape"] .app-shell [data-panel="overview"],html[data-initial-view="auto-scrape"] .app-shell [data-panel="overview"],html[data-initial-view="downloads"] .app-shell [data-panel="overview"],html[data-initial-view="presets"] .app-shell [data-panel="overview"],html[data-initial-view="settings"] .app-shell [data-panel="overview"]{display:none}html[data-initial-view="scrape"] .app-shell [data-panel="scrape"],html[data-initial-view="auto-scrape"] .app-shell [data-panel="auto-scrape"],html[data-initial-view="downloads"] .app-shell [data-panel="downloads"],html[data-initial-view="presets"] .app-shell [data-panel="presets"],html[data-initial-view="settings"] .app-shell [data-panel="settings"]{display:block}
 .wave-progress::before {
   width: 220%;
   height: 122%;

@@ -53,7 +53,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
 from .timeutils import local_now, timezone_name
 
 
@@ -1309,6 +1309,22 @@ def retry_images(task_id: str, _: dict = Depends(current_user)) -> dict:
 def search_task_cover_with_google(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not search_google_cover(task_id):
         raise HTTPException(status_code=400, detail="任务不存在、封面已存在，或 Google 搜索正在进行")
+    return {"ok": True}
+
+
+@app.get("/api/tasks/{task_id}/cover/google-candidates")
+def google_cover_candidates(task_id: str, _: dict = Depends(current_user)) -> dict:
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return {"candidates": task.get("google_cover_candidates") or [], "status": task.get("google_cover_search_status") or "idle", "error": task.get("google_cover_search_error") or ""}
+
+
+@app.post("/api/tasks/{task_id}/cover/google-select")
+def select_task_cover_with_google(task_id: str, body: dict, _: dict = Depends(current_user)) -> dict:
+    candidate_id = str(body.get("candidate_id") or "")
+    if not candidate_id or not select_google_cover(task_id, candidate_id):
+        raise HTTPException(status_code=400, detail="封面候选项无效或下载正在进行")
     return {"ok": True}
 
 
