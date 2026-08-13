@@ -10,6 +10,7 @@ data/tasks.json
 data/presets.json
 data/config.yml
 data/task-config/
+data/task-covers/
 data/*.tmp
 video/
 logo-preview.png

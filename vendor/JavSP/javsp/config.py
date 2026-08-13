@@ -155,6 +155,7 @@ class CoverCrop(BaseConfig):
 class CoverSummarize(BaseConfig):
     basename_pattern: str
     highres: bool
+    google_search_fallback: bool = False
     add_label: bool
     crop: CoverCrop
 

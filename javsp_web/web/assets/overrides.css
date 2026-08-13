@@ -43,7 +43,6 @@
 .media-link-list { display: flex; gap: 8px; flex-wrap: wrap; }
 .task-media-links { margin-top: 18px; padding-top: 14px; border-top: 1px solid #eaecf0; }
 .task-media-links h3 { margin: 0 0 10px; font-size: 14px; }
-.task-media-links { display: none; }
 .detail-poster-wrap { position: relative; width: 100%; }
 .detail-poster-wrap .detail-poster { width: 100%; }
 
@@ -65,7 +64,8 @@
   padding: 18px;
   text-align: center;
 }
-.detail-poster-empty { display: grid; }
+.detail-poster-empty { display: grid; gap: 10px; padding: 12px; }
+.task-google-cover { width: auto; }
 .overview-cover-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; padding: 9px 11px; border: 1px solid #eaecf0; border-radius: 6px; background: #f8fafc; }
 .overview-cover-toolbar .check-label { margin: 0; }
 .overview-cover-toolbar .button { margin-left: auto; }

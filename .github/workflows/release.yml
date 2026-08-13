@@ -5,6 +5,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      publish_latest:
+        description: "Also publish the latest Docker tag"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -28,8 +34,8 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=tag
-            type=raw,value=latest
+            type=raw,value=bata
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' && inputs.publish_latest }}
       - uses: docker/build-push-action@v6
         with:
           context: .

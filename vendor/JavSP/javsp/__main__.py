@@ -4,6 +4,8 @@ import sys
 import json
 import time
 import logging
+from html import unescape
+from urllib.parse import quote_plus
 from PIL import Image
 from pydantic import ValidationError
 from pydantic_extra_types.pendulum_dt import Duration
@@ -467,6 +469,7 @@ def RunNormalMode(all_movies):
             filenames = [os.path.split(i)[1] for i in movie.files]
             logger.info('正在整理: ' + ', '.join(filenames))
             progress_event('movie', status='running', index=movie_index, total=len(all_movies), files=filenames)
+            progress_event('metadata', dvdid=movie.dvdid or movie.cid)
             inner_bar = tqdm(total=total_step, desc='步骤', ascii=True, leave=False, disable=progress_enabled())
             # 依次执行各个步骤
             inner_bar.set_description(f'启动并发任务')
@@ -510,9 +513,9 @@ def RunNormalMode(all_movies):
             progress_event('images', done=0, total=1, kind='cover', status='downloading')
             try:
                 if Cfg().summarizer.cover.highres:
-                    cover_dl = download_cover(movie.info.covers, movie.fanart_file, movie.info.big_covers)
+                    cover_dl = download_cover(movie.info.covers, movie.fanart_file, movie.info.big_covers, movie.info.dvdid or movie.info.cid)
                 else:
-                    cover_dl = download_cover(movie.info.covers, movie.fanart_file)
+                    cover_dl = download_cover(movie.info.covers, movie.fanart_file, dvdid=movie.info.dvdid or movie.info.cid)
             except Exception as e:
                 progress_event('images', done=0, total=1, kind='cover', status='failed', error=str(e))
                 raise
@@ -594,7 +597,43 @@ def RunNormalMode(all_movies):
     return return_movies
 
 
-def download_cover(covers, fanart_path, big_covers=[]):
+def _google_image_candidates(dvdid):
+    """Return a bounded, de-duplicated set of full-size Google image results."""
+    if not dvdid:
+        return []
+    query = quote_plus(f"{dvdid} cover")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; JavSP/1.0)",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    response = requests.get(f"https://www.google.com/search?tbm=isch&q={query}", headers=headers, timeout=15)
+    response.raise_for_status()
+    candidates = []
+    for value in re.findall(r'"(https?://[^"\\]+)"', response.text):
+        value = unescape(value).replace('\\u003d', '=').replace('\\u0026', '&').replace('\\/', '/')
+        if value.startswith('https://encrypted-tbn0.gstatic.com/'):
+            continue
+        if value not in candidates:
+            candidates.append(value)
+        if len(candidates) >= 12:
+            break
+    return candidates
+
+
+def _download_google_cover(dvdid, fanart_path):
+    for url in _google_image_candidates(dvdid):
+        try:
+            pic_path = get_pic_path(fanart_path, url)
+            download(url, pic_path)
+            if valid_pic(pic_path):
+                logger.info(f"Google image search fallback cover succeeded: {dvdid}")
+                return (url, pic_path)
+        except Exception as exc:
+            logger.debug(exc, exc_info=True)
+    return None
+
+
+def download_cover(covers, fanart_path, big_covers=[], dvdid=None):
     """下载封面图片"""
     # 优先下载高清封面
     for url in big_covers:
@@ -628,6 +667,9 @@ def download_cover(covers, fanart_path, big_covers=[]):
                 logger.debug(e, exc_info=True)
     logger.error(f"下载封面图片失败")
     logger.debug('big_covers:'+str(big_covers) + ', covers'+str(covers))
+    if Cfg().summarizer.cover.google_search_fallback:
+        logger.info(f"Original covers failed; trying Google image search fallback: {dvdid or 'unknown'}")
+        return _download_google_cover(dvdid, fanart_path)
     return None
 
 def get_pic_path(fanart_path, url):

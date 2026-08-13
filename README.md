@@ -38,7 +38,7 @@ JavSP WEB 基于 [JavSP](https://github.com/Yuukiy/JavSP)，用于从影片文�
 docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
   -v "${PWD}\data:/app/data" `
   -v "D:\Videos:/video" `
-  apecme/javsp-web:latest
+  apecme/javsp-web:bata
 ```
 
 将 `D:\Videos` 替换为实际影片目录，然后访问 `http://127.0.0.1:8090/login`。Docker 版中填写路径时使用实际挂载的容器路径，例如 `/video/Movies` 或 `/mnt/movies`。
@@ -50,7 +50,7 @@ docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
 ```yaml
 services:
   javsp-web:
-    image: apecme/javsp-web:latest
+    image: apecme/javsp-web:bata
     container_name: javsp-web
     restart: unless-stopped
     ports:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import io
 import json
 import re
 import shutil
@@ -9,6 +10,8 @@ import sys
 import threading
 import uuid
 from pathlib import Path
+from html import unescape
+from urllib.parse import quote_plus
 
 import yaml
 import requests
@@ -26,6 +29,7 @@ _batch_running: dict[str, int] = {}
 _logs: dict[str, list[str]] = {}
 _deleted_tasks: set[str] = set()
 _cancelled_tasks: set[str] = set()
+_TASK_COVERS_DIR = DATA_DIR / "task-covers"
 _VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 _PROGRESS_RE = re.compile(r"^(?P<key>[^:]{1,120}):\s+(?P<percent>\d{1,3})%.*?(?:(?P<done>\d+)\s*/\s*(?P<total>\d+))?")
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -446,7 +450,8 @@ def list_tasks() -> list[dict]:
                     if images["fanart_total"]:
                         images["fanart_done"] = images["fanart_total"]
             output = image_progress.get("output") or {}
-            item["cover_count"] = len(_cover_paths(item.get("input_directory", ""), output))
+            fallback_cover = _TASK_COVERS_DIR / f"{item['id']}.jpg"
+            item["cover_count"] = len(_cover_paths(item.get("input_directory", ""), output)) + int(fallback_cover.is_file())
             item["fanart_count"] = len(_fanart_paths(item.get("input_directory", ""), output))
             sources = image_progress.get("image_sources", {})
             has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
@@ -542,6 +547,9 @@ def get_cover_path(task_id: str, index: int) -> Path | None:
         return None
     progress = _task_progress(task, _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:]))
     paths = _cover_paths(task.get("input_directory", ""), progress.get("output") or {})
+    fallback_cover = _TASK_COVERS_DIR / f"{task_id}.jpg"
+    if fallback_cover.is_file():
+        paths.append(fallback_cover)
     return paths[index] if index < len(paths) else None
 
 
@@ -792,6 +800,78 @@ def _download_retry_image(url: str, destination: Path) -> None:
     finally:
         if temporary.exists():
             temporary.unlink(missing_ok=True)
+
+
+def _google_image_candidates(query: str) -> list[str]:
+    if not query:
+        return []
+    response = requests.get(
+        f"https://www.google.com/search?tbm=isch&q={quote_plus(f'{query} cover')}",
+        headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)", "Accept-Language": "en-US,en;q=0.9"},
+        timeout=20,
+    )
+    response.raise_for_status()
+    candidates: list[str] = []
+    for value in re.findall(r'"(https?://[^"\\]+)"', response.text):
+        value = unescape(value).replace("\\u003d", "=").replace("\\u0026", "&").replace("\\/", "/")
+        if value.startswith("https://encrypted-tbn0.gstatic.com/") or value in candidates:
+            continue
+        candidates.append(value)
+        if len(candidates) == 12:
+            break
+    return candidates
+
+
+def _task_cover_query(task: dict) -> str:
+    metadata = (task.get("progress") or {}).get("metadata") or {}
+    if str(metadata.get("dvdid") or "").strip():
+        return str(metadata["dvdid"]).strip()
+    for value in (task.get("input_directory"), task.get("file_name"), task.get("name")):
+        match = re.search(r"(?<!\d)(\d{6}[-_]\d{2,3}|[A-Za-z]{2,10}[-_]\d{2,5})(?!\d)", str(value or ""))
+        if match:
+            return match.group(1).replace("_", "-")
+    return ""
+
+
+def _search_google_cover(task: dict) -> None:
+    task_id = str(task["id"])
+    try:
+        query = _task_cover_query(task)
+        if not query:
+            raise ValueError("未能从任务中识别影片番号")
+        for url in _google_image_candidates(query):
+            try:
+                response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, timeout=30)
+                response.raise_for_status()
+                with Image.open(io.BytesIO(response.content)) as image:
+                    image.verify()
+                with Image.open(io.BytesIO(response.content)) as image:
+                    destination = _TASK_COVERS_DIR / f"{task_id}.jpg"
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    image.convert("RGB").save(destination, "JPEG", quality=92)
+                _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面成功：{query}")
+                task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+                return
+            except (OSError, requests.RequestException, ValueError):
+                continue
+        raise ValueError("Google 搜索未找到可用封面")
+    except (OSError, requests.RequestException, ValueError) as exc:
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面失败：{exc}")
+        task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+    finally:
+        task["google_cover_search_running"] = False
+        _persist(task)
+
+
+def search_google_cover(task_id: str) -> bool:
+    with _lock:
+        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        if not task or task.get("google_cover_search_running") or get_cover_path(task_id, 0):
+            return False
+        task["google_cover_search_running"] = True
+        _persist(task)
+    threading.Thread(target=_search_google_cover, args=(task,), name=f"google-cover-{task_id}", daemon=True).start()
+    return True
 
 
 def _rebuild_retry_poster(fanart_file: Path, poster_file: Path) -> None:

@@ -118,6 +118,7 @@ summarizer:
     basename_pattern: "poster"
     # 尽可能下载高清封面？（高清封面大小约 8-10 MiB，远大于普通封面，如果你的网络条件不佳，会降低整理速度）
     highres: true
+    google_search_fallback: false
     # 在封面图上添加水印（标签），例如“字幕”
     add_label: false
     crop:

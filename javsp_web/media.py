@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import os
+import re
 import socket
 import struct
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -78,12 +79,20 @@ def list_media_libraries(server: dict) -> list[dict]:
     return [item for item in libraries if item["id"]]
 
 
-def _search_server(server: dict, task: dict) -> dict | None:
+def _task_search_terms(task: dict) -> list[str]:
     metadata = (task.get("progress") or {}).get("metadata") or {}
     terms = [str(metadata.get("dvdid") or "").strip(), str(metadata.get("title") or task.get("title") or "").strip()]
-    terms = [term for term in terms if term]
+    for value in (task.get("input_directory"), task.get("file_name"), task.get("name")):
+        match = re.search(r"(?<!\d)(\d{6}[-_]\d{2,3}|[A-Za-z]{2,10}[-_]\d{2,5})(?!\d)", str(value or ""))
+        if match:
+            terms.append(match.group(1).replace("_", "-"))
+    return list(dict.fromkeys(term for term in terms if term))
+
+
+def _search_server(server: dict, task: dict) -> tuple[dict | None, str]:
+    terms = _task_search_terms(task)
     if not terms:
-        return None
+        return None, ""
     library_ids = [str(value) for value in server.get("libraries") or [] if str(value).strip()] or [None]
     for term in terms:
         for library_id in library_ids:
@@ -93,16 +102,17 @@ def _search_server(server: dict, task: dict) -> dict | None:
             response = requests.get(f"{_service_url(server)}/Items", params=params, headers=_headers(server), timeout=20)
             response.raise_for_status()
             items = response.json().get("Items") or []
-            if items:
-                return items[0]
-    return None
+            valid_items = [item for item in items if isinstance(item, dict) and item.get("Id")]
+            if len(valid_items) == 1:
+                return valid_items[0], term
+    return None, terms[0]
 
 
 def media_links_for_task(task: dict) -> list[dict]:
     links: list[dict] = []
     for server in list_media_servers():
         try:
-            item = _search_server(server, task)
+            item, term = _search_server(server, task)
             base = server.get("external_url") or server["url"]
             link = {
                 "id": server["id"],
@@ -111,7 +121,7 @@ def media_links_for_task(task: dict) -> list[dict]:
                 "found": bool(item),
                 "title": (item or {}).get("Name") or "",
                 "play_url": f"{base}/web/index.html#!/details?id={quote(str(item['Id']))}" if item and item.get("Id") else "",
-                "search_url": f"{base}/web/index.html#!/search.html?query={quote(str((task.get('progress') or {}).get('metadata', {}).get('dvdid') or task.get('title') or task.get('name') or ''))}",
+                "search_url": f"{base}/web/index.html#!/search.html?query={quote(term)}" if term else "",
             }
             links.append(link)
         except (OSError, requests.RequestException, ValueError) as exc:

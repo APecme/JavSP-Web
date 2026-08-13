@@ -53,7 +53,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover
 from .timeutils import local_now, timezone_name
 
 
@@ -1302,6 +1302,13 @@ def stop_task(task_id: str, _: dict = Depends(current_user)) -> dict:
 def retry_images(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not retry_task_images(task_id):
         raise HTTPException(status_code=400, detail="该任务没有可重新下载的失败图片，或图片重试正在进行")
+    return {"ok": True}
+
+
+@app.post("/api/tasks/{task_id}/cover/google-search", status_code=202)
+def search_task_cover_with_google(task_id: str, _: dict = Depends(current_user)) -> dict:
+    if not search_google_cover(task_id):
+        raise HTTPException(status_code=400, detail="任务不存在、封面已存在，或 Google 搜索正在进行")
     return {"ok": True}
 
 
