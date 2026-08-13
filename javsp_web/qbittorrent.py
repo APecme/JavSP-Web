@@ -105,6 +105,8 @@ def list_downloads(settings: dict) -> list[dict]:
             "completed_on": int(item.get("completion_on", 0) or 0),
             "download_speed": int(item.get("dlspeed", 0) or 0),
             "upload_speed": int(item.get("upspeed", 0) or 0),
+            "download_limit": int(item.get("dl_limit", 0) or 0),
+            "upload_limit": int(item.get("up_limit", 0) or 0),
             "ratio": float(item.get("ratio", 0) or 0),
             "seeding_time": int(item.get("seeding_time", 0) or 0),
             "inactive_seeding_time": int(item.get("inactive_seeding_time", 0) or 0),

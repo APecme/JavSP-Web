@@ -437,6 +437,13 @@ def list_tasks() -> list[dict]:
             item["title"] = item["progress"]["metadata"].get("title") or ""
             item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
             item["log_tail"] = _display_log_lines(cleaned_logs)[-_MAX_DISPLAY_LOG_LINES:]
+            if item.get("status") == "failed":
+                error = str(item.get("error") or "").strip()
+                if "JavSP 退出码:" in error and any("个抓取器均未获取到影片信息" in line for line in cleaned_logs):
+                    error = "抓取器均未获取到影片信息"
+                    item["error"] = error
+                if error and error not in item["log_tail"]:
+                    item["log_tail"].append(f"任务失败原因：{error}")
             if item.get("status") == "succeeded":
                 for key in ("concurrent", "summary"):
                     stage = item["progress"]["stages"][key]

@@ -1163,7 +1163,7 @@ function overviewCoverCard(task) {
   const artwork = coverReady
     ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
     : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
-  return `<article class="overview-cover-card"><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span></button></article>`;
+  return `<article class="overview-cover-card"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span></button></article>`;
 }
 
 function artworkPlaceholder(className, label) {

@@ -1057,10 +1057,17 @@ def _apply_transfer_limits() -> tuple[int, list[str]]:
     errors: list[str] = []
     for settings in list_downloaders():
         try:
-            for item in list_downloads(settings):
-                if not _managed_download(item, management):
-                    continue
+            managed = [item for item in list_downloads(settings) if _managed_download(item, management)]
+            for item in managed:
                 set_torrent_transfer_limits(settings, item["hash"], int(management.get("download_limit_kib", -1)), int(management.get("upload_limit_kib", -1)))
+            expected_download = 0 if int(management.get("download_limit_kib", -1)) < 0 else int(management["download_limit_kib"]) * 1024
+            expected_upload = 0 if int(management.get("upload_limit_kib", -1)) < 0 else int(management["upload_limit_kib"]) * 1024
+            refreshed = {item["hash"]: item for item in list_downloads(settings)}
+            for item in managed:
+                actual = refreshed.get(item["hash"])
+                if not actual or actual.get("download_limit") != expected_download or actual.get("upload_limit") != expected_upload:
+                    errors.append(f"{settings.get('name') or '下载器'}: qBittorrent 未确认 {item['name']} 的限速设置")
+                    continue
                 applied += 1
         except QbittorrentError as exc:
             errors.append(f"{settings.get('name') or '下载器'}: {exc}")
