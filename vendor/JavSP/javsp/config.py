@@ -46,7 +46,7 @@ class Network(BaseConfig):
     proxy_free: Dict[CrawlerID, Url]
 
 class CrawlerSelect(BaseConfig):
-    def items(self) -> List[tuple[str, list[CrawlerID]]]:
+    def items(self) -> List[tuple[str, list[str]]]:
         return [
             ('normal', self.normal),
             ('fc2', self.fc2),
@@ -55,7 +55,7 @@ class CrawlerSelect(BaseConfig):
             ('gyutto', self.gyutto),
         ]
 
-    def __getitem__(self, index) -> list[CrawlerID]:
+    def __getitem__(self, index) -> list[str]:
         match index:
             case 'normal':
                 return self.normal
@@ -69,11 +69,11 @@ class CrawlerSelect(BaseConfig):
                 return self.gyutto
         raise Exception("Unknown crawler type")
 
-    normal: list[CrawlerID]
-    fc2: list[CrawlerID]
-    cid: list[CrawlerID]
-    getchu: list[CrawlerID]
-    gyutto: list[CrawlerID]
+    normal: list[str]
+    fc2: list[str]
+    cid: list[str]
+    getchu: list[str]
+    gyutto: list[str]
 
 class MovieInfoField(str, Enum):
     dvdid = 'dvdid'

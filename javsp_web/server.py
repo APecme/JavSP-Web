@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 import uuid
@@ -19,6 +20,7 @@ from . import __version__
 from .auth import SESSION_COOKIE, create_session, current_user, remove_session, require_admin
 from .config_validation import load_base_config, validate_config_data
 from .storage import (
+    CUSTOM_CRAWLERS_DIR,
     delete_preset,
     claim_auto_scrape_schedule_run,
     delete_user,
@@ -28,6 +30,7 @@ from .storage import (
     get_qbittorrent_settings,
     get_qbittorrent_management,
     IS_FROZEN,
+    VENDOR_DIR,
     list_presets,
     list_auto_scrape_schedules,
     list_downloaders,
@@ -103,6 +106,11 @@ class CrawlerConfigBody(BaseModel):
     sleep_after_scraping: str = Field(default="PT1S", min_length=1, max_length=64)
     use_javdb_cover: Literal["fallback", "yes", "no"] = "fallback"
     normalize_actress_name: bool = True
+
+
+class CustomCrawlerBody(BaseModel):
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
+    source: str = Field(min_length=1, max_length=200_000)
 
 
 class TaskBody(BaseModel):
@@ -478,12 +486,29 @@ _CRAWLER_REQUIRED_KEYS = {
 }
 
 
+def _crawler_sources() -> list[dict]:
+    sources: list[dict] = []
+    web_dir = VENDOR_DIR / "javsp" / "web"
+    for path in sorted(web_dir.glob("*.py")):
+        if path.stem.startswith("_") or path.stem in {"base", "exceptions", "proxyfree", "translate"}:
+            continue
+        sources.append({"name": path.stem, "kind": "built_in", "source": path.read_text(encoding="utf-8")})
+    for path in sorted(CUSTOM_CRAWLERS_DIR.glob("*.py")):
+        if not path.stem.startswith("_"):
+            sources.append({"name": path.stem, "kind": "custom", "source": path.read_text(encoding="utf-8")})
+    return sources
+
+
+def _available_crawler_names() -> set[str]:
+    return _CRAWLER_IDS | {item["name"] for item in _crawler_sources() if item["kind"] == "custom"}
+
+
 def _validated_crawler_selection(selection: dict[str, list[str]]) -> dict[str, list[str]]:
     if set(selection) != _CRAWLER_GROUPS:
         raise HTTPException(status_code=400, detail="爬虫配置必须包含普通影片、FC2、CID、Getchu 和 Gyutto 五类")
     cleaned: dict[str, list[str]] = {}
     for group, crawlers in selection.items():
-        if not isinstance(crawlers, list) or not all(isinstance(item, str) and item in _CRAWLER_IDS for item in crawlers):
+        if not isinstance(crawlers, list) or not all(isinstance(item, str) and item in _available_crawler_names() for item in crawlers):
             raise HTTPException(status_code=400, detail=f"{group} 包含不支持的爬虫")
         if len(crawlers) != len(set(crawlers)):
             raise HTTPException(status_code=400, detail=f"{group} 不能重复添加同一爬虫")
@@ -601,6 +626,7 @@ def get_crawler_config(_: dict = Depends(current_user)) -> dict:
             "normalize_actress_name": bool(crawler.get("normalize_actress_name", True)),
         },
         "available_required_keys": sorted(_CRAWLER_REQUIRED_KEYS),
+        "crawlers": _crawler_sources(),
     }
 
 
@@ -631,6 +657,33 @@ def update_crawler_config(body: CrawlerConfigBody, _: dict = Depends(require_adm
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     write_config(yaml.safe_dump(current, allow_unicode=True, sort_keys=False))
     return {"ok": True, "rules": rules}
+
+
+@app.put("/api/crawler-config/custom")
+def save_custom_crawler(body: CustomCrawlerBody, _: dict = Depends(require_admin)) -> dict:
+    if "def parse_data" not in body.source:
+        raise HTTPException(status_code=400, detail="爬虫代码必须定义 parse_data(movie) 函数")
+    try:
+        compile(body.source, f"{body.name}.py", "exec")
+    except SyntaxError as exc:
+        raise HTTPException(status_code=400, detail=f"Python 语法错误: {exc.msg}（第 {exc.lineno} 行）") from exc
+    CUSTOM_CRAWLERS_DIR.mkdir(parents=True, exist_ok=True)
+    path = (CUSTOM_CRAWLERS_DIR / f"{body.name}.py").resolve()
+    if path.parent != CUSTOM_CRAWLERS_DIR.resolve():
+        raise HTTPException(status_code=400, detail="爬虫名称无效")
+    path.write_text(body.source, encoding="utf-8")
+    return {"ok": True, "name": body.name}
+
+
+@app.delete("/api/crawler-config/custom/{name}")
+def delete_custom_crawler(name: str, _: dict = Depends(require_admin)) -> dict:
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+        raise HTTPException(status_code=400, detail="爬虫名称无效")
+    path = (CUSTOM_CRAWLERS_DIR / f"{name}.py").resolve()
+    if path.parent != CUSTOM_CRAWLERS_DIR.resolve() or not path.is_file():
+        raise HTTPException(status_code=404, detail="自定义爬虫不存在")
+    path.unlink()
+    return {"ok": True}
 
 
 @app.put("/api/config")
@@ -996,6 +1049,24 @@ def _managed_download(item: dict, management: dict) -> bool:
     return (not tags or bool(tags & item_tags)) and (not category or item.get("category") == category)
 
 
+def _apply_transfer_limits() -> tuple[int, list[str]]:
+    management = get_qbittorrent_management()
+    if not management.get("takeover_enabled"):
+        return 0, []
+    applied = 0
+    errors: list[str] = []
+    for settings in list_downloaders():
+        try:
+            for item in list_downloads(settings):
+                if not _managed_download(item, management):
+                    continue
+                set_torrent_transfer_limits(settings, item["hash"], int(management.get("download_limit_kib", -1)), int(management.get("upload_limit_kib", -1)))
+                applied += 1
+        except QbittorrentError as exc:
+            errors.append(f"{settings.get('name') or '下载器'}: {exc}")
+    return applied, errors
+
+
 def _auto_scrape_rules(management: dict) -> list[dict]:
     """Return the new multi-rule representation, upgrading a legacy saved rule."""
     rules: list[dict] = []
@@ -1131,7 +1202,8 @@ def update_download_management(body: QbittorrentManagementBody, _: dict = Depend
     management["auto_scrape_category"] = first_rule["category"]
     management["auto_scrape_preset_id"] = first_rule["preset_id"]
     save_qbittorrent_management(management)
-    return _public_qbittorrent_management(management)
+    applied, errors = _apply_transfer_limits()
+    return {**_public_qbittorrent_management(management), "limit_applied_count": applied, "limit_apply_errors": errors}
 
 
 @app.get("/api/downloads")

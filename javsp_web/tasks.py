@@ -2,22 +2,25 @@ from __future__ import annotations
 
 import os
 import io
+import html
+import ipaddress
 import json
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import uuid
 from pathlib import Path
 from html import unescape
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urljoin, urlparse
 
 import yaml
 import requests
 from PIL import Image, ImageOps
 
-from .storage import DATA_DIR, IS_FROZEN, VENDOR_DIR, get_preset, load_tasks, read_config, save_tasks
+from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, get_preset, load_tasks, read_config, save_tasks
 from .config_validation import load_base_config, validate_config_data
 from .timeutils import now_iso
 
@@ -700,7 +703,7 @@ def _run_task(task: dict) -> None:
     _persist(task)
     command = [sys.executable, "--run-javsp", "-c", task["config_path"]] if IS_FROZEN else [sys.executable, "-m", "javsp", "-c", task["config_path"]]
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
     # The embedded worker reports structured events; terminal tqdm redraws are disabled.
     env["JAVSP_PROGRESS"] = "1"
     try:
@@ -746,8 +749,9 @@ def _run_task(task: dict) -> None:
         elif code == 0:
             _logs.setdefault(task["id"], []).append("JavSP 执行完成")
         else:
-            task["error"] = f"JavSP 退出码: {code}"
-            _logs.setdefault(task["id"], []).append(f"JavSP 执行失败，退出码: {code}")
+            no_result = any("个抓取器均未获取到影片信息" in line for line in _logs.get(task["id"], []))
+            task["error"] = "抓取器均未获取到影片信息" if no_result else f"JavSP 执行失败（退出码: {code}）"
+            _logs.setdefault(task["id"], []).append(task["error"])
     except Exception as exc:  # noqa: BLE001
         task["status"] = "failed"
         task["error"] = str(exc)
@@ -818,25 +822,100 @@ def _task_proxy(task: dict) -> dict[str, str]:
     return {"http": proxy, "https": proxy} if proxy else {}
 
 
-def _google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[str]:
+def _identifier_token(value: str) -> str:
+    """Normalize a movie identifier for matching search-result metadata."""
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def _is_public_image_url(value: str) -> bool:
+    """Reject local/private targets before the server fetches a chosen image."""
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)}
+    except socket.gaierror:
+        return False
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            return False
+        if not ip.is_global:
+            return False
+    return True
+
+
+def _request_public_image(url: str, proxies: dict[str, str]) -> requests.Response:
+    """Fetch an image while validating every redirect target against SSRF."""
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}
+    for _ in range(5):
+        if not _is_public_image_url(url):
+            raise ValueError("图片地址不是可公开访问的地址")
+        response = requests.get(url, headers=headers, proxies=proxies, timeout=30, allow_redirects=False)
+        if response.is_redirect:
+            location = response.headers.get("Location")
+            if not location:
+                raise ValueError("图片重定向地址无效")
+            url = urljoin(url, location)
+            continue
+        response.raise_for_status()
+        return response
+    raise ValueError("图片重定向次数过多")
+
+
+def _append_candidate(candidates: list[dict], seen: set[str], query: str, url: str, source: str, title: str = "", width: int = 0, height: int = 0, context: str = "") -> None:
+    if not url.startswith(("http://", "https://")) or len(url) > 4096 or url in seen:
+        return
+    token = _identifier_token(query)
+    searchable = _identifier_token(" ".join((url, title, context)))
+    if token not in searchable:
+        return
+    if width and height:
+        ratio = width / height
+        if width < 120 or height < 160 or not 0.35 <= ratio <= 1.1:
+            return
+    seen.add(url)
+    candidates.append({
+        "image_url": url,
+        "thumbnail_url": url,
+        "source": source,
+        "title": title[:160],
+        "width": width,
+        "height": height,
+    })
+
+
+def _google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[dict]:
     if not query:
         return []
-    candidates: list[str] = []
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)", "Accept-Language": "en-US,en;q=0.9"}
+    candidates: list[dict] = []
+    seen: set[str] = set()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
+    }
+    image_query = f'"{query}"'
     try:
         response = requests.get(
-            f"https://www.google.com/search?tbm=isch&q={quote_plus(f'{query} cover')}",
+            f"https://www.google.com/search?tbm=isch&q={quote_plus(image_query)}",
             headers=headers,
             proxies=proxies,
             timeout=20,
         )
         response.raise_for_status()
         page = unescape(response.text).replace("\\u003d", "=").replace("\\u0026", "&").replace("\\/", "/")
-        for value in re.findall(r"https?://[^\"'\s<>]+", page):
-            value = value.rstrip("\\,;)")
-            if value.startswith(("https://encrypted-tbn0.gstatic.com/", "https://www.google.com/", "https://accounts.google.com/", "https://support.google.com/")) or value in candidates:
+        token = _identifier_token(query)
+        for match in re.finditer(r"https?://[^\"'\s<>]+", page):
+            value = match.group(0).rstrip("\\,;)")
+            if value.startswith(("https://encrypted-tbn0.gstatic.com/", "https://www.google.com/", "https://accounts.google.com/", "https://support.google.com/")):
                 continue
-            candidates.append(value)
+            context = page[max(0, match.start() - 700):match.end() + 700]
+            if token not in _identifier_token(context):
+                continue
+            # Google frequently serves the source image from a CDN whose URL
+            # does not include the identifier; the enclosing result does.
+            _append_candidate(candidates, seen, query, value, "Google", context=context)
             if len(candidates) == 12:
                 return candidates
     except requests.RequestException:
@@ -844,17 +923,27 @@ def _google_image_candidates(query: str, proxies: dict[str, str] | None = None) 
 
     try:
         response = requests.get(
-            f"https://www.bing.com/images/search?q={quote_plus(f'{query} cover')}",
+            f"https://www.bing.com/images/search?q={quote_plus(image_query)}",
             headers=headers,
             proxies=proxies,
             timeout=20,
         )
         response.raise_for_status()
-        page = unescape(response.text).replace("\\u002f", "/").replace("\\u003a", ":")
-        for value in re.findall(r'(?i)\"murl\"\s*:\s*\"(https?://[^\"]+)\"', page):
-            value = value.replace("\\/", "/").replace("\\u0026", "&")
-            if value not in candidates:
-                candidates.append(value)
+        for raw in re.findall(r'\bm="(\{.*?\})"', response.text):
+            try:
+                item = json.loads(html.unescape(raw))
+            except json.JSONDecodeError:
+                continue
+            _append_candidate(
+                candidates,
+                seen,
+                query,
+                str(item.get("murl") or "").replace("\\/", "/"),
+                "Bing",
+                " ".join(str(item.get(key) or "") for key in ("t", "desc", "purl")),
+                int(item.get("ow") or 0),
+                int(item.get("oh") or 0),
+            )
             if len(candidates) == 12:
                 break
     except requests.RequestException:
@@ -897,13 +986,10 @@ def _search_google_cover(task: dict) -> None:
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
         proxies = _task_proxy(task)
-        urls = []
-        for url in _google_image_candidates(query, proxies):
-            if isinstance(url, str) and url.startswith(("http://", "https://")) and len(url) <= 4096 and url not in urls:
-                urls.append(url)
-        if not urls:
-            raise ValueError("搜索引擎未返回可用的图片结果")
-        task["google_cover_candidates"] = [{"id": f"image-{i + 1}", "image_url": url, "thumbnail_url": url} for i, url in enumerate(urls[:12])]
+        candidates = _google_image_candidates(query, proxies)
+        if not candidates:
+            raise ValueError("搜索引擎未返回与番号匹配的可下载封面")
+        task["google_cover_candidates"] = [{"id": f"image-{i + 1}", **item} for i, item in enumerate(candidates[:12])]
         task["google_cover_search_status"] = "succeeded"
         task["google_cover_search_running"] = False
         _persist(task)
@@ -949,8 +1035,7 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
     def download() -> None:
         try:
             destination = _google_cover_destination(task)
-            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, proxies=_task_proxy(task), timeout=30)
-            response.raise_for_status()
+            response = _request_public_image(url, _task_proxy(task))
             with Image.open(io.BytesIO(response.content)) as image:
                 image.verify()
             with Image.open(io.BytesIO(response.content)) as image:

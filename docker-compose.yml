@@ -1,6 +1,6 @@
 services:
   javsp-web:
-    image: apecme/javsp-web:latest
+    image: apecme/javsp-web:bata
     container_name: javsp-web
     restart: unless-stopped
     ports:

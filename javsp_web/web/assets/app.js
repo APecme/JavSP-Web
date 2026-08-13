@@ -210,11 +210,6 @@ function renderConfigFields() {
     const container = $(`#preset-fields-${tab.id}`);
     if (!container) return;
     const values = state.formValues?.[tab.section] || {};
-    if (tab.id === 'crawler') {
-      const selection = values.selection || {};
-      container.innerHTML = `<div class="crawler-config-editor"><p class="muted">此处设置当前刮削预设使用哪些爬虫以及执行顺序。</p>${crawlerConfigMarkup(selection)}</div>`;
-      return;
-    }
     const paths = [];
     const walk = (value, path) => {
       if (!pathMatchesTab(path, tab.prefixes)) return;
@@ -256,9 +251,6 @@ function readConfigFields() {
     const [section, ...path] = control.dataset.configPath.split('.');
     setPathValue(values, `${section}.${path.join('.')}`, control.value);
   });
-  document.querySelectorAll('#preset-fields-crawler .crawler-config-group').forEach((group) => {
-    setPathValue(values, `crawler.selection.${group.dataset.crawlerGroup}`, [...group.querySelectorAll('.crawler-selection')].map((item) => item.value));
-  });
   return Object.fromEntries(FORM_SECTIONS.map((section) => [section, values[section] || {}]));
 }
 
@@ -276,7 +268,8 @@ async function loadCrawlerConfig() {
   host.innerHTML = '<p class="muted">正在读取爬虫配置...</p>';
   try {
     const result = await api('/api/crawler-config');
-    host.innerHTML = `<p class="muted">此页面设置全局爬虫规则。每个刮削预设使用哪些爬虫及其顺序，请在“刮削预设”的“爬虫”标签页中设置。</p>${crawlerRulesMarkup(result.rules || {}, result.available_required_keys || [])}<div class="form-actions"><button class="button primary" id="save-crawler-config" type="button">保存爬虫配置</button><span id="crawler-config-message" class="form-message"></span></div>`;
+    state.crawlerSources = result.crawlers || [];
+    host.innerHTML = `<p class="muted">此页面设置全局爬虫规则与代码。刮削预设的“爬虫”页保持原有完整配置表单。</p>${crawlerRulesMarkup(result.rules || {}, result.available_required_keys || [])}<div class="form-actions"><button class="button primary" id="save-crawler-config" type="button">保存爬虫规则</button><span id="crawler-config-message" class="form-message"></span></div>${crawlerCodeMarkup(state.crawlerSources)}`;
   } catch (error) { host.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`; }
 }
 
@@ -299,6 +292,17 @@ function crawlerRulesMarkup(rules, availableKeys) {
   const keys = availableKeys.length ? availableKeys : ['cover', 'title'];
   const checked = (id, fallback = true) => rules[id] === undefined ? fallback : Boolean(rules[id]);
   return `<div class="crawler-rules-editor"><label class="config-field"><span class="config-field-name">抓取成功必需字段 <small>(crawler.required_keys)</small></span><span id="crawler-rule-required-keys" class="crawler-required-keys">${keys.map((key) => `<label class="check-label"><input type="checkbox" value="${escapeHtml(key)}"${required.has(key) ? ' checked' : ''}>${escapeHtml(key)}</label>`).join('')}</span><small class="config-description">至少命中这些字段才将爬虫结果视为有效。</small></label><label class="check-label"><input id="crawler-rule-hardworking" type="checkbox"${checked('hardworking') ? ' checked' : ''}>深度抓取更多信息</label><label class="check-label"><input id="crawler-rule-respect-site-avid" type="checkbox"${checked('respect_site_avid') ? ' checked' : ''}>使用站点返回的番号</label><label class="config-field"><span class="config-field-name">FC2Fan 本地镜像目录</span><input id="crawler-rule-fc2fan-path" value="${escapeHtml(rules.fc2fan_local_path || '')}" placeholder="未设置"><small class="config-description">目录中应包含类似 FC2-12345.html 的镜像文件。</small></label><label class="config-field"><span class="config-field-name">每部影片刮削后等待时间</span><input id="crawler-rule-sleep" value="${escapeHtml(rules.sleep_after_scraping || 'PT1S')}" placeholder="PT1S"><small class="config-description">使用 ISO 8601 时长，例如 PT1S。</small></label><label class="config-field"><span class="config-field-name">JavDB 封面策略</span><select id="crawler-rule-javdb-cover"><option value="fallback"${rules.use_javdb_cover === 'fallback' ? ' selected' : ''}>fallback</option><option value="yes"${rules.use_javdb_cover === 'yes' ? ' selected' : ''}>yes</option><option value="no"${rules.use_javdb_cover === 'no' ? ' selected' : ''}>no</option></select></label><label class="check-label"><input id="crawler-rule-normalize-actress" type="checkbox"${checked('normalize_actress_name') ? ' checked' : ''}>统一女优艺名</label></div>`;
+}
+
+function crawlerCodeMarkup(crawlers) {
+  const items = Array.isArray(crawlers) ? crawlers : [];
+  const selected = items[0] || null;
+  return `<section class="crawler-code-editor"><div class="crawler-code-heading"><div><h3>爬虫代码</h3><p class="muted">内置爬虫可查看；自定义爬虫保存到数据目录，选择进刮削预设后生效。</p></div><button class="button secondary" type="button" id="add-custom-crawler">添加爬虫</button></div><div class="crawler-code-layout"><div id="crawler-code-list" class="crawler-code-list">${items.map((item, index) => `<button type="button" class="crawler-code-item${index ? '' : ' active'}" data-crawler-code-name="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong><span>${item.kind === 'custom' ? '自定义' : '内置'}</span></button>`).join('') || '<p class="muted">没有可用爬虫。</p>'}</div><div id="crawler-code-detail" class="crawler-code-detail">${selected ? crawlerCodeDetail(selected) : ''}</div></div></section>`;
+}
+
+function crawlerCodeDetail(crawler) {
+  const editable = crawler.kind === 'custom';
+  return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${editable ? `<button class="button danger" type="button" data-delete-custom-crawler="${escapeHtml(crawler.name)}">删除</button>` : ''}</div><label class="config-field"><span class="config-field-name">爬虫名称</span><input id="crawler-code-name" value="${escapeHtml(crawler.name)}"${editable ? '' : ' disabled'}></label><label class="config-field"><span class="config-field-name">Python 代码</span><textarea id="crawler-code-source" class="code-editor" spellcheck="false"${editable ? '' : ' readonly'}>${escapeHtml(crawler.source || '')}</textarea></label>${editable ? '<div class="form-actions"><button class="button primary" type="button" id="save-custom-crawler">保存爬虫代码</button><span id="crawler-code-message" class="form-message"></span></div>' : ''}`;
 }
 
 async function api(path, options = {}) {
@@ -351,20 +355,6 @@ function showToast(message, tone = 'success') {
   container.appendChild(toast);
   window.setTimeout(() => { toast.classList.add('leaving'); }, 2800);
   window.setTimeout(() => { toast.remove(); }, 3200);
-}
-
-function showView(view) {
-  document.documentElement.removeAttribute('data-initial-view');
-  document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
-  document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
-  const title = { overview: '概览', scrape: '手动刮削', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
-  $('#section-title').textContent = title;
-  $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' ? '配置' : '工作区';
-  if (view === 'overview') renderOverview();
-  if (view === 'scrape') { renderTasks(); loadPresets(); }
-  if (view === 'presets') loadPresets();
-  if (view === 'crawler-config') loadCrawlerConfig();
-  if (view === 'settings') loadUsers();
 }
 
 function taskCard(task) {
@@ -516,12 +506,12 @@ function renderOverview() {
   $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
   const latest = state.tasks[0];
   $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  const completed = state.tasks.filter((task) => task.status === 'succeeded' && task.cover_count > 0).slice(0, 24);
+  const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || (task.progress?.image_sources?.cover_urls?.length || task.progress?.image_sources?.preview_pics?.length))).slice(0, 24);
   const availableIds = new Set(completed.map((task) => task.id));
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => availableIds.has(id)));
   const selectedCount = state.selectedOverviewTasks.size;
   const toolbar = completed.length ? `<div class="overview-cover-toolbar"><label class="check-label"><input id="overview-select-all" type="checkbox"${selectedCount && selectedCount === completed.length ? ' checked' : ''}>选择全部</label><span class="muted">已选择 ${selectedCount} 项</span><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>` : '';
-  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录">删除</button><img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(task.name || '')}"><figcaption>${escapeHtml(task.name || task.id)}</figcaption></figure>`).join('')}</div>` : '<div class="task-list empty">还没有已完成的封面</div>';
+  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => { const image = task.cover_count ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(task.name || '')}">` : artworkPlaceholder('overview-cover-placeholder', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载'); return `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover-open" type="button" data-task-detail="${escapeHtml(task.id)}">${image}<figcaption>${escapeHtml(task.name || task.id)}</figcaption></button></figure>`; }).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
   if (completed.length) {
     $('#overview-tasks').insertAdjacentHTML('afterbegin', toolbar);
     $('#overview-tasks').querySelectorAll('.overview-cover').forEach((card) => {
@@ -863,7 +853,7 @@ document.addEventListener('change', (event) => {
     return;
   }
   if (event.target.id === 'overview-select-all') {
-    const completed = state.tasks.filter((task) => task.status === 'succeeded' && task.cover_count > 0).slice(0, 24);
+    const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || (task.progress?.image_sources?.cover_urls?.length || task.progress?.image_sources?.preview_pics?.length))).slice(0, 24);
     if (event.target.checked) completed.forEach((task) => state.selectedOverviewTasks.add(task.id));
     else state.selectedOverviewTasks.clear();
     renderOverview();
@@ -1611,6 +1601,7 @@ function showView(view) {
   if (view === 'scrape') { renderTasks(); loadPresets(); }
   if (view === 'auto-scrape') { loadPresets(); loadAutoScrapeSchedules(); }
   if (view === 'downloads') { loadDownloadManagement(); loadDownloads(); }
+  if (view === 'crawler-config') loadCrawlerConfig();
   if (view === 'presets') loadPresets();
   if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); }
   localStorage.setItem('javsp-web.active-view', view);
@@ -1728,6 +1719,35 @@ async function probeMediaLibraries(showMessage = true) {
 
 document.addEventListener('click', async (event) => {
   if (event.target.closest('#save-crawler-config')) { await saveCrawlerConfig(); return; }
+  const crawlerCodeItem = event.target.closest('[data-crawler-code-name]');
+  if (crawlerCodeItem) {
+    document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.toggle('active', item === crawlerCodeItem));
+    const crawler = (state.crawlerSources || []).find((item) => item.name === crawlerCodeItem.dataset.crawlerCodeName);
+    if (crawler) $('#crawler-code-detail').innerHTML = crawlerCodeDetail(crawler);
+    return;
+  }
+  if (event.target.closest('#add-custom-crawler')) {
+    const name = `custom_${Date.now()}`;
+    const crawler = { name, kind: 'custom', source: 'from javsp.datatype import MovieInfo\n\n\ndef parse_data(movie: MovieInfo):\n    # Populate movie fields here, or raise MovieNotFoundError.\n    raise NotImplementedError("Implement this crawler")\n' };
+    $('#crawler-code-detail').innerHTML = crawlerCodeDetail(crawler);
+    document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.remove('active'));
+    return;
+  }
+  if (event.target.closest('#save-custom-crawler')) {
+    const message = $('#crawler-code-message');
+    try {
+      const saved = await api('/api/crawler-config/custom', { method: 'PUT', body: JSON.stringify({ name: $('#crawler-code-name').value.trim(), source: $('#crawler-code-source').value }) });
+      if (message) message.textContent = `已保存 ${saved.name}`;
+      await loadCrawlerConfig();
+    } catch (error) { if (message) message.textContent = error.message; }
+    return;
+  }
+  const deleteCustomCrawler = event.target.closest('[data-delete-custom-crawler]');
+  if (deleteCustomCrawler) {
+    const name = deleteCustomCrawler.dataset.deleteCustomCrawler;
+    confirmAction({ title: '删除自定义爬虫', text: `确定删除自定义爬虫“${name}”吗？已在预设中引用它的任务将无法加载该爬虫。`, confirmLabel: '删除爬虫', danger: true, run: async () => { await api(`/api/crawler-config/custom/${encodeURIComponent(name)}`, { method: 'DELETE' }); await loadCrawlerConfig(); } });
+    return;
+  }
   const closeButton = event.target.closest('[data-dialog-close]');
   if (closeButton) {
     closeButton.closest('dialog')?.close();
@@ -1848,16 +1868,18 @@ document.addEventListener('click', async (event) => {
     const taskId = googleCover.dataset.googleCoverTask;
     api(`/api/tasks/${encodeURIComponent(taskId)}/cover/google-search`, { method: 'POST' }).then(async () => {
       let result;
-      for (let attempt = 0; attempt < 20; attempt += 1) {
+      // Search engines can each take up to 20 seconds. Keep the dialog flow
+      // alive for the full server-side window instead of silently timing out.
+      for (let attempt = 0; attempt < 100; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/google-candidates`);
         if (!result.status || !['queued', 'running'].includes(result.status)) break;
       }
       const candidates = result?.candidates || [];
       const dialog = $('#google-cover-dialog');
-      $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || '未找到可用图片');
-      $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="${escapeHtml(candidate.thumbnail_url || candidate.image_url)}" loading="lazy" alt="候选封面"><span>选择此封面</span></button>`).join('');
-      if (candidates.length && dialog && !dialog.open) dialog.showModal();
+      $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || (result?.status === 'running' ? '搜索仍在进行，请稍后重试。' : '未找到与番号匹配的可用图片'));
+      $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="${escapeHtml(candidate.thumbnail_url || candidate.image_url)}" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
+      if (dialog && !dialog.open) dialog.showModal();
       await loadTasks();
     }).catch((error) => {
       googleCover.disabled = false;
@@ -1937,7 +1959,7 @@ $('#download-management-form').addEventListener('submit', async (event) => {
     const saved = await api('/api/downloads/settings', { method: 'PUT', body: JSON.stringify(payload) });
     state.autoScrapeRules = normalizeAutoScrapeRules(saved);
     renderAutoScrapeRules(state.autoScrapeRules);
-    message.textContent = '全局接管与做种策略已保存';
+    message.textContent = saved.limit_apply_errors?.length ? `策略已保存；限速应用失败：${saved.limit_apply_errors.join('；')}` : `策略已保存，已立即应用到 ${saved.limit_applied_count || 0} 个已接管任务`;
     await loadDownloads();
   } catch (error) { message.textContent = error.message; }
 });

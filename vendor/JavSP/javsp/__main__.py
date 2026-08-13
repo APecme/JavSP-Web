@@ -74,7 +74,13 @@ def import_crawlers():
                 #     logger.debug('由于未配置有效的fc2fan路径，已跳过该抓取器')
                 #     continue
                 import_name = 'javsp.web.' + name
-                __import__(import_name)
+                try:
+                    __import__(import_name)
+                except ModuleNotFoundError as exc:
+                    if exc.name != import_name:
+                        raise
+                    import_name = name
+                    __import__(import_name)
                 valid_mods.append(import_name)  # 抓取器有效: 使用完整模块路径，便于程序实际使用
             except ModuleNotFoundError:
                 unknown_mods.append(name)       # 抓取器无效: 仅使用模块名，便于显示
@@ -135,20 +141,22 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
         mark_crawler_complete()
 
     # 根据影片的数据源获取对应的抓取器
-    crawler_mods: List[CrawlerID] = Cfg().crawler.selection[movie.data_src]
+    crawler_mods: List[str] = Cfg().crawler.selection[movie.data_src]
 
-    all_info = {i.value: MovieInfo(movie) for i in crawler_mods}
+    all_info = {str(i).removeprefix('javsp.web.'): MovieInfo(movie) for i in crawler_mods}
     # 番号为cid但同时也有有效的dvdid时，也尝试使用普通模式进行抓取
     if movie.data_src == 'cid' and movie.dvdid:
         crawler_mods = crawler_mods + Cfg().crawler.selection.normal
         for i in all_info.values():
             i.dvdid = None
         for i in Cfg().crawler.selection.normal:
-            all_info[i.value] = MovieInfo(movie.dvdid)
+            all_info[str(i).removeprefix('javsp.web.')] = MovieInfo(movie.dvdid)
     crawler_total = len(all_info)
     thread_pool = []
     for mod_partial, info in all_info.items():
         mod = f"javsp.web.{mod_partial}"
+        if mod not in sys.modules:
+            mod = mod_partial
         parser = getattr(sys.modules[mod], 'parse_data')
         # 将all_info中的info实例传递给parser，parser抓取完成后，info实例的值已经完成更新
         # TODO: 抓取器如果带有parse_data_raw，说明它已经自行进行了重试处理，此时将重试次数设置为1
@@ -179,7 +187,7 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
     for info in all_info.values():
         del info.success
     # 删除all_info中键名中的'web.'
-    all_info = {k[4:]:v for k,v in all_info.items()}
+    all_info = {k.removeprefix('web.'):v for k,v in all_info.items()}
     return all_info
 
 

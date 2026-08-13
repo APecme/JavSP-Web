@@ -30,6 +30,7 @@ PATH_MAPPINGS_FILE = DATA_DIR / "path-mappings.json"
 AUTO_SCRAPE_HISTORY_FILE = DATA_DIR / "auto-scrape-history.json"
 AUTO_SCRAPE_SCHEDULES_FILE = DATA_DIR / "auto-scrape-schedules.json"
 MEDIA_SERVERS_FILE = DATA_DIR / "media-servers.json"
+CUSTOM_CRAWLERS_DIR = DATA_DIR / "crawlers"
 _lock = threading.RLock()
 
 
@@ -66,6 +67,7 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def ensure_seed_data() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CUSTOM_CRAWLERS_DIR.mkdir(parents=True, exist_ok=True)
     with _lock:
         users = _read_json(USERS_FILE, None)
         if not isinstance(users, list) or not users:
