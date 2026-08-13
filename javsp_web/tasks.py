@@ -873,6 +873,18 @@ def _task_cover_query(task: dict) -> str:
     return ""
 
 
+def _google_cover_destination(task: dict) -> Path:
+    """Return the poster path emitted by JavSP, never a web-only cache path."""
+    output = task.get("image_output") if isinstance(task.get("image_output"), dict) else {}
+    poster_file = str(output.get("poster_file") or "").strip()
+    if poster_file:
+        return Path(poster_file)
+    save_dir = str(output.get("save_dir") or "").strip()
+    if save_dir:
+        return Path(save_dir) / "poster.jpg"
+    raise ValueError("无法确定刮削后的封面保存位置，请先完成影片整理后再下载封面")
+
+
 def _search_google_cover(task: dict) -> None:
     task_id = str(task["id"])
     try:
@@ -896,23 +908,6 @@ def _search_google_cover(task: dict) -> None:
         task["google_cover_search_running"] = False
         _persist(task)
         return
-        for url in _google_image_candidates(query, proxies):
-            try:
-                response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, proxies=proxies, timeout=30)
-                response.raise_for_status()
-                with Image.open(io.BytesIO(response.content)) as image:
-                    image.verify()
-                with Image.open(io.BytesIO(response.content)) as image:
-                    destination = _TASK_COVERS_DIR / f"{task_id}.jpg"
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    image.convert("RGB").save(destination, "JPEG", quality=92)
-                _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面成功：{query}")
-                task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
-                task["google_cover_search_status"] = "succeeded"
-                return
-            except (OSError, requests.RequestException, ValueError):
-                continue
-        raise ValueError("搜索引擎未返回可下载的图片结果")
     except (OSError, requests.RequestException, ValueError) as exc:
         _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面失败：{exc}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
@@ -953,14 +948,19 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
 
     def download() -> None:
         try:
+            destination = _google_cover_destination(task)
             response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}, proxies=_task_proxy(task), timeout=30)
             response.raise_for_status()
             with Image.open(io.BytesIO(response.content)) as image:
                 image.verify()
             with Image.open(io.BytesIO(response.content)) as image:
-                destination = _TASK_COVERS_DIR / f"{task_id}.jpg"
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 image.convert("RGB").save(destination, "JPEG", quality=92)
+            output = task.setdefault("image_output", {})
+            output["poster_file"] = str(destination)
+            output.setdefault("save_dir", str(destination.parent))
+            _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面下载成功：{destination}")
+            task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
             task["google_cover_search_status"] = "selected"
             task["google_cover_selected_id"] = candidate_id
             task["google_cover_candidates"] = []

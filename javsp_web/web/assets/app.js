@@ -1,11 +1,12 @@
 const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
-const FORM_SECTIONS = ['scanner', 'network', 'summarizer', 'translator', 'other'];
+const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
 const CRAWLER_IDS = ['airav','avsox','avwiki','dl_getchu','fanza','fc2','fc2fan','fc2ppvdb','gyutto','jav321','javbus','javdb','javlib','javmenu','mgstage','njav','prestige','arzon','arzon_iv'];
 const FORM_TABS = [
   { id: 'scanner', section: 'scanner', label: '扫描器', description: '负责识别影片文件、过滤目录和设置扫描规则。' },
   { id: 'network', section: 'network', label: '网络', description: '设置代理、重试次数和网络请求超时。' },
+  { id: 'crawler', section: 'crawler', label: '爬虫', description: '选择此预设实际使用的数据来源和爬虫顺序。' },
   { id: 'folder', section: 'summarizer', prefixes: ['move_files', 'path', 'title'], label: '文件夹整理', description: '设置输出目录、文件名、路径长度和文件移动规则。' },
   { id: 'defaults', section: 'summarizer', prefixes: ['default'], label: '替代文本', description: '设置影片信息字段缺失时使用的替代文本。' },
   { id: 'images', section: 'summarizer', prefixes: ['cover', 'fanart', 'extra_fanarts'], label: '图片', description: '设置封面、横版封面、裁剪和剧照下载规则。' },
@@ -209,6 +210,11 @@ function renderConfigFields() {
     const container = $(`#preset-fields-${tab.id}`);
     if (!container) return;
     const values = state.formValues?.[tab.section] || {};
+    if (tab.id === 'crawler') {
+      const selection = values.selection || {};
+      container.innerHTML = `<div class="crawler-config-editor"><p class="muted">此处设置当前刮削预设使用哪些爬虫以及执行顺序。</p>${crawlerConfigMarkup(selection)}</div>`;
+      return;
+    }
     const paths = [];
     const walk = (value, path) => {
       if (!pathMatchesTab(path, tab.prefixes)) return;
@@ -250,6 +256,9 @@ function readConfigFields() {
     const [section, ...path] = control.dataset.configPath.split('.');
     setPathValue(values, `${section}.${path.join('.')}`, control.value);
   });
+  document.querySelectorAll('#preset-fields-crawler .crawler-config-group').forEach((group) => {
+    setPathValue(values, `crawler.selection.${group.dataset.crawlerGroup}`, [...group.querySelectorAll('.crawler-selection')].map((item) => item.value));
+  });
   return Object.fromEntries(FORM_SECTIONS.map((section) => [section, values[section] || {}]));
 }
 
@@ -267,17 +276,29 @@ async function loadCrawlerConfig() {
   host.innerHTML = '<p class="muted">正在读取爬虫配置...</p>';
   try {
     const result = await api('/api/crawler-config');
-    host.innerHTML = `<p class="muted">此页面修改默认全局爬虫顺序；新任务会使用保存后的配置。</p><div class="crawler-config-editor">${crawlerConfigMarkup(result.selection)}</div><div class="form-actions"><button class="button primary" id="save-crawler-config" type="button">保存爬虫配置</button><span id="crawler-config-message" class="form-message"></span></div>`;
+    host.innerHTML = `<p class="muted">此页面设置全局爬虫规则。每个刮削预设使用哪些爬虫及其顺序，请在“刮削预设”的“爬虫”标签页中设置。</p>${crawlerRulesMarkup(result.rules || {}, result.available_required_keys || [])}<div class="form-actions"><button class="button primary" id="save-crawler-config" type="button">保存爬虫配置</button><span id="crawler-config-message" class="form-message"></span></div>`;
   } catch (error) { host.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`; }
 }
 
 async function saveCrawlerConfig() {
-  const selection = {};
-  document.querySelectorAll('#crawler-config-content .crawler-config-group').forEach((group) => {
-    selection[group.dataset.crawlerGroup] = [...group.querySelectorAll('.crawler-selection')].map((item) => item.value);
-  });
+  const rules = {
+    required_keys: [...document.querySelectorAll('#crawler-rule-required-keys input:checked')].map((item) => item.value),
+    hardworking: $('#crawler-rule-hardworking').checked,
+    respect_site_avid: $('#crawler-rule-respect-site-avid').checked,
+    fc2fan_local_path: $('#crawler-rule-fc2fan-path').value.trim() || null,
+    sleep_after_scraping: $('#crawler-rule-sleep').value.trim(),
+    use_javdb_cover: $('#crawler-rule-javdb-cover').value,
+    normalize_actress_name: $('#crawler-rule-normalize-actress').checked,
+  };
   const message = $('#crawler-config-message');
-  try { await api('/api/crawler-config', { method: 'PUT', body: JSON.stringify({ selection }) }); message.textContent = '爬虫配置已保存'; await loadCrawlerConfig(); } catch (error) { message.textContent = error.message; }
+  try { await api('/api/crawler-config', { method: 'PUT', body: JSON.stringify(rules) }); message.textContent = '爬虫配置已保存'; await loadCrawlerConfig(); } catch (error) { message.textContent = error.message; }
+}
+
+function crawlerRulesMarkup(rules, availableKeys) {
+  const required = new Set(Array.isArray(rules.required_keys) ? rules.required_keys : []);
+  const keys = availableKeys.length ? availableKeys : ['cover', 'title'];
+  const checked = (id, fallback = true) => rules[id] === undefined ? fallback : Boolean(rules[id]);
+  return `<div class="crawler-rules-editor"><label class="config-field"><span class="config-field-name">抓取成功必需字段 <small>(crawler.required_keys)</small></span><span id="crawler-rule-required-keys" class="crawler-required-keys">${keys.map((key) => `<label class="check-label"><input type="checkbox" value="${escapeHtml(key)}"${required.has(key) ? ' checked' : ''}>${escapeHtml(key)}</label>`).join('')}</span><small class="config-description">至少命中这些字段才将爬虫结果视为有效。</small></label><label class="check-label"><input id="crawler-rule-hardworking" type="checkbox"${checked('hardworking') ? ' checked' : ''}>深度抓取更多信息</label><label class="check-label"><input id="crawler-rule-respect-site-avid" type="checkbox"${checked('respect_site_avid') ? ' checked' : ''}>使用站点返回的番号</label><label class="config-field"><span class="config-field-name">FC2Fan 本地镜像目录</span><input id="crawler-rule-fc2fan-path" value="${escapeHtml(rules.fc2fan_local_path || '')}" placeholder="未设置"><small class="config-description">目录中应包含类似 FC2-12345.html 的镜像文件。</small></label><label class="config-field"><span class="config-field-name">每部影片刮削后等待时间</span><input id="crawler-rule-sleep" value="${escapeHtml(rules.sleep_after_scraping || 'PT1S')}" placeholder="PT1S"><small class="config-description">使用 ISO 8601 时长，例如 PT1S。</small></label><label class="config-field"><span class="config-field-name">JavDB 封面策略</span><select id="crawler-rule-javdb-cover"><option value="fallback"${rules.use_javdb_cover === 'fallback' ? ' selected' : ''}>fallback</option><option value="yes"${rules.use_javdb_cover === 'yes' ? ' selected' : ''}>yes</option><option value="no"${rules.use_javdb_cover === 'no' ? ' selected' : ''}>no</option></select></label><label class="check-label"><input id="crawler-rule-normalize-actress" type="checkbox"${checked('normalize_actress_name') ? ' checked' : ''}>统一女优艺名</label></div>`;
 }
 
 async function api(path, options = {}) {
@@ -500,7 +521,7 @@ function renderOverview() {
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => availableIds.has(id)));
   const selectedCount = state.selectedOverviewTasks.size;
   const toolbar = completed.length ? `<div class="overview-cover-toolbar"><label class="check-label"><input id="overview-select-all" type="checkbox"${selectedCount && selectedCount === completed.length ? ' checked' : ''}>选择全部</label><span class="muted">已选择 ${selectedCount} 项</span><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>` : '';
-  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => `<figure class="overview-cover"><img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(task.name || '')}"><figcaption>${escapeHtml(task.name || task.id)}</figcaption></figure>`).join('')}</div>` : '<div class="task-list empty">还没有已完成的封面</div>';
+  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录">删除</button><img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(task.name || '')}"><figcaption>${escapeHtml(task.name || task.id)}</figcaption></figure>`).join('')}</div>` : '<div class="task-list empty">还没有已完成的封面</div>';
   if (completed.length) {
     $('#overview-tasks').insertAdjacentHTML('afterbegin', toolbar);
     $('#overview-tasks').querySelectorAll('.overview-cover').forEach((card) => {
@@ -832,7 +853,7 @@ $('#task-form').addEventListener('submit', async (event) => {
 
 $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
-document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) deleteTaskInDialog(button.dataset.deleteTask); });
+document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) { event.stopPropagation(); deleteTaskInDialog(button.dataset.deleteTask); } });
 document.addEventListener('change', (event) => {
   const checkbox = event.target.closest('[data-overview-select]');
   if (checkbox) {
@@ -1119,7 +1140,7 @@ function openTaskDetail(taskId) {
   api(`/api/tasks/${encodeURIComponent(task.id)}/media-links`).then((result) => {
     const target = $('#task-media-overlay');
     if (!target) return;
-    const playable = (result.links || []).filter((link) => link.found && link.play_url);
+    const playable = (result.links || []).filter((link) => link.unique_match && link.play_url);
     const searchable = (result.links || []).filter((link) => link.search_url);
     target.innerHTML = playable.length
       ? playable.map((link) => `<a class="media-play-button" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener" title="在 ${escapeHtml(link.name)} 中播放">播放</a>`).join('')
@@ -1130,7 +1151,7 @@ function openTaskDetail(taskId) {
     const target = $('#task-media-links');
     if (!target) return;
     const links = result.links || [];
-    target.innerHTML = links.length ? `<h3>媒体库播放</h3><div class="media-link-list">${links.map((link) => link.found && link.play_url ? `<a class="button secondary" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中播放</a>` : (link.search_url ? `<a class="button secondary" href="${escapeHtml(link.search_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中打开媒体库</a>` : `<span class="muted">${escapeHtml(link.name)}：${escapeHtml(link.error || '未找到匹配条目')}</span>`)).join('')}</div>` : '<h3>媒体库播放</h3><p class="muted">尚未配置媒体服务器。</p>';
+    target.innerHTML = links.length ? `<h3>媒体库播放</h3><div class="media-link-list">${links.map((link) => link.unique_match && link.play_url ? `<a class="button secondary" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中播放</a>` : (link.search_url ? `<a class="button secondary" href="${escapeHtml(link.search_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中打开媒体库</a>` : `<span class="muted">${escapeHtml(link.name)}：${escapeHtml(link.error || '未找到匹配条目')}</span>`)).join('')}</div>` : '<h3>媒体库播放</h3><p class="muted">尚未配置媒体服务器。</p>';
   }).catch(() => { const target = $('#task-media-links'); if (target) target.innerHTML = '<h3>媒体库播放</h3><p class="muted">暂时无法读取媒体服务器。</p>'; });
 }
 

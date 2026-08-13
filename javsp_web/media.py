@@ -119,6 +119,7 @@ def media_links_for_task(task: dict) -> list[dict]:
                 "name": server["name"],
                 "type": server["type"],
                 "found": bool(item),
+                "unique_match": bool(item),
                 "title": (item or {}).get("Name") or "",
                 "play_url": f"{base}/web/index.html#!/details?id={quote(str(item['Id']))}" if item and item.get("Id") else "",
                 "search_url": f"{base}/web/index.html#!/search.html?query={quote(term)}" if term else "",

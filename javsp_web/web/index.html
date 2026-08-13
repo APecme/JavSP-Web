@@ -7,7 +7,7 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
   <title>JavSP WEB</title>
   <style>html[data-initial-view] [data-panel]{display:none}.view.active{display:block}html[data-initial-view="overview"] [data-panel="overview"],html[data-initial-view="scrape"] [data-panel="scrape"],html[data-initial-view="auto-scrape"] [data-panel="auto-scrape"],html[data-initial-view="downloads"] [data-panel="downloads"],html[data-initial-view="crawler-config"] [data-panel="crawler-config"],html[data-initial-view="presets"] [data-panel="presets"],html[data-initial-view="settings"] [data-panel="settings"]{display:block}</style>
-  <link rel="stylesheet" href="/assets/app.css?v=1.1.29">
+    <link rel="stylesheet" href="/assets/app.css?v=1.1.29-bata">
 </head>
 <body>
   <script>(function(){try{var v=localStorage.getItem('javsp-web.active-view');if(v)document.documentElement.dataset.initialView=v;}catch(e){}})();</script>
@@ -56,7 +56,7 @@
         </div>
       </section>
 
-      <section class="view" data-panel="crawler-config"><div class="panel"><div class="panel-heading"><div><h2>爬虫配置</h2><p class="muted">管理默认配置中各类影片的内置爬虫与执行顺序。</p></div></div><div id="crawler-config-content"></div></div></section>
+        <section class="view" data-panel="crawler-config"><div class="panel"><div class="panel-heading"><div><h2>爬虫配置</h2><p class="muted">管理爬虫的抓取规则与行为；各预设使用的爬虫和顺序在“刮削预设”中设置。</p></div></div><div id="crawler-config-content"></div></div></section>
 
       <section class="view" data-panel="settings">
         <div class="panel narrow"><div class="panel-heading"><div><h2>下载器</h2><p class="muted">可添加多个 qBittorrent 下载器；保存前会验证 Web API。</p></div><button class="button primary" id="add-downloader" type="button">+ 添加下载器</button></div><div id="downloader-list" class="downloader-list"></div></div>
@@ -75,6 +75,6 @@
   <dialog id="auto-scrape-run-dialog" class="task-detail-dialog"><form method="dialog"><div class="panel-heading"><div><h2 id="auto-scrape-run-title">定时任务日志</h2><p id="auto-scrape-run-subtitle" class="muted"></p></div><button class="icon-button" type="button" data-dialog-close>关闭</button></div><div id="auto-scrape-run-content" class="auto-scrape-run-content"></div></form></dialog>
   <dialog id="google-cover-dialog" class="app-dialog google-cover-dialog"><form method="dialog"><div class="dialog-heading"><h2>选择 Google 封面</h2><button class="dialog-close" type="button" data-dialog-close>关闭</button></div><div id="google-cover-candidates" class="google-cover-candidates"></div><p id="google-cover-message" class="form-error dialog-message"></p><div class="dialog-actions"><button class="button secondary" type="button" data-dialog-close>取消</button></div></form></dialog>
   <link rel="stylesheet" href="/assets/overrides.css?v=1.1.29">
-  <script src="/assets/app.js?v=1.1.29"></script>
+  <script src="/assets/app.js?v=1.1.29-bata"></script>
 </body>
 </html>

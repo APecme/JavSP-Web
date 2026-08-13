@@ -96,7 +96,13 @@ class ConfigBody(BaseModel):
 
 
 class CrawlerConfigBody(BaseModel):
-    selection: dict[str, list[str]]
+    required_keys: list[str] = Field(default_factory=list, max_length=32)
+    hardworking: bool = True
+    respect_site_avid: bool = True
+    fc2fan_local_path: str | None = Field(default=None, max_length=2048)
+    sleep_after_scraping: str = Field(default="PT1S", min_length=1, max_length=64)
+    use_javdb_cover: Literal["fallback", "yes", "no"] = "fallback"
+    normalize_actress_name: bool = True
 
 
 class TaskBody(BaseModel):
@@ -465,6 +471,11 @@ _CRAWLER_IDS = {
     "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv",
 }
 _CRAWLER_GROUPS = {"normal", "fc2", "cid", "getchu", "gyutto"}
+_CRAWLER_REQUIRED_KEYS = {
+    "dvdid", "cid", "url", "plot", "cover", "big_cover", "genre", "genre_id", "genre_norm", "score",
+    "title", "ori_title", "magnet", "serial", "actress", "actress_pics", "director", "duration", "producer",
+    "publisher", "uncensored", "publish_date", "preview_pics", "preview_video",
+}
 
 
 def _validated_crawler_selection(selection: dict[str, list[str]]) -> dict[str, list[str]]:
@@ -579,26 +590,47 @@ def get_config(_: dict = Depends(current_user)) -> dict:
 @app.get("/api/crawler-config")
 def get_crawler_config(_: dict = Depends(current_user)) -> dict:
     crawler = _base_config().get("crawler") or {}
-    selection = crawler.get("selection") or {}
-    return {"selection": {group: list(selection.get(group) or []) for group in sorted(_CRAWLER_GROUPS)}, "available": sorted(_CRAWLER_IDS)}
+    return {
+        "rules": {
+            "required_keys": list(crawler.get("required_keys") or []),
+            "hardworking": bool(crawler.get("hardworking", True)),
+            "respect_site_avid": bool(crawler.get("respect_site_avid", True)),
+            "fc2fan_local_path": str(crawler.get("fc2fan_local_path") or ""),
+            "sleep_after_scraping": str(crawler.get("sleep_after_scraping") or "PT1S"),
+            "use_javdb_cover": str(crawler.get("use_javdb_cover") or "fallback"),
+            "normalize_actress_name": bool(crawler.get("normalize_actress_name", True)),
+        },
+        "available_required_keys": sorted(_CRAWLER_REQUIRED_KEYS),
+    }
 
 
 @app.put("/api/crawler-config")
 def update_crawler_config(body: CrawlerConfigBody, _: dict = Depends(require_admin)) -> dict:
-    selection = _validated_crawler_selection(body.selection)
+    required_keys = list(dict.fromkeys(body.required_keys))
+    if any(key not in _CRAWLER_REQUIRED_KEYS for key in required_keys):
+        raise HTTPException(status_code=400, detail="required_keys 包含不支持的影片信息字段")
+    rules = {
+        "required_keys": required_keys,
+        "hardworking": body.hardworking,
+        "respect_site_avid": body.respect_site_avid,
+        "fc2fan_local_path": body.fc2fan_local_path or None,
+        "sleep_after_scraping": body.sleep_after_scraping,
+        "use_javdb_cover": body.use_javdb_cover,
+        "normalize_actress_name": body.normalize_actress_name,
+    }
     try:
         current = yaml.safe_load(read_config()) or {}
     except yaml.YAMLError as exc:
         raise HTTPException(status_code=400, detail=f"配置文件格式错误: {exc}") from exc
     if not isinstance(current, dict):
         raise HTTPException(status_code=400, detail="配置根节点必须是对象")
-    current.setdefault("crawler", {})["selection"] = selection
+    current.setdefault("crawler", {}).update(rules)
     try:
-        validate_config_data(_deep_merge(_base_config(), {"crawler": {"selection": selection}}))
+        validate_config_data(_deep_merge(_base_config(), {"crawler": rules}))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     write_config(yaml.safe_dump(current, allow_unicode=True, sort_keys=False))
-    return {"ok": True, "selection": selection}
+    return {"ok": True, "rules": rules}
 
 
 @app.put("/api/config")
