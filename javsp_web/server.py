@@ -95,6 +95,10 @@ class ConfigBody(BaseModel):
     content: str = Field(min_length=1)
 
 
+class CrawlerConfigBody(BaseModel):
+    selection: dict[str, list[str]]
+
+
 class TaskBody(BaseModel):
     input_directory: str = Field(min_length=1)
     preset_id: str = "default"
@@ -456,6 +460,26 @@ def _base_config() -> dict:
     return load_base_config()
 
 
+_CRAWLER_IDS = {
+    "airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto",
+    "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv",
+}
+_CRAWLER_GROUPS = {"normal", "fc2", "cid", "getchu", "gyutto"}
+
+
+def _validated_crawler_selection(selection: dict[str, list[str]]) -> dict[str, list[str]]:
+    if set(selection) != _CRAWLER_GROUPS:
+        raise HTTPException(status_code=400, detail="爬虫配置必须包含普通影片、FC2、CID、Getchu 和 Gyutto 五类")
+    cleaned: dict[str, list[str]] = {}
+    for group, crawlers in selection.items():
+        if not isinstance(crawlers, list) or not all(isinstance(item, str) and item in _CRAWLER_IDS for item in crawlers):
+            raise HTTPException(status_code=400, detail=f"{group} 包含不支持的爬虫")
+        if len(crawlers) != len(set(crawlers)):
+            raise HTTPException(status_code=400, detail=f"{group} 不能重复添加同一爬虫")
+        cleaned[group] = crawlers
+    return cleaned
+
+
 def _normalize_form(form: dict, base: dict | None = None) -> dict:
     base = base or _base_config()
     normalized = {}
@@ -552,6 +576,31 @@ def get_config(_: dict = Depends(current_user)) -> dict:
     return {"content": content, "parsed": parsed}
 
 
+@app.get("/api/crawler-config")
+def get_crawler_config(_: dict = Depends(current_user)) -> dict:
+    crawler = _base_config().get("crawler") or {}
+    selection = crawler.get("selection") or {}
+    return {"selection": {group: list(selection.get(group) or []) for group in sorted(_CRAWLER_GROUPS)}, "available": sorted(_CRAWLER_IDS)}
+
+
+@app.put("/api/crawler-config")
+def update_crawler_config(body: CrawlerConfigBody, _: dict = Depends(require_admin)) -> dict:
+    selection = _validated_crawler_selection(body.selection)
+    try:
+        current = yaml.safe_load(read_config()) or {}
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=400, detail=f"配置文件格式错误: {exc}") from exc
+    if not isinstance(current, dict):
+        raise HTTPException(status_code=400, detail="配置根节点必须是对象")
+    current.setdefault("crawler", {})["selection"] = selection
+    try:
+        validate_config_data(_deep_merge(_base_config(), {"crawler": {"selection": selection}}))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    write_config(yaml.safe_dump(current, allow_unicode=True, sort_keys=False))
+    return {"ok": True, "selection": selection}
+
+
 @app.put("/api/config")
 def update_config(body: ConfigBody, _: dict = Depends(require_admin)) -> dict:
     try:
@@ -609,7 +658,7 @@ def task(task_id: str, _: dict = Depends(current_user)) -> dict:
     return item
 
 
-@app.get("/api/tasks/{task_id}/cover/{index}")
+@app.get("/api/tasks/{task_id}/cover/{index:int}")
 def task_cover(task_id: str, index: int, _: dict = Depends(current_user)) -> FileResponse:
     path = get_cover_path(task_id, index)
     if not path or not path.is_file():
@@ -617,7 +666,7 @@ def task_cover(task_id: str, index: int, _: dict = Depends(current_user)) -> Fil
     return FileResponse(path)
 
 
-@app.get("/api/tasks/{task_id}/fanart/{index}")
+@app.get("/api/tasks/{task_id}/fanart/{index:int}")
 def task_fanart(task_id: str, index: int, _: dict = Depends(current_user)) -> FileResponse:
     path = get_fanart_path(task_id, index)
     if not path or not path.is_file():

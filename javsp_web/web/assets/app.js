@@ -1,12 +1,11 @@
 const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
-const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
+const FORM_SECTIONS = ['scanner', 'network', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
 const CRAWLER_IDS = ['airav','avsox','avwiki','dl_getchu','fanza','fc2','fc2fan','fc2ppvdb','gyutto','jav321','javbus','javdb','javlib','javmenu','mgstage','njav','prestige','arzon','arzon_iv'];
 const FORM_TABS = [
   { id: 'scanner', section: 'scanner', label: '扫描器', description: '负责识别影片文件、过滤目录和设置扫描规则。' },
   { id: 'network', section: 'network', label: '网络', description: '设置代理、重试次数和网络请求超时。' },
-  { id: 'crawler', section: 'crawler', label: '爬虫', description: '选择数据来源和影片信息抓取策略。' },
   { id: 'folder', section: 'summarizer', prefixes: ['move_files', 'path', 'title'], label: '文件夹整理', description: '设置输出目录、文件名、路径长度和文件移动规则。' },
   { id: 'defaults', section: 'summarizer', prefixes: ['default'], label: '替代文本', description: '设置影片信息字段缺失时使用的替代文本。' },
   { id: 'images', section: 'summarizer', prefixes: ['cover', 'fanart', 'extra_fanarts'], label: '图片', description: '设置封面、横版封面、裁剪和剧照下载规则。' },
@@ -210,17 +209,6 @@ function renderConfigFields() {
     const container = $(`#preset-fields-${tab.id}`);
     if (!container) return;
     const values = state.formValues?.[tab.section] || {};
-    if (tab.id === 'crawler') {
-      const crawler = values || {};
-      const selection = crawler.selection || {};
-      const lists = Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
-        const selected = Array.isArray(selection[group]) ? selection[group] : [];
-        const options = CRAWLER_IDS.filter((id) => !selected.includes(id)).map((id) => `<option value="${id}">${id}</option>`).join('');
-        return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}爬虫</h3><div class="crawler-config-list">${selected.map((id, index) => `<div class="crawler-config-row"><select class="crawler-selection" data-group="${group}">${CRAWLER_IDS.map((option) => `<option value="${option}"${option === id ? ' selected' : ''}>${option}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up"${index ? '' : ' disabled'}>上移</button><button class="button secondary crawler-move" type="button" data-direction="down"${index === selected.length - 1 ? ' disabled' : ''}>下移</button><button class="button danger crawler-remove" type="button">删除</button></div>`).join('')}</div><div class="crawler-add"><select class="crawler-add-select"><option value="">添加爬虫</option>${options}</select><button class="button secondary crawler-add-button" type="button">添加</button></div></div>`;
-      }).join('');
-      container.innerHTML = `<div class="crawler-config-editor"><p class="muted">可调整每类影片的爬虫顺序、增删现有爬虫。爬虫名称仅允许内置模块。</p>${lists}</div>`;
-      return;
-    }
     const paths = [];
     const walk = (value, path) => {
       if (!pathMatchesTab(path, tab.prefixes)) return;
@@ -263,6 +251,33 @@ function readConfigFields() {
     setPathValue(values, `${section}.${path.join('.')}`, control.value);
   });
   return Object.fromEntries(FORM_SECTIONS.map((section) => [section, values[section] || {}]));
+}
+
+function crawlerConfigMarkup(selection = {}) {
+  return Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
+    const selected = Array.isArray(selection[group]) ? selection[group] : [];
+    const options = CRAWLER_IDS.filter((id) => !selected.includes(id)).map((id) => `<option value="${id}">${id}</option>`).join('');
+    return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}爬虫</h3><div class="crawler-config-list">${selected.map((id, index) => `<div class="crawler-config-row"><select class="crawler-selection">${CRAWLER_IDS.map((option) => `<option value="${option}"${option === id ? ' selected' : ''}>${option}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up"${index ? '' : ' disabled'}>上移</button><button class="button secondary crawler-move" type="button" data-direction="down"${index === selected.length - 1 ? ' disabled' : ''}>下移</button><button class="button danger crawler-remove" type="button">删除</button></div>`).join('')}</div><div class="crawler-add"><select class="crawler-add-select"><option value="">添加爬虫</option>${options}</select><button class="button secondary crawler-add-button" type="button">添加</button></div></div>`;
+  }).join('');
+}
+
+async function loadCrawlerConfig() {
+  const host = $('#crawler-config-content');
+  if (!host) return;
+  host.innerHTML = '<p class="muted">正在读取爬虫配置...</p>';
+  try {
+    const result = await api('/api/crawler-config');
+    host.innerHTML = `<p class="muted">此页面修改默认全局爬虫顺序；新任务会使用保存后的配置。</p><div class="crawler-config-editor">${crawlerConfigMarkup(result.selection)}</div><div class="form-actions"><button class="button primary" id="save-crawler-config" type="button">保存爬虫配置</button><span id="crawler-config-message" class="form-message"></span></div>`;
+  } catch (error) { host.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`; }
+}
+
+async function saveCrawlerConfig() {
+  const selection = {};
+  document.querySelectorAll('#crawler-config-content .crawler-config-group').forEach((group) => {
+    selection[group.dataset.crawlerGroup] = [...group.querySelectorAll('.crawler-selection')].map((item) => item.value);
+  });
+  const message = $('#crawler-config-message');
+  try { await api('/api/crawler-config', { method: 'PUT', body: JSON.stringify({ selection }) }); message.textContent = '爬虫配置已保存'; await loadCrawlerConfig(); } catch (error) { message.textContent = error.message; }
 }
 
 async function api(path, options = {}) {
@@ -327,6 +342,7 @@ function showView(view) {
   if (view === 'overview') renderOverview();
   if (view === 'scrape') { renderTasks(); loadPresets(); }
   if (view === 'presets') loadPresets();
+  if (view === 'crawler-config') loadCrawlerConfig();
   if (view === 'settings') loadUsers();
 }
 
@@ -1475,10 +1491,6 @@ async function refreshAutoScrapeRun() {
     const byCreatedAt = Date.parse(left.created_at || '') - Date.parse(right.created_at || '');
     return Number.isFinite(byCreatedAt) && byCreatedAt !== 0 ? byCreatedAt : String(left.id).localeCompare(String(right.id));
   });
-  document.querySelectorAll('.crawler-config-group').forEach((group) => {
-    const key = group.dataset.crawlerGroup;
-    setPathValue(values, `crawler.selection.${key}`, [...group.querySelectorAll('.crawler-selection')].map((item) => item.value));
-  });
   syncTaskExpansion(tasks);
   $('#auto-scrape-run-content').innerHTML = tasks.length ? tasks.map(scheduleRunTaskMarkup).join('') : '<p class="muted">相关任务已被删除，无法查看日志。</p>';
   restoreLogScroll();
@@ -1571,9 +1583,9 @@ function showView(view) {
   document.documentElement.removeAttribute('data-initial-view');
   document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
-  const title = { overview: '概览', scrape: '手动刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
+  const title = { overview: '概览', scrape: '手动刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', 'crawler-config': '爬虫配置', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
   $('#section-title').textContent = title;
-  $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' ? '配置' : '工作区';
+  $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' || view === 'crawler-config' ? '配置' : '工作区';
   if (view === 'overview') renderOverview();
   if (view === 'scrape') { renderTasks(); loadPresets(); }
   if (view === 'auto-scrape') { loadPresets(); loadAutoScrapeSchedules(); }
@@ -1694,6 +1706,7 @@ async function probeMediaLibraries(showMessage = true) {
 }
 
 document.addEventListener('click', async (event) => {
+  if (event.target.closest('#save-crawler-config')) { await saveCrawlerConfig(); return; }
   const closeButton = event.target.closest('[data-dialog-close]');
   if (closeButton) {
     closeButton.closest('dialog')?.close();
@@ -2071,7 +2084,7 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`)) showView(savedView);
     state.user = await api('/api/auth/me');
     $('#current-user').textContent = state.user.username;
-    if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); }
+    if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); }
     await Promise.all([loadTasks(), loadPresets(), loadPathTools()]);
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || (savedView !== 'settings' && savedView !== 'auto-scrape'))) showView(savedView);
   } catch (error) { return; }
