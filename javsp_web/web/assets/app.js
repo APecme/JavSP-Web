@@ -318,6 +318,7 @@ function showToast(message, tone = 'success') {
 }
 
 function showView(view) {
+  document.documentElement.removeAttribute('data-initial-view');
   document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
   const title = { overview: '概览', scrape: '手动刮削', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
@@ -1567,6 +1568,7 @@ function autoScrapeSchedulePayload() {
 }
 
 function showView(view) {
+  document.documentElement.removeAttribute('data-initial-view');
   document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
   const title = { overview: '概览', scrape: '手动刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
