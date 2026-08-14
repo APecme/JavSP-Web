@@ -850,12 +850,24 @@ def test_crawler(body: CrawlerTestBody, _: dict = Depends(require_admin)) -> dic
     if not value:
         raise HTTPException(status_code=400, detail="请输入要测试的番号")
     config_path = None
+    cookiecloud_path = None
+    cookiecloud_warning = ""
     try:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".yml", delete=False) as config_file:
             config_file.write(read_config())
             config_path = config_file.name
         env = os.environ.copy()
         env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+        settings = get_cookiecloud_settings(include_password=True)
+        if settings.get("enabled"):
+            try:
+                cookies = fetch_cookiecloud(settings)
+                with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as cookie_file:
+                    json.dump(cookies, cookie_file, ensure_ascii=False)
+                    cookiecloud_path = cookie_file.name
+                env["JAVSP_COOKIECLOUD_FILE"] = cookiecloud_path
+            except CookieCloudError as exc:
+                cookiecloud_warning = f"CookieCloud 同步失败，测试将不携带登录 Cookie：{exc}"
         completed = subprocess.run(
             [sys.executable, "-c", _CRAWLER_TEST_SCRIPT, "-c", config_path, body.name, value],
             cwd=str(VENDOR_DIR),
@@ -870,6 +882,8 @@ def test_crawler(body: CrawlerTestBody, _: dict = Depends(require_admin)) -> dic
             return {"crawler": body.name, "input_value": value, "data": {}, "error": "爬虫测试未返回结果", "output": output[-40_000:]}
         result = json.loads(result_line[len(_CRAWLER_TEST_MARKER):])
         result["output"] = output.replace(result_line, "").strip()[-40_000:]
+        if cookiecloud_warning:
+            result["output"] = (cookiecloud_warning + "\n" + result["output"]).strip()
         return result
     except subprocess.TimeoutExpired:
         return {"crawler": body.name, "input_value": value, "data": {}, "error": "爬虫测试超时（90 秒）", "output": ""}
@@ -879,6 +893,11 @@ def test_crawler(body: CrawlerTestBody, _: dict = Depends(require_admin)) -> dic
         if config_path:
             try:
                 Path(config_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        if cookiecloud_path:
+            try:
+                Path(cookiecloud_path).unlink(missing_ok=True)
             except OSError:
                 pass
 
