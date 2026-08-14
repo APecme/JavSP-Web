@@ -340,6 +340,12 @@ function renderGoogleBrowser(taskId) {
   target.innerHTML = `<section class="google-captcha-panel"><strong>Google 要求完成验证码</strong><p class="muted">请直接在下方真实 Google 浏览器窗口中完成验证。</p><iframe class="google-browser-frame" src="/google-browser/vnc.html?autoconnect=true&resize=remote&path=${path}" title="Google 浏览器"></iframe></section>`;
 }
 
+function renderGoogleCoverLoading() {
+  const target = $('#google-cover-candidates');
+  if (!target) return;
+  target.innerHTML = '<section class="google-cover-loading" role="status"><i></i><strong>正在搜索 Google 图片</strong><span>请保持此窗口打开，结果会自动显示。</span></section>';
+}
+
 function showToast(message, tone = 'success') {
   const host = document.querySelector('dialog[open]') || document.body;
   let container = host.querySelector(':scope > #toast-container');
@@ -1952,6 +1958,10 @@ document.addEventListener('click', async (event) => {
     googleCover.disabled = true;
     googleCover.textContent = '正在搜索封面';
     const taskId = googleCover.dataset.googleCoverTask;
+    const dialog = $('#google-cover-dialog');
+    renderGoogleCoverLoading();
+    $('#google-cover-message').textContent = '正在连接搜索引擎';
+    if (dialog && !dialog.open) dialog.showModal();
     api(`/api/tasks/${encodeURIComponent(taskId)}/cover/search`, { method: 'POST' }).then(async () => {
       let result;
       // Keep polling while a rendered Google session is searching or waiting for CAPTCHA input.

@@ -871,7 +871,7 @@ def _request_public_image(url: str, proxies: dict[str, str]) -> requests.Respons
     raise ValueError("图片重定向次数过多")
 
 
-def _append_candidate(candidates: list[dict], seen: set[str], query: str, url: str, source: str, title: str = "", width: int = 0, height: int = 0, context: str = "") -> None:
+def _append_candidate(candidates: list[dict], seen: set[str], query: str, url: str, source: str, title: str = "", width: int = 0, height: int = 0, context: str = "", thumbnail_url: str = "") -> None:
     if not url.startswith(("http://", "https://")) or len(url) > 4096 or url in seen:
         return
     token = _identifier_token(query)
@@ -885,12 +885,22 @@ def _append_candidate(candidates: list[dict], seen: set[str], query: str, url: s
     seen.add(url)
     candidates.append({
         "image_url": url,
-        "thumbnail_url": url,
+        "thumbnail_url": thumbnail_url if thumbnail_url.startswith(("http://", "https://")) and len(thumbnail_url) <= 4096 else url,
         "source": source,
         "title": title[:160],
         "width": width,
         "height": height,
     })
+
+
+def _google_thumbnail_url(context: str) -> str:
+    """Prefer Google's CDN thumbnail near a result over a hotlink-protected original."""
+    for match in re.finditer(r"https?://[^\"'\s<>]+", context):
+        value = match.group(0).rstrip("\\,;)")
+        hostname = (urlparse(value).hostname or "").lower()
+        if hostname.endswith(("gstatic.com", "googleusercontent.com")):
+            return value
+    return ""
 
 
 def _google_image_urls(page: str) -> list[tuple[str, str]]:
@@ -1136,7 +1146,7 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
                 # The Google query itself is the exact movie identifier. CDN URLs
                 # commonly omit that identifier, so URL-text matching would discard
                 # valid results before the user can choose one.
-                _append_candidate(candidates, seen, query, image_url, "Google", title=query, context=context)
+                _append_candidate(candidates, seen, query, image_url, "Google", title=query, context=context, thumbnail_url=_google_thumbnail_url(context))
                 if len(candidates) == 12:
                     return candidates
             if candidates:
@@ -1150,7 +1160,7 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
         if not result_urls:
             failures.append("Google Chromium 未返回图片数据")
         for image_url, context in result_urls:
-            _append_candidate(candidates, seen, query, image_url, "Google", title=query, context=context)
+            _append_candidate(candidates, seen, query, image_url, "Google", title=query, context=context, thumbnail_url=_google_thumbnail_url(context))
             if len(candidates) == 12:
                 return candidates
         if candidates:
