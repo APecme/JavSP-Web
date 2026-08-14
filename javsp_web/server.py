@@ -63,7 +63,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
+from .tasks import active_schedule_task_ids, cancel_task, click_google_captcha, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_image, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
 from .timeutils import local_now, timezone_name
 
 
@@ -1627,6 +1627,30 @@ def google_cover_candidates(task_id: str, _: dict = Depends(current_user)) -> di
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     return {"candidates": task.get("google_cover_candidates") or [], "status": task.get("google_cover_search_status") or "idle", "error": task.get("google_cover_search_error") or ""}
+
+
+@app.get("/api/tasks/{task_id}/cover/captcha")
+def google_cover_captcha(task_id: str, _: dict = Depends(current_user)) -> Response:
+    image = google_captcha_image(task_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="当前任务没有等待处理的 Google 验证码")
+    return Response(content=image, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/tasks/{task_id}/cover/captcha/click")
+def click_google_cover_captcha(task_id: str, body: dict, _: dict = Depends(current_user)) -> dict:
+    try:
+        x = float(body.get("x"))
+        y = float(body.get("y"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="验证码点击坐标无效")
+    try:
+        result = click_google_captcha(task_id, x, y)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"验证码操作失败：{exc.__class__.__name__}") from exc
+    if not result:
+        raise HTTPException(status_code=400, detail="验证码会话已结束或点击坐标无效")
+    return result
 
 
 @app.post("/api/tasks/{task_id}/cover/select")

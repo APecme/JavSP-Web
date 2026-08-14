@@ -260,6 +260,10 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .task-detail-log summary { cursor: pointer; color: #475467; font-size: 12px; font-weight: 600; }
 .task-detail-log .task-log-wrap { max-width: 100%; margin-top: 8px; overflow: hidden; }
 .task-detail-log .task-log { max-height: min(34vh, 260px); min-height: 0; overflow: auto; }
+.google-captcha-panel { grid-column: 1 / -1; display: grid; justify-items: center; gap: 10px; min-width: 0; }
+.google-captcha-screen { display: block; max-width: 100%; padding: 0; border: 1px solid #d0d5dd; background: #fff; cursor: crosshair; overflow: auto; }
+.google-captcha-screen img { display: block; width: min(100%, 720px); height: auto; max-height: 62vh; object-fit: contain; }
+.google-captcha-screen:disabled { opacity: .72; cursor: wait; }
 .auto-scrape-run-content { display: grid; gap: 14px; }
 .schedule-run-task { padding: 15px; border: 1px solid #eaecf0; border-radius: 6px; background: #fff; }
 .schedule-run-task .scrape-progress { margin-top: 14px; }

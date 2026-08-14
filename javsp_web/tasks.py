@@ -4,12 +4,14 @@ import os
 import io
 import ipaddress
 import json
+import math
 import re
 import shutil
 import socket
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from pathlib import Path
 from html import unescape
@@ -31,6 +33,8 @@ _batch_running: dict[str, int] = {}
 _logs: dict[str, list[str]] = {}
 _deleted_tasks: set[str] = set()
 _cancelled_tasks: set[str] = set()
+_google_captcha_sessions: dict[str, dict] = {}
+_google_captcha_sessions_lock = threading.RLock()
 _TASK_COVERS_DIR = DATA_DIR / "task-covers"
 _VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 _PROGRESS_RE = re.compile(r"^(?P<key>[^:]{1,120}):\s+(?P<percent>\d{1,3})%.*?(?:(?P<done>\d+)\s*/\s*(?P<total>\d+))?")
@@ -41,6 +45,7 @@ _IMAGE_TRANSFER_RE = re.compile(r"^(?:Downloading extrafanart \d+ from url:|[^\s
 _NATIVE_PROGRESS_LOG_RE = re.compile(r"^已下载剧照\s+\d+/\d+:")
 _MAX_LOG_LINES = 5000
 _MAX_DISPLAY_LOG_LINES = 1500
+_GOOGLE_CAPTCHA_TIMEOUT = 300
 _BYTE_SIZE_RE = re.compile(r"^\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>[kmgtpe]?i?b)?\s*$", re.IGNORECASE)
 
 
@@ -907,7 +912,85 @@ def _google_image_urls(page: str) -> list[tuple[str, str]]:
     return originals + thumbnails
 
 
-def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
+def _google_captcha_present(driver) -> bool:
+    page = driver.page_source
+    return "/sorry/" in driver.current_url or "captcha-form" in page
+
+
+def _wait_for_google_captcha(task_id: str, task: dict, driver) -> None:
+    session = {"driver": driver, "lock": threading.RLock(), "image": driver.get_screenshot_as_png()}
+    with _google_captcha_sessions_lock:
+        _google_captcha_sessions[task_id] = session
+    task["google_cover_search_status"] = "captcha"
+    task["google_cover_search_error"] = "Google 要求验证，请在封面选择窗口中完成验证码"
+    _logs.setdefault(task_id, list(task.get("log_tail") or [])).append("Google 要求验证，等待用户在封面选择窗口操作验证码")
+    task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+    _persist(task)
+    deadline = time.monotonic() + _GOOGLE_CAPTCHA_TIMEOUT
+    try:
+        while time.monotonic() < deadline:
+            with session["lock"]:
+                if not _google_captcha_present(driver):
+                    task["google_cover_search_status"] = "running"
+                    task["google_cover_search_error"] = ""
+                    _logs[task_id].append("Google 验证已完成，继续读取图片搜索结果")
+                    task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+                    _persist(task)
+                    return
+            time.sleep(0.5)
+        raise RuntimeError("Google 验证等待超时，请重新搜索封面")
+    finally:
+        with _google_captcha_sessions_lock:
+            if _google_captcha_sessions.get(task_id) is session:
+                _google_captcha_sessions.pop(task_id, None)
+
+
+def google_captcha_image(task_id: str) -> bytes | None:
+    with _google_captcha_sessions_lock:
+        session = _google_captcha_sessions.get(task_id)
+    if not session:
+        return None
+    with session["lock"]:
+        return bytes(session.get("image") or b"") or None
+
+
+def click_google_captcha(task_id: str, x: float, y: float) -> dict | None:
+    if not math.isfinite(x) or not math.isfinite(y):
+        return None
+    with _google_captcha_sessions_lock:
+        session = _google_captcha_sessions.get(task_id)
+    if not session:
+        return None
+    with session["lock"]:
+        image = bytes(session.get("image") or b"")
+        if not image:
+            return None
+        with Image.open(io.BytesIO(image)) as screenshot:
+            image_width, image_height = screenshot.size
+        if x < 0 or y < 0 or x > image_width or y > image_height:
+            return None
+        driver = session["driver"]
+        viewport = driver.execute_script("return {width: window.innerWidth, height: window.innerHeight};") or {}
+        viewport_width = max(1, int(viewport.get("width") or image_width))
+        viewport_height = max(1, int(viewport.get("height") or image_height))
+        target_x = x * viewport_width / image_width
+        target_y = y * viewport_height / image_height
+        for event_type in ("mousePressed", "mouseReleased"):
+            driver.execute_cdp_cmd("Input.dispatchMouseEvent", {
+                "type": event_type,
+                "x": target_x,
+                "y": target_y,
+                "button": "left",
+                "clickCount": 1,
+            })
+        time.sleep(0.35)
+        session["image"] = driver.get_screenshot_as_png()
+        with Image.open(io.BytesIO(session["image"])) as screenshot:
+            width, height = screenshot.size
+        return {"active": _google_captcha_present(driver), "width": width, "height": height}
+
+
+def _google_images_with_chromium(query: str, proxies: dict[str, str], task_id: str = "", task: dict | None = None) -> str:
     """Drive a rendered Google Images page and return its visible image URLs."""
     try:
         from selenium import webdriver
@@ -999,8 +1082,34 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
             """
         )
         page = driver.page_source
-        if "/sorry/" in driver.current_url or "captcha-form" in page:
-            raise RuntimeError("Google 要求浏览器完成验证码，请检查该任务使用的代理出口")
+        if _google_captcha_present(driver):
+            if not task_id or task is None:
+                raise RuntimeError("Google 要求浏览器完成验证码")
+            _wait_for_google_captcha(task_id, task, driver)
+            wait.until(lambda browser: browser.execute_script("return document.readyState") in ("interactive", "complete"))
+            driver.execute_script("window.scrollTo(0, Math.min(document.body.scrollHeight, window.innerHeight * 2));")
+            time.sleep(0.8)
+            visible_urls = driver.execute_script(
+                """
+                const urls = new Set();
+                for (const link of document.querySelectorAll('a[href]')) {
+                  try {
+                    const parsed = new URL(link.href, location.href);
+                    const original = parsed.searchParams.get('imgurl');
+                    if (original && /^https?:/i.test(original)) urls.add(original);
+                  } catch (_) {}
+                }
+                for (const image of document.images) {
+                  const url = image.currentSrc || image.src || '';
+                  const width = image.naturalWidth || image.width || 0;
+                  const height = image.naturalHeight || image.height || 0;
+                  const ratio = height ? width / height : 0;
+                  if (/^https?:/i.test(url) && width >= 120 && height >= 160 && ratio >= 0.35 && ratio <= 1.1) urls.add(url);
+                }
+                return Array.from(urls).slice(0, 80);
+                """
+            )
+            page = driver.page_source
         if visible_urls:
             page += "\n" + json.dumps(visible_urls, ensure_ascii=False)
         if not page.strip() or (not visible_urls and not _google_image_urls(page)):
@@ -1018,7 +1127,7 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
                 pass
 
 
-def _search_google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[dict]:
+def _search_google_image_candidates(query: str, proxies: dict[str, str] | None = None, task_id: str = "", task: dict | None = None) -> list[dict]:
     """Return image candidates exclusively from Google Images result pages."""
     if not query:
         return []
@@ -1061,7 +1170,7 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
         except requests.RequestException as exc:
             failures.append(f"{urlparse(url).netloc}: {exc.__class__.__name__}")
     try:
-        rendered_page = _google_images_with_chromium(query, proxies)
+        rendered_page = _google_images_with_chromium(query, proxies, task_id=task_id, task=task)
         result_urls = _google_image_urls(rendered_page)
         if not result_urls:
             failures.append("Google Chromium 未返回图片数据")
@@ -1117,7 +1226,7 @@ def _search_google_cover(task: dict) -> None:
         _logs[task_id].append(f"Google 图片搜索网络路径：{route}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
-        candidates = _search_google_image_candidates(query, proxies)
+        candidates = _search_google_image_candidates(query, proxies, task_id=task_id, task=task)
         if not candidates:
             raise ValueError("Google 图片搜索未返回可下载封面")
         task["google_cover_candidates"] = [{"id": f"image-{i + 1}", **item} for i, item in enumerate(candidates[:12])]

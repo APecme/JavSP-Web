@@ -1979,10 +1979,20 @@ document.addEventListener('click', async (event) => {
     const taskId = googleCover.dataset.googleCoverTask;
     api(`/api/tasks/${encodeURIComponent(taskId)}/cover/search`, { method: 'POST' }).then(async () => {
       let result;
-      // Google retries its image endpoints and a rendered Chromium session before returning.
-      for (let attempt = 0; attempt < 100; attempt += 1) {
+      // Keep polling while a rendered Google session is searching or waiting for CAPTCHA input.
+      for (let attempt = 0; attempt < 600; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/candidates`);
+        if (result.status === 'captcha') {
+          const dialog = $('#google-cover-dialog');
+          const target = $('#google-cover-candidates');
+          if (!target.querySelector('[data-google-captcha-task]')) {
+            target.innerHTML = `<section class="google-captcha-panel"><strong>Google 要求完成验证码</strong><button class="google-captcha-screen" type="button" data-google-captcha-task="${escapeHtml(taskId)}"><img src="/api/tasks/${encodeURIComponent(taskId)}/cover/captcha?v=${Date.now()}" alt="Google 验证码"></button><span class="muted">请直接点击验证码画面中的选项和验证按钮</span></section>`;
+          }
+          $('#google-cover-message').textContent = '等待完成 Google 验证';
+          if (dialog && !dialog.open) dialog.showModal();
+          continue;
+        }
         if (!result.status || !['queued', 'running'].includes(result.status)) break;
       }
       const candidates = result?.candidates || [];
@@ -1995,6 +2005,25 @@ document.addEventListener('click', async (event) => {
       googleCover.disabled = false;
       googleCover.textContent = error.message;
     });
+  }
+  const googleCaptcha = event.target.closest('[data-google-captcha-task]');
+  if (googleCaptcha) {
+    const image = googleCaptcha.querySelector('img');
+    if (!image?.complete || !image.naturalWidth || googleCaptcha.disabled) return;
+    const rect = image.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * image.naturalWidth / rect.width;
+    const y = (event.clientY - rect.top) * image.naturalHeight / rect.height;
+    if (x < 0 || y < 0 || x > image.naturalWidth || y > image.naturalHeight) return;
+    googleCaptcha.disabled = true;
+    try {
+      const result = await api(`/api/tasks/${encodeURIComponent(googleCaptcha.dataset.googleCaptchaTask)}/cover/captcha/click`, { method: 'POST', body: JSON.stringify({ x, y }) });
+      $('#google-cover-message').textContent = result.active ? '已传递验证码操作' : '验证已完成，正在继续搜索';
+      if (result.active) image.src = `/api/tasks/${encodeURIComponent(googleCaptcha.dataset.googleCaptchaTask)}/cover/captcha?v=${Date.now()}`;
+    } catch (error) {
+      $('#google-cover-message').textContent = error.message;
+    } finally {
+      googleCaptcha.disabled = false;
+    }
   }
   const coverOption = event.target.closest('[data-google-cover-select]');
   if (coverOption) {
