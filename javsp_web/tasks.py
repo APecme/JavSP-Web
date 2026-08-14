@@ -60,9 +60,9 @@ from javsp.config import Cfg
 from javsp.datatype import MovieInfo
 
 MARKER = "JAVSP_WEB_COVER_CRAWL "
-known = {"airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto", "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv"}
+known = ("airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto", "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv")
 dvdid = sys.argv[-1]
-names = []
+names = list(known)
 for _, selection in Cfg().crawler.selection.items():
     for name in selection:
         name = str(name)
@@ -1396,7 +1396,7 @@ def _search_google_cover(task: dict) -> None:
             raise ValueError("未能从任务中识别影片番号")
         task["google_cover_search_status"] = "running"
         task["google_cover_search_error"] = ""
-        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用全部已配置爬虫搜索封面：{query}")
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用全部内置爬虫及预设自定义爬虫搜索封面：{query}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
         env = os.environ.copy()
