@@ -9,7 +9,6 @@ import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import threading
 import uuid
 from pathlib import Path
@@ -917,37 +916,101 @@ def _google_image_urls(page: str) -> list[tuple[str, str]]:
 
 
 def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
-    """Render Google Images in Chromium when Google serves requests a script-only page."""
+    """Drive a rendered Google Images page and return its visible image URLs."""
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.support.ui import WebDriverWait
+    except ImportError as exc:
+        raise RuntimeError("浏览器搜索组件不可用") from exc
+
     binary = os.environ.get("JAVSP_GOOGLE_CHROMIUM", "").strip()
     if not binary:
-        binary = next((candidate for candidate in ("chromium", "chromium-browser", "google-chrome") if shutil.which(candidate)), "")
+        binary = next((path for candidate in ("chromium", "chromium-browser", "google-chrome") if (path := shutil.which(candidate))), "")
     if not binary:
         raise RuntimeError("Chromium 不可用")
+    driver_binary = os.environ.get("JAVSP_GOOGLE_CHROMEDRIVER", "").strip()
+    if not driver_binary:
+        driver_binary = next((path for candidate in ("chromedriver", "chromium-driver") if (path := shutil.which(candidate))), "")
+    if not driver_binary:
+        raise RuntimeError("ChromeDriver 不可用")
+
     proxy = str(proxies.get("https") or proxies.get("http") or "").strip()
+    if proxy.lower().startswith("socks5h://"):
+        proxy = "socks5://" + proxy[len("socks5h://"):]
     search_url = f"https://www.google.com/search?tbm=isch&safe=off&filter=0&q={quote_plus(f'\"{query}\"')}"
-    with tempfile.TemporaryDirectory(prefix="javsp-google-") as profile:
-        command = [
-            binary,
-            "--headless=new",
-            "--no-sandbox",
-            "--disable-gpu",
-            "--disable-dev-shm-usage",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-background-networking",
-            "--virtual-time-budget=8000",
-            f"--user-data-dir={profile}",
-            "--dump-dom",
-            search_url,
-        ]
-        if proxy:
-            command.insert(-2, f"--proxy-server={proxy}")
-        completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30, check=False)
-    page = completed.stdout.decode("utf-8", errors="replace")
-    if not page.strip():
-        detail = completed.stderr.decode("utf-8", errors="replace").strip().splitlines()
-        raise RuntimeError(detail[-1] if detail else "Chromium 未返回页面")
-    return page
+    options = Options()
+    options.binary_location = binary
+    for argument in (
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-blink-features=AutomationControlled",
+        "--window-size=1440,1800",
+        "--lang=zh-CN",
+        "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    ):
+        options.add_argument(argument)
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    if proxy:
+        options.add_argument(f"--proxy-server={proxy}")
+
+    driver = None
+    try:
+        driver = webdriver.Chrome(service=Service(executable_path=driver_binary), options=options)
+        driver.set_page_load_timeout(18)
+        driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"},
+        )
+        driver.get(search_url)
+        wait = WebDriverWait(driver, 12, poll_frequency=0.25)
+        wait.until(lambda browser: browser.execute_script("return document.readyState") in ("interactive", "complete"))
+        # Google lazily materializes result images while the page is scrolled.
+        driver.execute_script("window.scrollTo(0, Math.min(document.body.scrollHeight, window.innerHeight * 2));")
+        visible_urls = driver.execute_script(
+            """
+            const urls = new Set();
+            for (const link of document.querySelectorAll('a[href]')) {
+              try {
+                const parsed = new URL(link.href, location.href);
+                const original = parsed.searchParams.get('imgurl');
+                if (original && /^https?:/i.test(original)) urls.add(original);
+              } catch (_) {}
+            }
+            for (const image of document.images) {
+              const url = image.currentSrc || image.src || '';
+              const width = image.naturalWidth || image.width || 0;
+              const height = image.naturalHeight || image.height || 0;
+              const ratio = height ? width / height : 0;
+              if (/^https?:/i.test(url) && width >= 120 && height >= 160 && ratio >= 0.35 && ratio <= 1.1) urls.add(url);
+            }
+            return Array.from(urls).slice(0, 80);
+            """
+        )
+        page = driver.page_source
+        if "/sorry/" in driver.current_url or "captcha-form" in page:
+            raise RuntimeError("Google 要求浏览器完成验证码，请检查该任务使用的代理出口")
+        if visible_urls:
+            page += "\n" + json.dumps(visible_urls, ensure_ascii=False)
+        if not page.strip() or not visible_urls:
+            raise RuntimeError("Google 浏览器页面未显示图片结果")
+        return page
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"Chromium 执行失败：{exc.__class__.__name__}") from exc
+    finally:
+        if driver is not None:
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
 
 def _search_google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[dict]:
@@ -974,7 +1037,7 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
     failures: list[str] = []
     for url, params in requests_to_try:
         try:
-            response = session.get(url, params=params, proxies=proxies, timeout=12)
+            response = session.get(url, params=params, proxies=proxies, timeout=8)
             response.raise_for_status()
             result_urls = _google_image_urls(response.text)
             if not result_urls:
@@ -1003,7 +1066,7 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
                 return candidates
         if candidates:
             return candidates
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+    except (OSError, RuntimeError) as exc:
         failures.append(f"Google Chromium: {exc}")
     if failures:
         raise ValueError("Google 图片搜索未向服务器返回可用结果（" + "；".join(failures) + "）")
@@ -1041,7 +1104,7 @@ def _search_google_cover(task: dict) -> None:
             raise ValueError("未能从任务中识别影片番号")
         task["google_cover_search_status"] = "running"
         task["google_cover_search_error"] = ""
-        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用 Google 搜索封面：{query}")
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用 Google 图片搜索封面：{query}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
         proxies = _task_proxy(task)
@@ -1054,10 +1117,10 @@ def _search_google_cover(task: dict) -> None:
         _persist(task)
         return
     except (OSError, requests.RequestException, ValueError) as exc:
-        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面失败：{exc}")
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 图片搜索封面失败：{exc}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         task["google_cover_search_status"] = "failed"
-        task["google_cover_search_error"] = str(exc)
+        task["google_cover_search_error"] = "搜索引擎未返回可下载封面，请查看任务日志"
     finally:
         task["google_cover_search_running"] = False
         _persist(task)

@@ -1099,8 +1099,8 @@ function openTaskDetail(taskId) {
     : '<p class="muted">暂无剧照</p>';
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
-  const googleStatus = task.google_cover_search_running ? '正在使用 Google 搜索封面' : (task.google_cover_search_status === 'failed' ? `Google 搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
-  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试 Google 搜索' : '使用 Google 搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
+  const googleStatus = task.google_cover_search_running ? '正在使用搜索引擎搜索封面' : (task.google_cover_search_status === 'failed' ? `搜索引擎搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
+  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
@@ -1899,7 +1899,7 @@ document.addEventListener('click', async (event) => {
     const taskId = googleCover.dataset.googleCoverTask;
     api(`/api/tasks/${encodeURIComponent(taskId)}/cover/search`, { method: 'POST' }).then(async () => {
       let result;
-      // Google retries its official regional image endpoints before returning.
+      // Google retries its image endpoints and a rendered Chromium session before returning.
       for (let attempt = 0; attempt < 100; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/candidates`);
@@ -1907,7 +1907,7 @@ document.addEventListener('click', async (event) => {
       }
       const candidates = result?.candidates || [];
       const dialog = $('#google-cover-dialog');
-      $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || (result?.status === 'running' ? 'Google 搜索仍在进行，请稍后重试。' : 'Google 未返回可用图片'));
+      $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || (result?.status === 'running' ? '搜索引擎仍在进行，请稍后重试。' : '搜索引擎未返回可用图片'));
       $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="${escapeHtml(candidate.thumbnail_url || candidate.image_url)}" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
       if (dialog && !dialog.open) dialog.showModal();
       await loadTasks();
