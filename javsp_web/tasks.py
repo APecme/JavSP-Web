@@ -931,7 +931,7 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
     proxy = str(proxies.get("https") or proxies.get("http") or "").strip()
     if proxy.lower().startswith("socks5h://"):
         proxy = "socks5://" + proxy[len("socks5h://"):]
-    search_url = f"https://www.google.com/search?tbm=isch&safe=off&filter=0&q={quote_plus(f'\"{query}\"')}"
+    search_url = f"https://www.google.com/search?tbm=isch&safe=off&filter=0&hl=zh-CN&gl=JP&q={quote_plus(query)}"
     options = Options()
     options.binary_location = binary
     for argument in (
@@ -942,6 +942,7 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-background-networking",
+        "--disable-quic",
         "--disable-blink-features=AutomationControlled",
         "--window-size=1440,1800",
         "--lang=zh-CN",
@@ -965,6 +966,18 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
         wait.until(lambda browser: browser.execute_script("return document.readyState") in ("interactive", "complete"))
         # Google lazily materializes result images while the page is scrolled.
         driver.execute_script("window.scrollTo(0, Math.min(document.body.scrollHeight, window.innerHeight * 2));")
+        wait.until(lambda browser: browser.execute_script(
+            """
+            return location.pathname.includes('/sorry/') || document.querySelector('#captcha-form') ||
+              document.querySelectorAll('a[href*=' + JSON.stringify('imgurl=') + '], a[href*=' + JSON.stringify('/imgres') + ']').length > 0 ||
+              document.documentElement.innerHTML.includes('imgurl') ||
+              Array.from(document.images).some((image) => {
+                const width = image.naturalWidth || image.width || 0;
+                const height = image.naturalHeight || image.height || 0;
+                return /^https?:/.test(image.currentSrc || image.src) && width >= 120 && height >= 160;
+              });
+            """
+        ))
         visible_urls = driver.execute_script(
             """
             const urls = new Set();
@@ -990,7 +1003,7 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
             raise RuntimeError("Google 要求浏览器完成验证码，请检查该任务使用的代理出口")
         if visible_urls:
             page += "\n" + json.dumps(visible_urls, ensure_ascii=False)
-        if not page.strip() or not visible_urls:
+        if not page.strip() or (not visible_urls and not _google_image_urls(page)):
             raise RuntimeError("Google 浏览器页面未显示图片结果")
         return page
     except RuntimeError:
@@ -1016,7 +1029,7 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
     }
-    image_query = f'"{query}"'
+    image_query = query
     session = requests.Session()
     session.headers.update(headers)
     # Google may serve a JavaScript-only failure page on one regional endpoint.
