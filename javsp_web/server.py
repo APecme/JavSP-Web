@@ -815,6 +815,13 @@ def get_crawler_config(_: dict = Depends(current_user)) -> dict:
     }
 
 
+@app.get("/api/crawler-config/names")
+def get_crawler_config_names(_: dict = Depends(current_user)) -> dict:
+    return {
+        "crawlers": [{"name": item["name"], "kind": item["kind"]} for item in _crawler_sources()],
+    }
+
+
 @app.put("/api/crawler-config/custom")
 def save_custom_crawler(body: CustomCrawlerBody, _: dict = Depends(require_admin)) -> dict:
     if "def parse_data" not in body.source:

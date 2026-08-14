@@ -42,6 +42,7 @@ _TASK_COOKIECLOUD_DIR = DATA_DIR / "task-cookiecloud"
 _VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 _PROGRESS_RE = re.compile(r"^(?P<key>[^:]{1,120}):\s+(?P<percent>\d{1,3})%.*?(?:(?P<done>\d+)\s*/\s*(?P<total>\d+))?")
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+_CLASH_FAKE_IP_NETWORK = ipaddress.ip_network("198.18.0.0/15")
 _TQDM_RE = re.compile(r"\d{1,3}%\|.*(?:\||$)|\b\d+(?:\.\d+)?(?:[KMGT]?i?B|B)\s*\[\d{2}:\d{2}")
 _CRAWLER_TQDM_RE = re.compile(r"^(?P<name>javsp\.web\.[^:]+):\s*(?P<message>.*?)\s*:\s*\d{1,3}%\|")
 _IMAGE_TRANSFER_RE = re.compile(r"^(?:Downloading extrafanart \d+ from url:|[^\s:]+\.(?:jpg|jpeg|png|webp):\s*\d+(?:\.\d+)?[KMGT]?i?B)", re.IGNORECASE)
@@ -83,7 +84,7 @@ for name in names:
         parse_data(movie)
         for cover in (getattr(movie, "big_cover", None), getattr(movie, "cover", None)):
             if isinstance(cover, str) and cover.startswith(("http://", "https://")):
-                results.append({"source": name, "image_url": cover, "title": str(getattr(movie, "title", "") or "")})
+                results.append({"source": name, "image_url": cover, "referer_url": str(getattr(movie, "url", "") or ""), "title": str(getattr(movie, "title", "") or "")})
     except Exception as exc:
         results.append({"source": name, "error": exc.__class__.__name__})
 print(MARKER + json.dumps({"results": results}, ensure_ascii=False))
@@ -997,7 +998,7 @@ def _identifier_token(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
-def _is_public_image_url(value: str) -> bool:
+def _is_public_image_url(value: str, proxies: dict[str, str]) -> bool:
     """Reject local/private targets before the server fetches a chosen image."""
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -1011,22 +1012,42 @@ def _is_public_image_url(value: str) -> bool:
             ip = ipaddress.ip_address(address)
         except ValueError:
             return False
-        if not ip.is_global:
+        if not ip.is_global and not (proxies and ip in _CLASH_FAKE_IP_NETWORK):
             return False
     return True
 
 
-def _request_public_image(url: str, proxies: dict[str, str]) -> requests.Response:
+def _image_cookiecloud_cookies(url: str) -> dict[str, str]:
+    """Return only CookieCloud cookies whose domain can be sent to an image host."""
+    settings = get_cookiecloud_settings(include_password=True)
+    if not settings.get("enabled"):
+        return {}
+    host = (urlparse(url).hostname or "").lower()
+    if not host:
+        return {}
+    try:
+        synced = fetch_cookiecloud(settings)
+    except CookieCloudError:
+        return {}
+    result: dict[str, str] = {}
+    for domain, cookies in synced.items():
+        normalized = str(domain).strip().lstrip(".").lower()
+        if host == normalized or host.endswith("." + normalized):
+            result.update({str(name): str(value) for name, value in cookies.items()})
+    return result
+
+
+def _request_public_image(url: str, proxies: dict[str, str], referer_url: str = "") -> requests.Response:
     """Fetch an image while validating every redirect target against SSRF."""
     headers = {
         "User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)",
         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        "Referer": "https://www.google.com/",
+        "Referer": referer_url if referer_url.startswith(("http://", "https://")) else "https://www.google.com/",
     }
     for _ in range(5):
-        if not _is_public_image_url(url):
+        if not _is_public_image_url(url, proxies):
             raise ValueError("图片地址不是可公开访问的地址")
-        response = requests.get(url, headers=headers, proxies=proxies, timeout=30, allow_redirects=False)
+        response = requests.get(url, headers=headers, cookies=_image_cookiecloud_cookies(url), proxies=proxies, timeout=30, allow_redirects=False)
         if response.is_redirect:
             location = response.headers.get("Location")
             if not location:
@@ -1433,7 +1454,7 @@ def _search_google_cover(task: dict) -> None:
             if not url.startswith(("http://", "https://")) or len(url) > 4096 or url in seen:
                 continue
             seen.add(url)
-            candidates.append({"image_url": url, "thumbnail_url": url, "source": str(item.get("source") or "爬虫"), "title": str(item.get("title") or "")[:160]})
+            candidates.append({"image_url": url, "thumbnail_url": url, "referer_url": str(item.get("referer_url") or ""), "source": str(item.get("source") or "爬虫"), "title": str(item.get("title") or "")[:160]})
         if not candidates:
             raise ValueError("已配置爬虫未返回可下载封面")
         task["google_cover_candidates"] = [{"id": f"image-{i + 1}", **item} for i, item in enumerate(candidates[:12])]
@@ -1478,6 +1499,7 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
             return False
         candidate = next((item for item in task.get("google_cover_candidates") or [] if item.get("id") == candidate_id), None)
         url = str(candidate.get("image_url") or "") if isinstance(candidate, dict) else ""
+        referer_url = str(candidate.get("referer_url") or "") if isinstance(candidate, dict) else ""
         if not url.startswith(("http://", "https://")) or len(url) > 4096:
             return False
         task["google_cover_search_running"] = True
@@ -1487,7 +1509,7 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
     def download() -> None:
         try:
             destination = _google_cover_destination(task)
-            response = _request_public_image(url, _task_proxy(task))
+            response = _request_public_image(url, _task_proxy(task), referer_url)
             with Image.open(io.BytesIO(response.content)) as image:
                 image.verify()
             with Image.open(io.BytesIO(response.content)) as image:
@@ -1521,7 +1543,8 @@ def google_cover_thumbnail(task_id: str, candidate_id: str) -> tuple[bytes, str]
     url = str((candidate or {}).get("thumbnail_url") or (candidate or {}).get("image_url") or "")
     if not url.startswith(("http://", "https://")) or len(url) > 4096:
         return None
-    response = _request_public_image(url, _task_proxy(task))
+    referer_url = str((candidate or {}).get("referer_url") or "")
+    response = _request_public_image(url, _task_proxy(task), referer_url)
     content = response.content
     if not content or len(content) > 16 * 1024 * 1024:
         raise ValueError("候选封面图片无效或过大")

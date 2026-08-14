@@ -304,6 +304,14 @@ function crawlerConfigTagsMarkup(selection = {}) {
   }).join('');
 }
 
+async function loadCrawlerNames() {
+  try {
+    const result = await api('/api/crawler-config/names');
+    state.crawlerSources = result.crawlers || [];
+    if (state.presetMode === 'form') renderConfigFields();
+  } catch (_) { /* Manual input remains available when the name list cannot load. */ }
+}
+
 async function loadCrawlerConfig() {
   const host = $('#crawler-config-content');
   if (!host) return;
@@ -2528,7 +2536,7 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     state.user = await api('/api/auth/me');
     $('#current-user').textContent = state.user.username;
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); }
-    await Promise.all([loadTasks(), loadPresets(), loadPathTools()]);
+    await Promise.all([loadTasks(), loadPresets(), loadPathTools(), loadCrawlerNames()]);
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || (savedView !== 'settings' && savedView !== 'auto-scrape'))) showView(savedView);
   } catch (error) { return; }
   setInterval(() => {
