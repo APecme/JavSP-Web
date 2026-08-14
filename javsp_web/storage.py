@@ -414,15 +414,34 @@ def record_auto_scrape_schedule_result(schedule_id: str, result: str, task_ids: 
                 item["last_result"] = result[:500]
                 item["updated_at"] = now_iso()
                 runs = item.get("runs") if isinstance(item.get("runs"), list) else []
-                if runs:
-                    latest = runs[-1]
-                    if isinstance(latest, dict):
-                        latest["result"] = item["last_result"]
-                        if task_ids is not None:
-                            latest["task_ids"] = [str(task_id) for task_id in task_ids]
+                latest = next((run for run in reversed(runs) if isinstance(run, dict) and str(run.get("id") or "") == str(item.get("last_run_key") or "")), None)
+                if latest is not None:
+                    latest["result"] = item["last_result"]
+                    if task_ids is not None:
+                        latest["task_ids"] = [str(task_id) for task_id in task_ids]
                 item["runs"] = runs
                 _write_json(AUTO_SCRAPE_SCHEDULES_FILE, {"schedules": source})
                 return
+
+
+def delete_auto_scrape_schedule_run(schedule_id: str, run_id: str) -> bool:
+    """Remove only a saved run record; its tasks and media remain untouched."""
+    ensure_seed_data()
+    with _lock:
+        stored = _read_json(AUTO_SCRAPE_SCHEDULES_FILE, [])
+        source = stored.get("schedules", []) if isinstance(stored, dict) else stored
+        for item in source:
+            if not isinstance(item, dict) or str(item.get("id") or "") != schedule_id:
+                continue
+            runs = item.get("runs") if isinstance(item.get("runs"), list) else []
+            remaining = [run for run in runs if not (isinstance(run, dict) and str(run.get("id") or "") == run_id)]
+            if len(remaining) == len(runs):
+                return False
+            item["runs"] = remaining
+            item["updated_at"] = now_iso()
+            _write_json(AUTO_SCRAPE_SCHEDULES_FILE, {"schedules": source})
+            return True
+    return False
 
 
 def _normalize_media_server(item: dict[str, Any]) -> dict[str, Any] | None:

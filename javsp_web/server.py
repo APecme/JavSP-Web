@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import os
 import re
+import json
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -21,6 +25,7 @@ from .auth import SESSION_COOKIE, create_session, current_user, remove_session, 
 from .config_validation import load_base_config, validate_config_data
 from .storage import (
     CUSTOM_CRAWLERS_DIR,
+    delete_auto_scrape_schedule_run,
     delete_preset,
     claim_auto_scrape_schedule_run,
     delete_user,
@@ -84,6 +89,31 @@ IS_DOCKER = Path("/.dockerenv").exists() or os.environ.get("JAVSP_WEB_DOCKER") =
 CONTAINER_BROWSE_ROOT = Path("/")
 VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 _auto_scrape_run_lock = threading.RLock()
+_CRAWLER_TEST_MARKER = "JAVSP_WEB_CRAWLER_TEST "
+_CRAWLER_TEST_SCRIPT = r'''
+import importlib
+import json
+import sys
+
+MARKER = "JAVSP_WEB_CRAWLER_TEST "
+name, input_value = sys.argv[-2:]
+result = {"crawler": name, "input_value": input_value, "data": {}, "error": ""}
+try:
+    from javsp.datatype import MovieInfo
+    module_name = "javsp.web." + name if name in {
+        "airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto",
+        "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv",
+    } else name
+    parse_data = getattr(importlib.import_module(module_name), "parse_data", None)
+    if not callable(parse_data):
+        raise ValueError("crawler does not define parse_data(movie)")
+    movie = MovieInfo(input_value)
+    parse_data(movie)
+    result["data"] = vars(movie)
+except Exception as exc:
+    result["error"] = str(exc) or exc.__class__.__name__
+print(MARKER + json.dumps(result, ensure_ascii=False, default=str))
+'''
 
 
 class LoginBody(BaseModel):
@@ -116,6 +146,11 @@ class CrawlerConfigBody(BaseModel):
 class CustomCrawlerBody(BaseModel):
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
     source: str = Field(min_length=1, max_length=200_000)
+
+
+class CrawlerTestBody(BaseModel):
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
+    input_value: str = Field(min_length=1, max_length=256)
 
 
 class TaskBody(BaseModel):
@@ -691,6 +726,49 @@ def delete_custom_crawler(name: str, _: dict = Depends(require_admin)) -> dict:
         raise HTTPException(status_code=404, detail="自定义爬虫不存在")
     path.unlink()
     return {"ok": True}
+
+
+@app.post("/api/crawler-config/test")
+def test_crawler(body: CrawlerTestBody, _: dict = Depends(require_admin)) -> dict:
+    """Run one crawler against an explicit ID and return every MovieInfo field."""
+    crawler_names = _available_crawler_names()
+    if body.name not in crawler_names:
+        raise HTTPException(status_code=404, detail="爬虫不存在")
+    value = body.input_value.strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="请输入要测试的番号")
+    config_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".yml", delete=False) as config_file:
+            config_file.write(read_config())
+            config_path = config_file.name
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+        completed = subprocess.run(
+            [sys.executable, "-c", _CRAWLER_TEST_SCRIPT, "-c", config_path, body.name, value],
+            cwd=str(VENDOR_DIR),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=90,
+        )
+        output = completed.stdout.decode("utf-8", errors="replace")
+        result_line = next((line for line in reversed(output.splitlines()) if line.startswith(_CRAWLER_TEST_MARKER)), "")
+        if not result_line:
+            return {"crawler": body.name, "input_value": value, "data": {}, "error": "爬虫测试未返回结果", "output": output[-40_000:]}
+        result = json.loads(result_line[len(_CRAWLER_TEST_MARKER):])
+        result["output"] = output.replace(result_line, "").strip()[-40_000:]
+        return result
+    except subprocess.TimeoutExpired:
+        return {"crawler": body.name, "input_value": value, "data": {}, "error": "爬虫测试超时（90 秒）", "output": ""}
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return {"crawler": body.name, "input_value": value, "data": {}, "error": str(exc) or exc.__class__.__name__, "output": ""}
+    finally:
+        if config_path:
+            try:
+                Path(config_path).unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 @app.put("/api/config")
@@ -1393,6 +1471,13 @@ def run_auto_scrape_schedule_now(schedule_id: str, _: dict = Depends(require_adm
     return {"schedule_id": schedule_id, "run_id": claimed["last_run_key"], "count": len(created), "task_ids": [task["id"] for task in created], "skipped": skipped, "message": claimed.get("last_result", "")}
 
 
+@app.delete("/api/auto-scrape-schedules/{schedule_id}/runs/{run_id}")
+def delete_auto_scrape_run(schedule_id: str, run_id: str, _: dict = Depends(require_admin)) -> dict:
+    if not delete_auto_scrape_schedule_run(schedule_id, run_id):
+        raise HTTPException(status_code=404, detail="运行记录不存在")
+    return {"ok": True}
+
+
 @app.delete("/api/auto-scrape-schedules/{schedule_id}")
 def delete_auto_scrape_schedule(schedule_id: str, _: dict = Depends(require_admin)) -> dict:
     schedules = list_auto_scrape_schedules()
@@ -1472,14 +1557,16 @@ def retry_images(task_id: str, _: dict = Depends(current_user)) -> dict:
     return {"ok": True}
 
 
-@app.post("/api/tasks/{task_id}/cover/google-search", status_code=202)
+@app.post("/api/tasks/{task_id}/cover/search", status_code=202)
+@app.post("/api/tasks/{task_id}/cover/google-search", status_code=202, include_in_schema=False)
 def search_task_cover_with_google(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not search_google_cover(task_id):
         raise HTTPException(status_code=400, detail="任务不存在、封面已存在，或 Google 搜索正在进行")
     return {"ok": True}
 
 
-@app.get("/api/tasks/{task_id}/cover/google-candidates")
+@app.get("/api/tasks/{task_id}/cover/candidates")
+@app.get("/api/tasks/{task_id}/cover/google-candidates", include_in_schema=False)
 def google_cover_candidates(task_id: str, _: dict = Depends(current_user)) -> dict:
     task = get_task(task_id)
     if not task:
@@ -1487,7 +1574,8 @@ def google_cover_candidates(task_id: str, _: dict = Depends(current_user)) -> di
     return {"candidates": task.get("google_cover_candidates") or [], "status": task.get("google_cover_search_status") or "idle", "error": task.get("google_cover_search_error") or ""}
 
 
-@app.post("/api/tasks/{task_id}/cover/google-select")
+@app.post("/api/tasks/{task_id}/cover/select")
+@app.post("/api/tasks/{task_id}/cover/google-select", include_in_schema=False)
 def select_task_cover_with_google(task_id: str, body: dict, _: dict = Depends(current_user)) -> dict:
     candidate_id = str(body.get("candidate_id") or "")
     if not candidate_id or not select_google_cover(task_id, candidate_id):

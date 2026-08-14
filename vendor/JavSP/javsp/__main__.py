@@ -44,7 +44,7 @@ from javsp.file import *
 from javsp.func import *
 from javsp.image import *
 from javsp.datatype import Movie, MovieInfo
-from javsp.web.base import download
+from javsp.web.base import download, read_proxy
 from javsp.web.exceptions import *
 from javsp.web.translate import translate_movie_info
 from javsp.network_preflight import warn_restricted_crawler_network
@@ -611,36 +611,90 @@ def RunNormalMode(all_movies):
     return return_movies
 
 
-def _google_image_candidates(dvdid):
-    """Return a bounded, de-duplicated set of full-size Google image results."""
+def _search_engine_image_candidates(dvdid):
+    """Return cover candidates from image search engines using the configured proxy."""
     if not dvdid:
         return []
-    query = quote_plus(f"{dvdid} cover")
+    image_query = f'"{dvdid}"'
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; JavSP/1.0)",
-        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
     }
-    response = requests.get(f"https://www.google.com/search?tbm=isch&q={query}", headers=headers, timeout=15)
-    response.raise_for_status()
     candidates = []
-    for value in re.findall(r'"(https?://[^"\\]+)"', response.text):
-        value = unescape(value).replace('\\u003d', '=').replace('\\u0026', '&').replace('\\/', '/')
-        if value.startswith('https://encrypted-tbn0.gstatic.com/'):
-            continue
-        if value not in candidates:
-            candidates.append(value)
-        if len(candidates) >= 12:
-            break
+    proxy = read_proxy()
+    try:
+        page = requests.get(
+            f"https://duckduckgo.com/?q={quote_plus(image_query)}&iax=images&ia=images",
+            headers=headers,
+            proxies=proxy,
+            timeout=20,
+        )
+        page.raise_for_status()
+        match = re.search(r"vqd=['\"]([^'\"]+)", page.text)
+        if match:
+            response = requests.get(
+                "https://duckduckgo.com/i.js",
+                params={"q": image_query, "vqd": match.group(1), "o": "json", "l": "us-en"},
+                headers={**headers, "Referer": "https://duckduckgo.com/"},
+                proxies=proxy,
+                timeout=20,
+            )
+            response.raise_for_status()
+            for item in response.json().get("results") or []:
+                value = str(item.get("image") or "")
+                if value.startswith(("http://", "https://")) and value not in candidates:
+                    candidates.append(value)
+                if len(candidates) >= 12:
+                    return candidates
+    except (requests.RequestException, ValueError, json.JSONDecodeError):
+        pass
+    try:
+        response = requests.get(
+            f"https://www.bing.com/images/search?q={quote_plus(image_query)}",
+            headers=headers,
+            proxies=proxy,
+            timeout=20,
+        )
+        response.raise_for_status()
+        for raw in re.findall(r'\bm="(\{.*?\})"', response.text):
+            try:
+                value = json.loads(unescape(raw)).get("murl")
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, str) and value.startswith(("http://", "https://")) and value not in candidates:
+                candidates.append(value.replace("\\/", "/"))
+            if len(candidates) >= 12:
+                return candidates
+    except requests.RequestException:
+        pass
+    try:
+        response = requests.get(
+            f"https://www.google.com/search?tbm=isch&q={quote_plus(image_query)}",
+            headers=headers,
+            proxies=proxy,
+            timeout=20,
+        )
+        response.raise_for_status()
+        for value in re.findall(r'"(https?://[^"\\]+)"', response.text):
+            value = unescape(value).replace('\\u003d', '=').replace('\\u0026', '&').replace('\\/', '/')
+            if value.startswith('https://encrypted-tbn0.gstatic.com/'):
+                continue
+            if value not in candidates:
+                candidates.append(value)
+            if len(candidates) >= 12:
+                break
+    except requests.RequestException:
+        pass
     return candidates
 
 
-def _download_google_cover(dvdid, fanart_path):
-    for url in _google_image_candidates(dvdid):
+def _download_search_engine_cover(dvdid, fanart_path):
+    for url in _search_engine_image_candidates(dvdid):
         try:
             pic_path = get_pic_path(fanart_path, url)
             download(url, pic_path)
             if valid_pic(pic_path):
-                logger.info(f"Google image search fallback cover succeeded: {dvdid}")
+                logger.info(f"Search engine fallback cover succeeded: {dvdid}")
                 return (url, pic_path)
         except Exception as exc:
             logger.debug(exc, exc_info=True)
@@ -682,8 +736,8 @@ def download_cover(covers, fanart_path, big_covers=[], dvdid=None):
     logger.error(f"下载封面图片失败")
     logger.debug('big_covers:'+str(big_covers) + ', covers'+str(covers))
     if Cfg().summarizer.cover.google_search_fallback:
-        logger.info(f"Original covers failed; trying Google image search fallback: {dvdid or 'unknown'}")
-        return _download_google_cover(dvdid, fanart_path)
+        logger.info(f"Original covers failed; trying search engine fallback: {dvdid or 'unknown'}")
+        return _download_search_engine_cover(dvdid, fanart_path)
     return None
 
 def get_pic_path(fanart_path, url):

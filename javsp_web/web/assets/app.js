@@ -57,7 +57,7 @@ const FIELD_NOTES = {
   fields: '需要翻译的字段开关。',
 };
 const FIELD_DESCRIPTIONS = {
-  'summarizer.cover.google_search_fallback': '启用后，封面下载失败时使用 Google 图片搜索；如果 Google 只返回浏览器脚本页面，则自动尝试 Bing 图片结果。服务器需要能够通过预设中的代理访问搜索引擎。',
+  'summarizer.cover.google_search_fallback': '启用后，封面下载失败时仅使用 Google 图片搜索查找候选封面，并使用预设中的代理。',
   'scanner.ignored_id_pattern': '推测番号前会忽略文件名中匹配的字符串；除非熟悉正则表达式，否则不要修改。',
   'scanner.input_directory': '要整理的影片目录。手动刮削任务会临时覆盖此值。',
   'scanner.filename_extensions': '这些扩展名的文件会被当作影片扫描。',
@@ -302,7 +302,7 @@ function crawlerCodeMarkup(crawlers) {
 
 function crawlerCodeDetail(crawler) {
   const editable = crawler.kind === 'custom';
-  return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${editable ? `<button class="button danger" type="button" data-delete-custom-crawler="${escapeHtml(crawler.name)}">删除</button>` : ''}</div><label class="config-field"><span class="config-field-name">爬虫名称</span><input id="crawler-code-name" value="${escapeHtml(crawler.name)}"${editable ? '' : ' disabled'}></label><label class="config-field"><span class="config-field-name">Python 代码</span><textarea id="crawler-code-source" class="code-editor" spellcheck="false"${editable ? '' : ' readonly'}>${escapeHtml(crawler.source || '')}</textarea></label>${editable ? '<div class="form-actions"><button class="button primary" type="button" id="save-custom-crawler">保存爬虫代码</button><span id="crawler-code-message" class="form-message"></span></div>' : ''}`;
+  return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${editable ? `<button class="button danger" type="button" data-delete-custom-crawler="${escapeHtml(crawler.name)}">删除</button>` : ''}</div><label class="config-field"><span class="config-field-name">爬虫名称</span><input id="crawler-code-name" value="${escapeHtml(crawler.name)}"${editable ? '' : ' disabled'}></label><label class="config-field"><span class="config-field-name">Python 代码</span><textarea id="crawler-code-source" class="code-editor" spellcheck="false"${editable ? '' : ' readonly'}>${escapeHtml(crawler.source || '')}</textarea></label>${editable ? '<div class="form-actions"><button class="button primary" type="button" id="save-custom-crawler">保存爬虫代码</button><span id="crawler-code-message" class="form-message"></span></div>' : ''}<section class="crawler-test-panel"><div><h4>爬虫测试</h4><p class="muted">使用当前网络与代理配置，单独抓取一次。</p></div><label class="config-field"><span class="config-field-name">测试输入</span><input id="crawler-test-input" maxlength="256" placeholder="例如 DANDYA-044"></label><div class="form-actions"><button class="button secondary" type="button" data-test-crawler="${escapeHtml(crawler.name)}">测试爬虫</button><span id="crawler-test-message" class="form-message"></span></div><div id="crawler-test-result" class="crawler-test-result hidden"><details open><summary>抓取结果</summary><pre id="crawler-test-data" class="crawler-test-output"></pre></details><details id="crawler-test-output-wrap"><summary>运行输出</summary><pre id="crawler-test-output" class="crawler-test-output"></pre></details></div></section>`;
 }
 
 async function api(path, options = {}) {
@@ -1121,7 +1121,7 @@ function openTaskDetail(taskId) {
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const googleStatus = task.google_cover_search_running ? '正在使用 Google 搜索封面' : (task.google_cover_search_status === 'failed' ? `Google 搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
-  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试 Google 搜索封面' : '使用 Google 搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
+  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试 Google 搜索' : '使用 Google 搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
@@ -1495,9 +1495,11 @@ async function refreshAutoScrapeRun() {
   rememberTaskCards();
   $('#auto-scrape-run-title').textContent = `${schedule.name} - 任务日志`;
   $('#auto-scrape-run-subtitle').textContent = `${run.started_at ? run.started_at.replace('T', ' ') : ''} · ${run.result || '正在读取任务'}`;
-  const results = await Promise.all(run.task_ids.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
+  const cachedTasks = new Map(state.tasks.map((task) => [String(task.id), task]));
+  const missingIds = run.task_ids.map(String).filter((taskId) => !cachedTasks.has(taskId));
+  const results = await Promise.all(missingIds.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
   if (!dialog.open || state.activeAutoScrapeRun?.runId !== active.runId) return;
-  const taskById = new Map(results.filter(Boolean).map((task) => [String(task.id), task]));
+  const taskById = new Map([...cachedTasks, ...results.filter(Boolean).map((task) => [String(task.id), task])]);
   const tasks = run.task_ids.map(String).map((taskId) => taskById.get(taskId)).filter(Boolean).sort((left, right) => {
     const byCreatedAt = Date.parse(left.created_at || '') - Date.parse(right.created_at || '');
     return Number.isFinite(byCreatedAt) && byCreatedAt !== 0 ? byCreatedAt : String(left.id).localeCompare(String(right.id));
@@ -1514,7 +1516,7 @@ async function refreshAutoScrapeRun() {
 async function openAutoScrapeRun(scheduleId, runId) {
   state.activeAutoScrapeHistory = null;
   state.activeAutoScrapeRun = { scheduleId, runId };
-  $('#auto-scrape-run-content').innerHTML = '<p class="muted">正在读取任务日志…</p>';
+  $('#auto-scrape-run-content').innerHTML = '';
   $('#auto-scrape-run-dialog').showModal();
   await refreshAutoScrapeRun();
 }
@@ -1545,7 +1547,7 @@ function renderAutoScrapeHistory(scheduleId) {
   const runs = Array.isArray(schedule.runs) ? schedule.runs.slice().sort((left, right) => Date.parse(right.started_at || '') - Date.parse(left.started_at || '')) : [];
   $('#auto-scrape-run-title').textContent = `${schedule.name} - 全部运行记录`;
   $('#auto-scrape-run-subtitle').textContent = `已保存 ${runs.length} 次定时或立即运行记录`;
-  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(formatLocalDateTime(run.started_at) || run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p>${autoScrapeRunCountsMarkup(run)}</div>${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}</article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
+  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(formatLocalDateTime(run.started_at) || run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p>${autoScrapeRunCountsMarkup(run)}</div><div class="auto-scrape-history-actions">${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}<button class="icon-button schedule-delete" type="button" data-delete-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">删除日志</button></div></article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
 }
 
 function openAutoScrapeHistory(scheduleId) {
@@ -1742,6 +1744,40 @@ document.addEventListener('click', async (event) => {
     } catch (error) { if (message) message.textContent = error.message; }
     return;
   }
+  const testCrawler = event.target.closest('[data-test-crawler]');
+  if (testCrawler) {
+    const input = $('#crawler-test-input');
+    const message = $('#crawler-test-message');
+    const result = $('#crawler-test-result');
+    const data = $('#crawler-test-data');
+    const output = $('#crawler-test-output');
+    const outputWrap = $('#crawler-test-output-wrap');
+    const inputValue = input?.value.trim() || '';
+    if (!inputValue) {
+      if (message) message.textContent = '请输入测试输入';
+      input?.focus();
+      return;
+    }
+    const original = testCrawler.textContent;
+    testCrawler.disabled = true;
+    testCrawler.textContent = '正在测试';
+    if (message) { message.textContent = ''; message.classList.remove('form-error'); }
+    if (result) result.classList.add('hidden');
+    try {
+      const response = await api('/api/crawler-config/test', { method: 'POST', body: JSON.stringify({ name: testCrawler.dataset.testCrawler, input_value: inputValue }) });
+      if (message) { message.textContent = response.error ? `测试失败：${response.error}` : '测试完成'; message.classList.toggle('form-error', Boolean(response.error)); }
+      if (data) data.textContent = JSON.stringify(response.data || {}, null, 2);
+      if (output) output.textContent = response.output || '无额外输出';
+      if (outputWrap) outputWrap.classList.toggle('hidden', !response.output);
+      if (result) result.classList.remove('hidden');
+    } catch (error) {
+      if (message) { message.textContent = error.message; message.classList.add('form-error'); }
+    } finally {
+      testCrawler.disabled = false;
+      testCrawler.textContent = original;
+    }
+    return;
+  }
   const deleteCustomCrawler = event.target.closest('[data-delete-custom-crawler]');
   if (deleteCustomCrawler) {
     const name = deleteCustomCrawler.dataset.deleteCustomCrawler;
@@ -1776,6 +1812,23 @@ document.addEventListener('click', async (event) => {
       const target = $('#auto-scrape-run-content');
       if (target) target.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
     });
+  }
+  const deleteAutoScrapeRunButton = event.target.closest('[data-delete-auto-scrape-run]');
+  if (deleteAutoScrapeRunButton) {
+    const scheduleId = deleteAutoScrapeRunButton.dataset.deleteAutoScrapeRun;
+    const runId = deleteAutoScrapeRunButton.dataset.autoScrapeRunId;
+    confirmAction({
+      title: '删除运行日志',
+      text: '仅删除这条自动刮削运行记录，不会删除关联任务、封面或媒体文件。',
+      confirmLabel: '删除日志',
+      danger: true,
+      run: async () => {
+        await api(`/api/auto-scrape-schedules/${encodeURIComponent(scheduleId)}/runs/${encodeURIComponent(runId)}`, { method: 'DELETE' });
+        await loadAutoScrapeSchedules();
+        if ($('#auto-scrape-run-dialog')?.open) renderAutoScrapeHistory(scheduleId);
+      },
+    });
+    return;
   }
   const editAutoScrapeScheduleButton = event.target.closest('[data-edit-auto-scrape-schedule]');
   if (editAutoScrapeScheduleButton) {
@@ -1866,18 +1919,17 @@ document.addEventListener('click', async (event) => {
     googleCover.disabled = true;
     googleCover.textContent = '正在搜索封面';
     const taskId = googleCover.dataset.googleCoverTask;
-    api(`/api/tasks/${encodeURIComponent(taskId)}/cover/google-search`, { method: 'POST' }).then(async () => {
+    api(`/api/tasks/${encodeURIComponent(taskId)}/cover/search`, { method: 'POST' }).then(async () => {
       let result;
-      // Search engines can each take up to 20 seconds. Keep the dialog flow
-      // alive for the full server-side window instead of silently timing out.
+      // Google retries its official regional image endpoints before returning.
       for (let attempt = 0; attempt < 100; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 500));
-        result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/google-candidates`);
+        result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/candidates`);
         if (!result.status || !['queued', 'running'].includes(result.status)) break;
       }
       const candidates = result?.candidates || [];
       const dialog = $('#google-cover-dialog');
-      $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || (result?.status === 'running' ? '搜索仍在进行，请稍后重试。' : '未找到与番号匹配的可用图片'));
+      $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || (result?.status === 'running' ? 'Google 搜索仍在进行，请稍后重试。' : 'Google 未返回可用图片'));
       $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="${escapeHtml(candidate.thumbnail_url || candidate.image_url)}" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
       if (dialog && !dialog.open) dialog.showModal();
       await loadTasks();
@@ -1890,7 +1942,7 @@ document.addEventListener('click', async (event) => {
   if (coverOption) {
     coverOption.disabled = true;
     try {
-      await api(`/api/tasks/${encodeURIComponent(coverOption.dataset.googleCoverSelect)}/cover/google-select`, { method: 'POST', body: JSON.stringify({ candidate_id: coverOption.dataset.candidateId }) });
+      await api(`/api/tasks/${encodeURIComponent(coverOption.dataset.googleCoverSelect)}/cover/select`, { method: 'POST', body: JSON.stringify({ candidate_id: coverOption.dataset.candidateId }) });
       $('#google-cover-dialog')?.close();
       await loadTasks();
     } catch (error) { coverOption.disabled = false; $('#google-cover-message').textContent = error.message; }

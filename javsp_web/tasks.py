@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import io
-import html
 import ipaddress
 import json
 import re
@@ -14,7 +13,7 @@ import threading
 import uuid
 from pathlib import Path
 from html import unescape
-from urllib.parse import quote_plus, urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import yaml
 import requests
@@ -893,68 +892,73 @@ def _append_candidate(candidates: list[dict], seen: set[str], query: str, url: s
     })
 
 
-def _google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[dict]:
+def _google_image_urls(page: str) -> list[tuple[str, str]]:
+    """Extract original links first, then Google-hosted thumbnails as a fallback."""
+    decoded = (unescape(page).replace("\\/", "/").replace("\\u003d", "=").replace("\\u0026", "&")
+               .replace("\\x2f", "/").replace("\\x3d", "=").replace("\\x26", "&"))
+    originals: list[tuple[str, str]] = []
+    thumbnails: list[tuple[str, str]] = []
+    for match in re.finditer(r"https?://[^\"'\s<>]+", decoded):
+        value = match.group(0).rstrip("\\,;)")
+        context = decoded[max(0, match.start() - 1200):match.end() + 1200]
+        parsed = urlparse(value)
+        hostname = (parsed.hostname or "").lower()
+        is_google_host = hostname == "google.com" or hostname.startswith("www.google.") or hostname.endswith(".google.com")
+        if is_google_host and parsed.path == "/imgres":
+            original = parse_qs(parsed.query).get("imgurl", [""])[0]
+            if original:
+                originals.append((unescape(original), context))
+        elif parsed.netloc.endswith("gstatic.com") and parsed.path.startswith("/images"):
+            thumbnails.append((value, context))
+        elif not is_google_host and not hostname.endswith(("gstatic.com", "googleusercontent.com")):
+            originals.append((value, context))
+    return originals + thumbnails
+
+
+def _search_google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[dict]:
+    """Return image candidates exclusively from Google Images result pages."""
     if not query:
         return []
     candidates: list[dict] = []
     seen: set[str] = set()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-        "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
     }
     image_query = f'"{query}"'
-    try:
-        response = requests.get(
-            f"https://www.google.com/search?tbm=isch&q={quote_plus(image_query)}",
-            headers=headers,
-            proxies=proxies,
-            timeout=20,
-        )
-        response.raise_for_status()
-        page = unescape(response.text).replace("\\u003d", "=").replace("\\u0026", "&").replace("\\/", "/")
-        token = _identifier_token(query)
-        for match in re.finditer(r"https?://[^\"'\s<>]+", page):
-            value = match.group(0).rstrip("\\,;)")
-            if value.startswith(("https://encrypted-tbn0.gstatic.com/", "https://www.google.com/", "https://accounts.google.com/", "https://support.google.com/")):
+    session = requests.Session()
+    session.headers.update(headers)
+    # Google may serve a JavaScript-only failure page on one regional endpoint.
+    # All of these URLs are Google Images, not third-party search providers.
+    requests_to_try = (
+        ("https://www.google.com/search", {"q": image_query, "tbm": "isch", "safe": "off", "filter": "0"}),
+        ("https://www.google.com/search", {"q": image_query, "udm": "2", "safe": "off", "filter": "0"}),
+        ("https://www.google.co.jp/search", {"q": image_query, "tbm": "isch", "safe": "off", "filter": "0"}),
+    )
+    failures: list[str] = []
+    for url, params in requests_to_try:
+        try:
+            response = session.get(url, params=params, proxies=proxies, timeout=12)
+            response.raise_for_status()
+            result_urls = _google_image_urls(response.text)
+            if not result_urls:
+                failures.append(f"{urlparse(url).netloc} 未返回图片数据")
                 continue
-            context = page[max(0, match.start() - 700):match.end() + 700]
-            if token not in _identifier_token(context):
-                continue
-            # Google frequently serves the source image from a CDN whose URL
-            # does not include the identifier; the enclosing result does.
-            _append_candidate(candidates, seen, query, value, "Google", context=context)
-            if len(candidates) == 12:
+            for image_url, context in result_urls:
+                # The Google query itself is the exact movie identifier. CDN URLs
+                # commonly omit that identifier, so URL-text matching would discard
+                # valid results before the user can choose one.
+                _append_candidate(candidates, seen, query, image_url, "Google", title=query, context=context)
+                if len(candidates) == 12:
+                    return candidates
+            if candidates:
                 return candidates
-    except requests.RequestException:
-        pass
-
-    try:
-        response = requests.get(
-            f"https://www.bing.com/images/search?q={quote_plus(image_query)}",
-            headers=headers,
-            proxies=proxies,
-            timeout=20,
-        )
-        response.raise_for_status()
-        for raw in re.findall(r'\bm="(\{.*?\})"', response.text):
-            try:
-                item = json.loads(html.unescape(raw))
-            except json.JSONDecodeError:
-                continue
-            _append_candidate(
-                candidates,
-                seen,
-                query,
-                str(item.get("murl") or "").replace("\\/", "/"),
-                "Bing",
-                " ".join(str(item.get(key) or "") for key in ("t", "desc", "purl")),
-                int(item.get("ow") or 0),
-                int(item.get("oh") or 0),
-            )
-            if len(candidates) == 12:
-                break
-    except requests.RequestException:
-        pass
+            failures.append(f"{urlparse(url).netloc} 返回的图片与番号不匹配")
+        except requests.RequestException as exc:
+            failures.append(f"{urlparse(url).netloc}: {exc.__class__.__name__}")
+    if failures:
+        raise ValueError("Google 图片搜索未向服务器返回可用结果（" + "；".join(failures) + "）")
     return candidates
 
 
@@ -993,9 +997,9 @@ def _search_google_cover(task: dict) -> None:
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
         proxies = _task_proxy(task)
-        candidates = _google_image_candidates(query, proxies)
+        candidates = _search_google_image_candidates(query, proxies)
         if not candidates:
-            raise ValueError("搜索引擎未返回与番号匹配的可下载封面")
+            raise ValueError("Google 图片搜索未返回可下载封面")
         task["google_cover_candidates"] = [{"id": f"image-{i + 1}", **item} for i, item in enumerate(candidates[:12])]
         task["google_cover_search_status"] = "succeeded"
         task["google_cover_search_running"] = False
@@ -1051,7 +1055,7 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
             output = task.setdefault("image_output", {})
             output["poster_file"] = str(destination)
             output.setdefault("save_dir", str(destination.parent))
-            _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 搜索封面下载成功：{destination}")
+            _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 封面下载成功：{destination}")
             task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
             task["google_cover_search_status"] = "selected"
             task["google_cover_selected_id"] = candidate_id
