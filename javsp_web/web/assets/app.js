@@ -1014,26 +1014,25 @@ $('#task-delete-form').addEventListener('submit', async (event) => {
     await loadTasks();
   } catch (error) { $('#task-delete-message').textContent = error.message; }
 });
-document.addEventListener('submit', async (event) => {
-  const form = event.target.closest('#task-metadata-form');
-  if (!form) return;
-  event.preventDefault();
-  const button = form.querySelector('button[type="submit"]');
-  const data = new FormData(form);
-  const actress = String(data.get('actress') || '').split(/[\n,，、]/).map((value) => value.trim()).filter(Boolean);
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-save-task-metadata]');
+  if (!button) return;
+  const editor = button.closest('#task-metadata-editor');
+  if (!editor) return;
+  const actress = String(editor.querySelector('[name="actress"]')?.value || '').split(/[\n,，、]/).map((value) => value.trim()).filter(Boolean);
   const payload = {
-    dvdid: String(data.get('dvdid') || '').trim(),
-    title: String(data.get('title') || '').trim(),
+    dvdid: String(editor.querySelector('[name="dvdid"]')?.value || '').trim(),
+    title: String(editor.querySelector('[name="title"]')?.value || '').trim(),
     actress,
-    director: String(data.get('director') || '').trim(),
-    producer: String(data.get('producer') || '').trim(),
-    publisher: String(data.get('publisher') || '').trim(),
-    publish_date: String(data.get('publish_date') || '').trim(),
-    apply_to_folder: data.get('apply_to_folder') === 'on',
+    director: String(editor.querySelector('[name="director"]')?.value || '').trim(),
+    producer: String(editor.querySelector('[name="producer"]')?.value || '').trim(),
+    publisher: String(editor.querySelector('[name="publisher"]')?.value || '').trim(),
+    publish_date: String(editor.querySelector('[name="publish_date"]')?.value || '').trim(),
+    apply_to_folder: Boolean(editor.querySelector('[name="apply_to_folder"]')?.checked),
   };
   button.disabled = true;
   try {
-    await api(`/api/tasks/${encodeURIComponent(form.dataset.taskId)}/metadata`, { method: 'PATCH', body: JSON.stringify(payload) });
+    await api(`/api/tasks/${encodeURIComponent(editor.dataset.taskId)}/metadata`, { method: 'PATCH', body: JSON.stringify(payload) });
     state.taskMetadataEditing = false;
     await loadTasks();
     showToast(payload.apply_to_folder ? '影片资料和文件夹 NFO 已保存' : '影片资料已保存');
@@ -1243,7 +1242,7 @@ function openTaskDetail(taskId) {
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
   const actressInput = Array.isArray(metadata.actress) ? metadata.actress.join('\n') : (metadata.actress || '');
-  const metadataEditor = state.taskMetadataEditing ? `<form id="task-metadata-form" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="submit">保存资料</button></div></form>` : `<section class="task-metadata-summary"><div class="task-metadata-summary-heading"><h3>影片资料</h3><button class="button secondary" type="button" data-edit-task-metadata>修改</button></div><div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div></section>`;
+  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="task-metadata-summary"><div class="task-metadata-summary-heading"><h3>影片资料</h3><button class="button secondary" type="button" data-edit-task-metadata>修改</button></div><div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div></section>`;
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
