@@ -265,8 +265,9 @@ function proxyConnectivityResultMarkup(result) {
   const sites = (result.restricted_sites || []).join('、');
   let compatibility = '';
   if (sites) compatibility = result.japan_compatible ? `<p class="form-message">${escapeHtml(sites)} 的出口地区满足已知限制。</p>` : `<p class="form-error">${escapeHtml(sites)} 存在日本地区访问限制，当前${route}${result.reachable ? `为 ${escapeHtml(result.country || '未知')} 地区` : '无法确认地区'}。</p>`;
-  const hint = result.clash_mihomo_hint ? `<details><summary>Clash/Mihomo 覆写提示</summary><pre>${escapeHtml(result.clash_mihomo_hint)}</pre></details>` : '';
-  return `<p><strong>${route}：</strong>${exit}</p>${compatibility}${hint}`;
+  const hint = result.clash_mihomo_hint ? `<details open><summary>Clash/Mihomo 覆写提示</summary><pre>${escapeHtml(result.clash_mihomo_hint)}</pre></details>` : '';
+  const preflight = result.preflight_message ? `<pre class="proxy-test-preflight">${escapeHtml(result.preflight_message)}</pre>` : '';
+  return `${preflight}<p><strong>${route}：</strong>${exit}</p>${compatibility}${hint}`;
 }
 
 function crawlerConfigMarkup(selection = {}) {
@@ -1730,6 +1731,7 @@ document.addEventListener('click', async (event) => {
         body: JSON.stringify({
           proxy_server: values.network?.proxy_server || '',
           crawler_selection: values.crawler?.selection || state.formValues?.crawler?.selection || {},
+          preset_id: state.editingPreset || 'default',
           timeout: values.network?.timeout || '',
         }),
       });

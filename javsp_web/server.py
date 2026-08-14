@@ -167,6 +167,7 @@ class PresetConvertBody(BaseModel):
 class ProxyConnectivityTestBody(BaseModel):
     proxy_server: str | None = Field(default=None, max_length=2048)
     crawler_selection: dict | str | None = None
+    preset_id: str = Field(default="default", max_length=80)
     timeout: str | None = Field(default=None, max_length=32)
 
 
@@ -611,6 +612,8 @@ def _selected_crawlers(value: dict | str | None) -> set[str]:
             return set()
     if not isinstance(value, dict):
         return set()
+    if isinstance(value.get("selection"), (dict, str)):
+        return _selected_crawlers(value["selection"])
     selected: set[str] = set()
     for crawlers in value.values():
         if isinstance(crawlers, list):
@@ -650,7 +653,13 @@ def _proxy_connectivity_test(body: ProxyConnectivityTestBody) -> dict:
         except (requests.RequestException, ValueError, TypeError):
             continue
 
-    restricted = [details for crawler, details in _JAPAN_RESTRICTED_CRAWLERS.items() if crawler in _selected_crawlers(body.crawler_selection)]
+    selected_crawlers = _selected_crawlers(body.crawler_selection)
+    if not selected_crawlers:
+        preset = get_preset(body.preset_id)
+        if preset:
+            preset_values = _public_preset(preset).get("form_values") or {}
+            selected_crawlers = _selected_crawlers((preset_values.get("crawler") or {}).get("selection"))
+    restricted = [details for crawler, details in _JAPAN_RESTRICTED_CRAWLERS.items() if crawler in selected_crawlers]
     site_names = [name for name, _ in restricted]
     domains = [domain for _, domain in restricted]
     hint = ""
@@ -663,6 +672,27 @@ def _proxy_connectivity_test(body: ProxyConnectivityTestBody) -> dict:
         "japan_compatible": bool(result["reachable"] and result["country"] == "JP") if restricted else None,
         "clash_mihomo_hint": hint,
     })
+    if site_names:
+        site_text = "、".join(site_names)
+        route_text = "直连" if not raw_proxy else "配置代理"
+        if result["reachable"] and result["country"] == "JP":
+            preflight = f"网络预检：正在检查 {site_text} 所需的出口地区\n网络预检通过：{site_text} 的{route_text}出口地区满足已知限制。"
+        elif not result["reachable"]:
+            preflight = (
+                f"网络预检：正在检查 {site_text} 所需的出口地区\n"
+                f"网络预检：无法查询{route_text}出口地区；将继续执行刮削。\n"
+                f"网络预检警告：已启用的 {site_text} 存在日本地区访问限制，但无法查询{route_text}出口地区。"
+                "这些爬虫可能返回 403、登录页或地区限制页面；刮削会继续，其他爬虫不受影响。"
+            )
+        else:
+            preflight = (
+                f"网络预检：正在检查 {site_text} 所需的出口地区\n"
+                f"网络预检警告：已启用的 {site_text} 存在日本地区访问限制，但当前{route_text}出口地区为 {result['country']}。"
+                "这些爬虫可能返回 403、登录页或地区限制页面；刮削会继续，其他爬虫不受影响。"
+            )
+    else:
+        preflight = "网络预检：当前爬虫选择中没有需要日本出口地区的爬虫。"
+    result["preflight_message"] = preflight
     return result
 
 
