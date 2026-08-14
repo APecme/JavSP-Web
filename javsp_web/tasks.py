@@ -50,6 +50,40 @@ _MAX_LOG_LINES = 5000
 _MAX_DISPLAY_LOG_LINES = 1500
 _GOOGLE_CAPTCHA_TIMEOUT = 300
 _BYTE_SIZE_RE = re.compile(r"^\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>[kmgtpe]?i?b)?\s*$", re.IGNORECASE)
+_COVER_CRAWLER_MARKER = "JAVSP_WEB_COVER_CRAWL "
+_COVER_CRAWLER_SCRIPT = r'''
+import importlib
+import json
+import sys
+
+from javsp.config import Cfg
+from javsp.datatype import MovieInfo
+
+MARKER = "JAVSP_WEB_COVER_CRAWL "
+known = {"airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto", "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv"}
+dvdid = sys.argv[-1]
+names = []
+for _, selection in Cfg().crawler.selection.items():
+    for name in selection:
+        name = str(name)
+        if name not in names:
+            names.append(name)
+results = []
+for name in names:
+    try:
+        module_name = "javsp.web." + name if name in known else name
+        parse_data = getattr(importlib.import_module(module_name), "parse_data", None)
+        if not callable(parse_data):
+            continue
+        movie = MovieInfo(dvdid)
+        parse_data(movie)
+        for cover in (getattr(movie, "big_cover", None), getattr(movie, "cover", None)):
+            if isinstance(cover, str) and cover.startswith(("http://", "https://")):
+                results.append({"source": name, "image_url": cover, "title": str(getattr(movie, "title", "") or "")})
+    except Exception as exc:
+        results.append({"source": name, "error": exc.__class__.__name__})
+print(MARKER + json.dumps({"results": results}, ensure_ascii=False))
+'''
 
 
 def _decode_output(raw: bytes) -> str:
@@ -1355,34 +1389,64 @@ def save_uploaded_cover(task_id: str, content: bytes) -> bool:
 
 def _search_google_cover(task: dict) -> None:
     task_id = str(task["id"])
+    cookiecloud_file: Path | None = None
     try:
         query = _task_cover_query(task)
         if not query:
             raise ValueError("未能从任务中识别影片番号")
         task["google_cover_search_status"] = "running"
         task["google_cover_search_error"] = ""
-        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用 Google 图片搜索封面：{query}")
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"正在使用全部已配置爬虫搜索封面：{query}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
-        proxies = _task_proxy(task)
-        route = "配置代理" if proxies else "直连"
-        _logs[task_id].append(f"Google 图片搜索网络路径：{route}")
-        task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
-        _persist(task)
-        candidates = _search_google_image_candidates(query, proxies, task_id=task_id, task=task)
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+        settings = get_cookiecloud_settings(include_password=True)
+        if settings.get("enabled"):
+            try:
+                cookies = fetch_cookiecloud(settings)
+                _TASK_COOKIECLOUD_DIR.mkdir(parents=True, exist_ok=True)
+                cookiecloud_file = _TASK_COOKIECLOUD_DIR / f"{task_id}-cover-{uuid.uuid4().hex}.json"
+                cookiecloud_file.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
+                env["JAVSP_COOKIECLOUD_FILE"] = str(cookiecloud_file)
+                summary = cookiecloud_summary(cookies)
+                _logs[task_id].append(f"封面搜索已同步 CookieCloud：{summary['domains']} 个站点，{summary['cookies']} 条 Cookie")
+            except (CookieCloudError, OSError, ValueError) as exc:
+                _logs[task_id].append(f"封面搜索 CookieCloud 同步失败，继续使用其他凭据：{exc}")
+        completed = subprocess.run(
+            [sys.executable, "-c", _COVER_CRAWLER_SCRIPT, "-c", str(task["config_path"]), query],
+            cwd=str(VENDOR_DIR), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180,
+        )
+        output = completed.stdout.decode("utf-8", errors="replace")
+        result_line = next((line for line in reversed(output.splitlines()) if line.startswith(_COVER_CRAWLER_MARKER)), "")
+        if not result_line:
+            raise ValueError("爬虫封面搜索未返回结果")
+        result = json.loads(result_line[len(_COVER_CRAWLER_MARKER):])
+        candidates, seen = [], set()
+        for item in result.get("results") or []:
+            url = str(item.get("image_url") or "") if isinstance(item, dict) else ""
+            if not url.startswith(("http://", "https://")) or len(url) > 4096 or url in seen:
+                continue
+            seen.add(url)
+            candidates.append({"image_url": url, "thumbnail_url": url, "source": str(item.get("source") or "爬虫"), "title": str(item.get("title") or "")[:160]})
         if not candidates:
-            raise ValueError("Google 图片搜索未返回可下载封面")
+            raise ValueError("已配置爬虫未返回可下载封面")
         task["google_cover_candidates"] = [{"id": f"image-{i + 1}", **item} for i, item in enumerate(candidates[:12])]
         task["google_cover_search_status"] = "succeeded"
         task["google_cover_search_running"] = False
         _persist(task)
         return
-    except (OSError, requests.RequestException, ValueError) as exc:
-        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 图片搜索封面失败：{exc}")
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, TypeError, ValueError) as exc:
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"爬虫搜索封面失败：{exc}")
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         task["google_cover_search_status"] = "failed"
-        task["google_cover_search_error"] = "搜索引擎未返回可下载封面，请查看任务日志"
+        task["google_cover_search_error"] = "已配置爬虫未返回可下载封面，请查看任务日志"
     finally:
+        if cookiecloud_file:
+            try:
+                cookiecloud_file.unlink(missing_ok=True)
+            except OSError:
+                pass
         task["google_cover_search_running"] = False
         _persist(task)
 
@@ -1427,7 +1491,7 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
             output = task.setdefault("image_output", {})
             output["poster_file"] = str(destination)
             output.setdefault("save_dir", str(destination.parent))
-            _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"Google 封面下载成功：{destination}")
+            _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"爬虫封面下载成功：{destination}")
             task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
             task["google_cover_search_status"] = "selected"
             task["google_cover_selected_id"] = candidate_id
@@ -1591,7 +1655,7 @@ def recover_interrupted_tasks() -> int:
                 task["google_cover_search_running"] = False
                 task["google_cover_search_status"] = "failed"
                 task["google_cover_search_error"] = "服务重启后搜索已中止，请重试"
-                logs.append("Google 搜索封面已因服务重启中止，请重试")
+                logs.append("爬虫封面搜索已因服务重启中止，请重试")
                 changed += 1
             task["log_tail"] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
         if changed:

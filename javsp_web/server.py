@@ -147,6 +147,7 @@ class CookieCloudBody(BaseModel):
     enabled: bool = False
     server_url: str = Field(default="", max_length=2048)
     uuid: str = Field(default="", max_length=512)
+    crypto_type: Literal["auto", "legacy", "aes-128-cbc-fixed"] = "auto"
     password: str | None = Field(default=None, max_length=2048)
     clear_password: bool = False
 
@@ -1672,7 +1673,7 @@ def retry_images(task_id: str, _: dict = Depends(current_user)) -> dict:
 @app.post("/api/tasks/{task_id}/cover/google-search", status_code=202, include_in_schema=False)
 def search_task_cover_with_google(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not search_google_cover(task_id):
-        raise HTTPException(status_code=400, detail="任务不存在、封面已存在，或 Google 搜索正在进行")
+        raise HTTPException(status_code=400, detail="任务不存在、封面已存在，或爬虫封面搜索正在进行")
     return {"ok": True}
 
 

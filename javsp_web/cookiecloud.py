@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 from typing import Any
 from urllib.parse import quote
 
 import requests
+from Crypto.Cipher import AES
 
 
 class CookieCloudError(RuntimeError):
@@ -51,21 +55,81 @@ def _cookie_pairs(cookie_data: Any) -> dict[str, dict[str, str]]:
     return {domain: cookies for domain, cookies in result.items() if cookies}
 
 
+def _unpad_pkcs7(data: bytes) -> bytes:
+    if not data:
+        raise ValueError("empty plaintext")
+    size = data[-1]
+    if not 1 <= size <= AES.block_size or data[-size:] != bytes([size]) * size:
+        raise ValueError("invalid padding")
+    return data[:-size]
+
+
+def _decrypt_legacy(encrypted: str, uuid: str, password: str) -> dict[str, Any]:
+    raw = base64.b64decode(encrypted)
+    if len(raw) < 32 or raw[:8] != b"Salted__":
+        raise ValueError("invalid CryptoJS dynamic-IV payload")
+    salt, ciphertext = raw[8:16], raw[16:]
+    passphrase = hashlib.md5(f"{uuid}-{password}".encode("utf-8")).hexdigest()[:16].encode("utf-8")
+    key_iv, previous = b"", b""
+    while len(key_iv) < 48:
+        previous = hashlib.md5(previous + passphrase + salt).digest()
+        key_iv += previous
+    plaintext = _unpad_pkcs7(AES.new(key_iv[:32], AES.MODE_CBC, key_iv[32:48]).decrypt(ciphertext))
+    result = json.loads(plaintext.decode("utf-8"))
+    if not isinstance(result, dict):
+        raise ValueError("decrypted data is not an object")
+    return result
+
+
+def _decrypt_fixed_iv(encrypted: str, uuid: str, password: str) -> dict[str, Any]:
+    raw = base64.b64decode(encrypted)
+    key = hashlib.md5(f"{uuid}-{password}".encode("utf-8")).hexdigest()[:16].encode("utf-8")
+    plaintext = _unpad_pkcs7(AES.new(key, AES.MODE_CBC, b"\0" * 16).decrypt(raw))
+    result = json.loads(plaintext.decode("utf-8"))
+    if not isinstance(result, dict):
+        raise ValueError("decrypted data is not an object")
+    return result
+
+
+def _decode_payload(response: requests.Response, uuid: str, password: str, configured_crypto_type: str) -> dict[str, Any]:
+    try:
+        payload = response.json()
+    except ValueError:
+        text = response.text.strip()
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            payload = {"encrypted": text}
+    if isinstance(payload, str):
+        payload = {"encrypted": payload}
+    if not isinstance(payload, dict):
+        raise CookieCloudError("CookieCloud 返回的数据格式无效")
+    if not payload.get("encrypted"):
+        return payload
+    crypto_type = configured_crypto_type if configured_crypto_type != "auto" else str(payload.get("crypto_type") or "legacy")
+    try:
+        if crypto_type == "aes-128-cbc-fixed":
+            return _decrypt_fixed_iv(str(payload["encrypted"]), uuid, password)
+        return _decrypt_legacy(str(payload["encrypted"]), uuid, password)
+    except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        label = "AES-128-CBC（固定 IV）" if crypto_type == "aes-128-cbc-fixed" else "CryptoJS（动态 IV）"
+        raise CookieCloudError(f"CookieCloud {label} 解密失败，请检查 UUID、密码和加密类型") from exc
+
+
 def fetch_cookiecloud(settings: dict[str, Any], timeout: float = 15) -> dict[str, dict[str, str]]:
     server_url = str(settings.get("server_url") or "")
     uuid = str(settings.get("uuid") or "")
     password = str(settings.get("password") or "")
+    crypto_type = str(settings.get("crypto_type") or "auto")
     if not (server_url and uuid and password):
         raise CookieCloudError("请完整填写 CookieCloud 服务地址、UUID 和密码")
     try:
         response = requests.get(
             cookiecloud_url(server_url, uuid),
-            params={"password": password},
-            headers={"CookieCloud-Password": password},
             timeout=timeout,
         )
         response.raise_for_status()
-        payload = response.json()
+        payload = _decode_payload(response, uuid, password, crypto_type)
     except requests.RequestException as exc:
         # requests may include the complete URL in its exception text. The
         # CookieCloud password is a query parameter for compatibility, so do
@@ -73,8 +137,8 @@ def fetch_cookiecloud(settings: dict[str, Any], timeout: float = 15) -> dict[str
         status_code = getattr(getattr(exc, "response", None), "status_code", None)
         detail = f"HTTP {status_code}" if status_code else "网络请求失败"
         raise CookieCloudError(f"无法连接 CookieCloud：{detail}") from exc
-    except ValueError as exc:
-        raise CookieCloudError("CookieCloud 返回的不是 JSON 数据") from exc
+    except CookieCloudError:
+        raise
 
     if not isinstance(payload, dict):
         raise CookieCloudError("CookieCloud 返回的数据格式无效")

@@ -489,6 +489,7 @@ def get_cookiecloud_settings(include_password: bool = False) -> dict[str, Any]:
             "enabled": bool(saved.get("enabled")),
             "server_url": str(saved.get("server_url") or ""),
             "uuid": str(saved.get("uuid") or ""),
+            "crypto_type": str(saved.get("crypto_type") or "auto"),
             "has_password": bool(password),
             "updated_at": str(saved.get("updated_at") or ""),
         }
@@ -509,6 +510,7 @@ def save_cookiecloud_settings(settings: dict[str, Any]) -> dict[str, Any]:
             "enabled": bool(settings.get("enabled")),
             "server_url": str(settings.get("server_url") or "").strip().rstrip("/"),
             "uuid": str(settings.get("uuid") or "").strip(),
+            "crypto_type": str(settings.get("crypto_type") or existing.get("crypto_type") or "auto"),
             "password": password,
             "updated_at": now_iso(),
         }

@@ -353,7 +353,7 @@ function renderGoogleBrowser(taskId) {
 function renderGoogleCoverLoading() {
   const target = $('#google-cover-candidates');
   if (!target) return;
-  target.innerHTML = '<section class="google-cover-loading" role="status"><i></i><strong>正在搜索 Google 图片</strong></section>';
+  target.innerHTML = '<section class="google-cover-loading" role="status"><i></i><strong>正在查询全部已配置爬虫</strong></section>';
 }
 
 function googleImageSearchUrl(task) {
@@ -377,6 +377,28 @@ function renderGoogleCoverCandidates(taskId, candidates) {
   const target = $('#google-cover-candidates');
   if (!target) return;
   target.innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="/api/tasks/${encodeURIComponent(taskId)}/cover/candidates/${encodeURIComponent(candidate.id)}/thumbnail" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
+}
+
+async function waitForCrawlerCoverCandidates(taskId) {
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    if (state.googleCoverDialogDismissed || state.googleCoverDialogTaskId !== taskId) return;
+    try {
+      const result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/candidates`);
+      if (result.status === 'succeeded') {
+        renderGoogleCoverCandidates(taskId, result.candidates || []);
+        return;
+      }
+      if (result.status === 'failed') {
+        $('#google-cover-message').textContent = result.error || '爬虫未返回可下载封面';
+        return;
+      }
+    } catch (error) {
+      $('#google-cover-message').textContent = error.message;
+      return;
+    }
+  }
+  $('#google-cover-message').textContent = '爬虫封面搜索超时，请查看任务日志';
 }
 
 $('#google-cover-dialog')?.addEventListener('close', () => {
@@ -1300,7 +1322,7 @@ function openTaskDetail(taskId) {
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const taskLogLines = (task.log_tail || []).join('\n');
   const taskLog = taskLogLines ? `<details class="task-detail-log" data-task-details="detail-${escapeHtml(task.id)}"><summary>查看任务日志（${task.log_tail.length} 行）</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="detail-${escapeHtml(task.id)}">${escapeHtml(taskLogLines)}</pre><button class="copy-log" type="button" data-copy-task="detail-${escapeHtml(task.id)}">复制日志</button></div></details>` : '<p class="muted">当前任务尚未输出日志。</p>';
-  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">在本机浏览器中搜索封面</button></div>` : '';
+  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
@@ -1313,6 +1335,7 @@ function cookiecloudPayload() {
     enabled: $('#cookiecloud-enabled').checked,
     server_url: $('#cookiecloud-server-url').value.trim(),
     uuid: $('#cookiecloud-uuid').value.trim(),
+    crypto_type: $('#cookiecloud-crypto-type').value,
     password: $('#cookiecloud-password').value,
     clear_password: $('#cookiecloud-clear-password').checked,
   };
@@ -1325,6 +1348,7 @@ async function loadCookieCloud() {
     $('#cookiecloud-enabled').checked = Boolean(settings.enabled);
     $('#cookiecloud-server-url').value = settings.server_url || '';
     $('#cookiecloud-uuid').value = settings.uuid || '';
+    $('#cookiecloud-crypto-type').value = settings.crypto_type || 'auto';
     $('#cookiecloud-password').value = '';
     $('#cookiecloud-clear-password').checked = false;
     message.textContent = settings.has_password ? '已保存密码' : '';
@@ -2185,10 +2209,15 @@ document.addEventListener('click', async (event) => {
     if (!currentTask) return;
     state.googleCoverDialogTaskId = taskId;
     state.googleCoverDialogDismissed = false;
-    renderGoogleClientSearch(currentTask);
+    renderGoogleCoverLoading();
     $('#google-cover-message').textContent = '';
     if (dialog && !dialog.open) dialog.showModal();
-    openGoogleClientSearch(googleImageSearchUrl(currentTask));
+    try {
+      await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/search`, { method: 'POST' });
+      waitForCrawlerCoverCandidates(taskId);
+    } catch (error) {
+      $('#google-cover-message').textContent = error.message;
+    }
   }
   const openGoogleSearch = event.target.closest('[data-open-google-client-search]');
   if (openGoogleSearch) openGoogleClientSearch(openGoogleSearch.dataset.openGoogleClientSearch);
