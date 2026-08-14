@@ -1125,7 +1125,7 @@ function openTaskDetail(taskId) {
   const metadata = task.progress?.metadata || {};
   const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name]].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
-  const poster = `<div class="detail-poster-wrap">${posterImage}<div id="task-media-overlay" class="task-media-overlay"></div></div>`;
+  const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
@@ -1141,29 +1141,12 @@ function openTaskDetail(taskId) {
   const googleStatus = task.google_cover_search_running ? '正在使用搜索引擎搜索封面' : (task.google_cover_search_status === 'failed' ? `搜索引擎搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
   const taskLogLines = (task.log_tail || []).join('\n');
   const taskLog = taskLogLines ? `<details class="task-detail-log" data-task-details="detail-${escapeHtml(task.id)}"><summary>查看任务日志（${task.log_tail.length} 行）</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="detail-${escapeHtml(task.id)}">${escapeHtml(taskLogLines)}</pre><button class="copy-log" type="button" data-copy-task="detail-${escapeHtml(task.id)}">复制日志</button></div></details>` : '<p class="muted">当前任务尚未输出日志。</p>';
-  const googleLogButton = task.google_cover_search_status === 'failed' ? `<button class="button secondary" type="button" data-open-task-log="${escapeHtml(task.id)}">定位到任务日志</button>` : '';
-  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面')}</button>${googleLogButton}${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
+  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
   $('#task-detail-content').innerHTML = `<div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div><section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
   if (!$('#task-detail-dialog').open) $('#task-detail-dialog').showModal();
-  api(`/api/tasks/${encodeURIComponent(task.id)}/media-links`).then((result) => {
-    const target = $('#task-media-overlay');
-    if (!target) return;
-    const playable = (result.links || []).filter((link) => link.unique_match && link.play_url);
-    const searchable = (result.links || []).filter((link) => link.search_url);
-    target.innerHTML = playable.length
-      ? playable.map((link) => `<a class="media-play-button" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener" title="在 ${escapeHtml(link.name)} 中播放">播放</a>`).join('')
-      : searchable.map((link) => `<a class="media-play-button media-search-button" href="${escapeHtml(link.search_url)}" target="_blank" rel="noopener" title="在 ${escapeHtml(link.name)} 中搜索">搜索</a>`).join('');
-  }).catch(() => {});
-  $('#task-detail-content').insertAdjacentHTML('beforeend', '<section id="task-media-links" class="task-media-links"><h3>媒体库播放</h3><p class="muted">正在查找匹配的媒体条目…</p></section>');
-  api(`/api/tasks/${encodeURIComponent(task.id)}/media-links`).then((result) => {
-    const target = $('#task-media-links');
-    if (!target) return;
-    const links = result.links || [];
-    target.innerHTML = links.length ? `<h3>媒体库播放</h3><div class="media-link-list">${links.map((link) => link.unique_match && link.play_url ? `<a class="button secondary" href="${escapeHtml(link.play_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中播放</a>` : (link.search_url ? `<a class="button secondary" href="${escapeHtml(link.search_url)}" target="_blank" rel="noopener">在 ${escapeHtml(link.name)} 中打开媒体库</a>` : `<span class="muted">${escapeHtml(link.name)}：${escapeHtml(link.error || '未找到匹配条目')}</span>`)).join('')}</div>` : '<h3>媒体库播放</h3><p class="muted">尚未配置媒体服务器。</p>';
-  }).catch(() => { const target = $('#task-media-links'); if (target) target.innerHTML = '<h3>媒体库播放</h3><p class="muted">暂时无法读取媒体服务器。</p>'; });
 }
 
 function renderOverview() {
@@ -1948,21 +1931,6 @@ document.addEventListener('click', async (event) => {
   }
   const detail = event.target.closest('[data-task-detail]');
   if (detail) openTaskDetail(detail.dataset.taskDetail);
-  const openTaskLogButton = event.target.closest('[data-open-task-log]');
-  if (openTaskLogButton) {
-    const taskId = openTaskLogButton.dataset.openTaskLog;
-    state.taskOpen ||= {};
-    state.taskOpen[taskId] = true;
-    $('#task-detail-dialog')?.close();
-    showView('scrape');
-    renderTasks();
-    const logDetails = Array.from(document.querySelectorAll('[data-task-details]')).find((element) => element.dataset.taskDetails === `detail-${taskId}`);
-    if (logDetails) {
-      logDetails.open = true;
-      logDetails.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-    return;
-  }
   const retryImages = event.target.closest('[data-retry-task-images]');
   if (retryImages) {
     retryImages.disabled = true;
@@ -2002,7 +1970,7 @@ document.addEventListener('click', async (event) => {
       const candidates = result?.candidates || [];
       const dialog = $('#google-cover-dialog');
       $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || (result?.status === 'running' ? '搜索引擎仍在进行，请稍后重试。' : '搜索引擎未返回可用图片'));
-      $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="${escapeHtml(candidate.thumbnail_url || candidate.image_url)}" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
+      $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="/api/tasks/${encodeURIComponent(taskId)}/cover/candidates/${encodeURIComponent(candidate.id)}/thumbnail" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
       if (dialog && !dialog.open) dialog.showModal();
       await loadTasks();
     }).catch((error) => {

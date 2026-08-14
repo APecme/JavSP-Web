@@ -851,7 +851,11 @@ def _is_public_image_url(value: str) -> bool:
 
 def _request_public_image(url: str, proxies: dict[str, str]) -> requests.Response:
     """Fetch an image while validating every redirect target against SSRF."""
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Referer": "https://www.google.com/",
+    }
     for _ in range(5):
         if not _is_public_image_url(url):
             raise ValueError("图片地址不是可公开访问的地址")
@@ -1269,6 +1273,25 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
 
     threading.Thread(target=download, name=f"google-cover-download-{task_id}", daemon=True).start()
     return True
+
+
+def google_cover_thumbnail(task_id: str, candidate_id: str) -> tuple[bytes, str] | None:
+    """Serve a candidate image through the task's network route for browser previews."""
+    task = get_task(task_id)
+    if not task:
+        return None
+    candidate = next((item for item in task.get("google_cover_candidates") or [] if item.get("id") == candidate_id), None)
+    url = str((candidate or {}).get("thumbnail_url") or (candidate or {}).get("image_url") or "")
+    if not url.startswith(("http://", "https://")) or len(url) > 4096:
+        return None
+    response = _request_public_image(url, _task_proxy(task))
+    content = response.content
+    if not content or len(content) > 16 * 1024 * 1024:
+        raise ValueError("候选封面图片无效或过大")
+    with Image.open(io.BytesIO(content)) as image:
+        image.verify()
+    media_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+    return content, media_type if media_type.startswith("image/") else "image/jpeg"
 
 
 def _rebuild_retry_poster(fanart_file: Path, poster_file: Path) -> None:

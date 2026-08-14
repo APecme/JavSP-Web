@@ -63,8 +63,8 @@ from .storage import (
     write_config,
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
-from .media import list_media_libraries, media_links_for_task, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
+from .media import list_media_libraries, sync_media_server
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
 from .timeutils import local_now, timezone_name
 
 
@@ -904,14 +904,6 @@ def task_fanart(task_id: str, index: int, _: dict = Depends(current_user)) -> Fi
     return FileResponse(path)
 
 
-@app.get("/api/tasks/{task_id}/media-links")
-def task_media_links(task_id: str, _: dict = Depends(current_user)) -> dict:
-    item = get_task(task_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    return {"links": media_links_for_task(item)}
-
-
 def _public_media_server(server: dict) -> dict:
     return {
         "id": server.get("id", ""),
@@ -1632,6 +1624,18 @@ def google_cover_candidates(task_id: str, _: dict = Depends(current_user)) -> di
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     return {"candidates": task.get("google_cover_candidates") or [], "status": task.get("google_cover_search_status") or "idle", "error": task.get("google_cover_search_error") or ""}
+
+
+@app.get("/api/tasks/{task_id}/cover/candidates/{candidate_id}/thumbnail")
+def google_cover_candidate_thumbnail(task_id: str, candidate_id: str, _: dict = Depends(current_user)) -> Response:
+    try:
+        image = google_cover_thumbnail(task_id, candidate_id)
+    except (OSError, requests.RequestException, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="候选封面预览下载失败") from exc
+    if not image:
+        raise HTTPException(status_code=404, detail="候选封面不存在")
+    content, media_type = image
+    return Response(content=content, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
 
 
 @app.websocket("/api/tasks/{task_id}/cover/browser")
