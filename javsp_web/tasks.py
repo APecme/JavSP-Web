@@ -1173,17 +1173,28 @@ def cancel_task(task_id: str) -> bool:
 
 
 def recover_interrupted_tasks() -> int:
-    """Mark tasks left running by a previous service process as cancelled."""
+    """Resume scrape tasks that lost their worker process during a service restart."""
+    to_resume: list[dict] = []
     with _queue_condition:
         tasks = load_tasks()
         changed = 0
         for task in tasks:
             logs = _logs.setdefault(str(task.get("id") or ""), list(task.get("log_tail") or []))
-            if task.get("status") == "running":
-                task["status"] = "cancelled"
-                task["finished_at"] = now_iso()
-                task["error"] = "服务重启后任务已中止"
-                logs.append("服务重启，任务已中止")
+            if task.get("status") in {"running", "queued"}:
+                was_running = task.get("status") == "running"
+                try:
+                    recovery_count = max(0, int(task.get("recovery_count") or 0))
+                except (TypeError, ValueError):
+                    recovery_count = 0
+                task["status"] = "queued"
+                task["started_at"] = None
+                task["finished_at"] = None
+                task["return_code"] = None
+                task["error"] = None
+                task["recovery_count"] = recovery_count + 1
+                task["recovered_at"] = now_iso()
+                logs.append("服务重启，正在重新排队并恢复刮削任务" if was_running else "服务重启，已恢复排队中的刮削任务")
+                to_resume.append(task)
                 changed += 1
             if task.get("google_cover_search_running"):
                 task["google_cover_search_running"] = False
@@ -1195,7 +1206,9 @@ def recover_interrupted_tasks() -> int:
         if changed:
             save_tasks(tasks)
             _queue_condition.notify_all()
-        return changed
+    for task in to_resume:
+        threading.Thread(target=_run_task, args=(task,), name=f"task-recovery-{task['id']}", daemon=True).start()
+    return changed
 
 
 def delete_task(task_id: str) -> bool:
