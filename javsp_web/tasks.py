@@ -1113,6 +1113,10 @@ def _search_google_cover(task: dict) -> None:
         task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
         _persist(task)
         proxies = _task_proxy(task)
+        route = "配置代理" if proxies else "直连"
+        _logs[task_id].append(f"Google 图片搜索网络路径：{route}")
+        task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+        _persist(task)
         candidates = _search_google_image_candidates(query, proxies)
         if not candidates:
             raise ValueError("Google 图片搜索未返回可下载封面")

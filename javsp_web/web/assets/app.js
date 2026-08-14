@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
@@ -467,6 +467,13 @@ function restoreLogScroll() {
   document.querySelectorAll('[data-task-details]').forEach((details) => { details.open = Boolean(state.logOpen[details.dataset.taskDetails]); });
 }
 
+function hasTaskDetailLogSelection() {
+  const selection = window.getSelection?.();
+  const content = $('#task-detail-content');
+  if (!selection || selection.isCollapsed || !selection.rangeCount || !content) return false;
+  return content.contains(selection.anchorNode) && content.contains(selection.focusNode);
+}
+
 function renderTasks() {
   rememberLogScroll();
   $('#task-table').innerHTML = state.tasks.length ? state.tasks.map(taskCard).join('') : '<div class="task-list empty">还没有任务记录</div>';
@@ -521,7 +528,16 @@ function renderOverview() {
 
 async function loadTasks() {
   const pageScroll = window.scrollY;
-  try { rememberLogScroll(); state.tasks = await api('/api/tasks'); syncTaskExpansion(state.tasks); renderOverview(); renderTasks(); if ($('#task-detail-dialog')?.open && state.activeTaskDetail) openTaskDetail(state.activeTaskDetail); window.requestAnimationFrame(restoreLogScroll); } catch (error) { console.error(error); }
+  try {
+    rememberLogScroll();
+    state.tasks = await api('/api/tasks');
+    syncTaskExpansion(state.tasks);
+    renderOverview();
+    renderTasks();
+    const detailOpen = $('#task-detail-dialog')?.open && state.activeTaskDetail;
+    if (detailOpen && !state.taskDetailLogSelecting && !hasTaskDetailLogSelection()) openTaskDetail(state.activeTaskDetail);
+    window.requestAnimationFrame(restoreLogScroll);
+  } catch (error) { console.error(error); }
   if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
   window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
 }
@@ -1117,7 +1133,7 @@ function openTaskDetail(taskId) {
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const googleStatus = task.google_cover_search_running ? '正在使用搜索引擎搜索封面' : (task.google_cover_search_status === 'failed' ? `搜索引擎搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
   const taskLogLines = (task.log_tail || []).join('\n');
-  const taskLog = taskLogLines ? `<details class="task-detail-log" data-task-details="${escapeHtml(task.id)}"${task.google_cover_search_status === 'failed' ? ' open' : ''}><summary>查看任务日志（${task.log_tail.length} 行）</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="detail-${escapeHtml(task.id)}">${escapeHtml(taskLogLines)}</pre><button class="copy-log" type="button" data-copy-task="detail-${escapeHtml(task.id)}">复制日志</button></div></details>` : '<p class="muted">当前任务尚未输出日志。</p>';
+  const taskLog = taskLogLines ? `<details class="task-detail-log" data-task-details="detail-${escapeHtml(task.id)}"><summary>查看任务日志（${task.log_tail.length} 行）</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="detail-${escapeHtml(task.id)}">${escapeHtml(taskLogLines)}</pre><button class="copy-log" type="button" data-copy-task="detail-${escapeHtml(task.id)}">复制日志</button></div></details>` : '<p class="muted">当前任务尚未输出日志。</p>';
   const googleLogButton = task.google_cover_search_status === 'failed' ? `<button class="button secondary" type="button" data-open-task-log="${escapeHtml(task.id)}">定位到任务日志</button>` : '';
   const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面')}</button>${googleLogButton}${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
@@ -1933,7 +1949,7 @@ document.addEventListener('click', async (event) => {
     $('#task-detail-dialog')?.close();
     showView('scrape');
     renderTasks();
-    const logDetails = Array.from(document.querySelectorAll('[data-task-details]')).find((element) => element.dataset.taskDetails === taskId);
+    const logDetails = Array.from(document.querySelectorAll('[data-task-details]')).find((element) => element.dataset.taskDetails === `detail-${taskId}`);
     if (logDetails) {
       logDetails.open = true;
       logDetails.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -2238,3 +2254,10 @@ function formatLocalDateTime(value) {
 }
 
 $('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; });
+
+document.addEventListener('pointerdown', (event) => {
+  state.taskDetailLogSelecting = Boolean(event.target.closest('#task-detail-content .task-log'));
+});
+document.addEventListener('pointerup', () => {
+  state.taskDetailLogSelecting = false;
+});
