@@ -1116,11 +1116,14 @@ function openTaskDetail(taskId) {
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const googleStatus = task.google_cover_search_running ? '正在使用搜索引擎搜索封面' : (task.google_cover_search_status === 'failed' ? `搜索引擎搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
-  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
+  const taskLogLines = (task.log_tail || []).join('\n');
+  const taskLog = taskLogLines ? `<details class="task-detail-log" data-task-details="${escapeHtml(task.id)}"${task.google_cover_search_status === 'failed' ? ' open' : ''}><summary>查看任务日志（${task.log_tail.length} 行）</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="detail-${escapeHtml(task.id)}">${escapeHtml(taskLogLines)}</pre><button class="copy-log" type="button" data-copy-task="detail-${escapeHtml(task.id)}">复制日志</button></div></details>` : '<p class="muted">当前任务尚未输出日志。</p>';
+  const googleLogButton = task.google_cover_search_status === 'failed' ? `<button class="button secondary" type="button" data-open-task-log="${escapeHtml(task.id)}">定位到任务日志</button>` : '';
+  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面')}</button>${googleLogButton}${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
-  $('#task-detail-content').innerHTML = `<div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div><section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section><section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
+  $('#task-detail-content').innerHTML = `<div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div><section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
   if (!$('#task-detail-dialog').open) $('#task-detail-dialog').showModal();
   api(`/api/tasks/${encodeURIComponent(task.id)}/media-links`).then((result) => {
     const target = $('#task-media-overlay');
@@ -1922,6 +1925,21 @@ document.addEventListener('click', async (event) => {
   }
   const detail = event.target.closest('[data-task-detail]');
   if (detail) openTaskDetail(detail.dataset.taskDetail);
+  const openTaskLogButton = event.target.closest('[data-open-task-log]');
+  if (openTaskLogButton) {
+    const taskId = openTaskLogButton.dataset.openTaskLog;
+    state.taskOpen ||= {};
+    state.taskOpen[taskId] = true;
+    $('#task-detail-dialog')?.close();
+    showView('scrape');
+    renderTasks();
+    const logDetails = Array.from(document.querySelectorAll('[data-task-details]')).find((element) => element.dataset.taskDetails === taskId);
+    if (logDetails) {
+      logDetails.open = true;
+      logDetails.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    return;
+  }
   const retryImages = event.target.closest('[data-retry-task-images]');
   if (retryImages) {
     retryImages.disabled = true;
