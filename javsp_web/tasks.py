@@ -1304,6 +1304,35 @@ def _google_cover_destination(task: dict) -> Path:
     raise ValueError("无法确定刮削后的封面保存位置，请先完成影片整理后再下载封面")
 
 
+def save_uploaded_cover(task_id: str, content: bytes) -> bool:
+    """Validate a browser-uploaded cover and save it to the task's poster path."""
+    if not content or len(content) > 16 * 1024 * 1024:
+        return False
+    with _lock:
+        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        if not task or task.get("google_cover_search_running") or get_cover_path(task_id, 0):
+            return False
+        try:
+            destination = _google_cover_destination(task)
+            with Image.open(io.BytesIO(content)) as image:
+                image.verify()
+            with Image.open(io.BytesIO(content)) as image:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                image.convert("RGB").save(destination, "JPEG", quality=92)
+        except (OSError, ValueError):
+            return False
+        output = task.setdefault("image_output", {})
+        output["poster_file"] = str(destination)
+        output.setdefault("save_dir", str(destination.parent))
+        task["google_cover_search_running"] = False
+        task["google_cover_search_status"] = "selected"
+        task["google_cover_candidates"] = []
+        _logs.setdefault(task_id, list(task.get("log_tail") or [])).append(f"本机浏览器选择的封面已保存：{destination}")
+        task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
+        _persist(task)
+        return True
+
+
 def _search_google_cover(task: dict) -> None:
     task_id = str(task["id"])
     try:

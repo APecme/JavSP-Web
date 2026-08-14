@@ -261,6 +261,11 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .google-cover-loading i { width: 34px; height: 34px; border: 3px solid #dbeafe; border-top-color: #175cd3; border-radius: 50%; animation: google-cover-spin .8s linear infinite; }
 .google-cover-loading strong { color: #101828; font-size: 14px; }
 .google-cover-loading span { color: #667085; font-size: 12px; }
+.google-client-search { grid-column: 1 / -1; display: grid; gap: 16px; padding: 20px; }
+.google-client-search-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.google-client-search-heading strong { color: #101828; font-size: 14px; }
+.google-cover-upload { display: grid; gap: 8px; max-width: 420px; color: #344054; font-size: 12px; font-weight: 600; }
+.google-cover-upload input { padding: 8px; }
 @keyframes google-cover-spin { to { transform: rotate(360deg); } }
 .google-cover-candidates { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); align-items: start; padding: 16px; }
 .google-cover-option { grid-template-rows: 250px auto minmax(32px, auto); align-items: start; text-align: left; min-width: 0; }
@@ -320,6 +325,7 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
   .google-cover-candidates { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px; }
   .google-cover-option { grid-template-rows: 200px auto minmax(32px, auto); }
   .google-cover-option img { height: 200px; }
+  .google-client-search-heading { align-items: stretch; flex-direction: column; }
   .detail-images { grid-template-columns: 1fr; }
   .detail-image-actions { min-width: 0; }
   .task-detail-log { width: 100%; }

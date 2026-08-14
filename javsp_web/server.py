@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 import requests
 import yaml
 from croniter import croniter
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response, WebSocket, status
+from fastapi import Cookie, Depends, FastAPI, File, UploadFile, HTTPException, Query, Response, WebSocket, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -64,7 +64,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover, update_task_metadata
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
 
 
@@ -1633,6 +1633,14 @@ def retry_images(task_id: str, _: dict = Depends(current_user)) -> dict:
 def search_task_cover_with_google(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not search_google_cover(task_id):
         raise HTTPException(status_code=400, detail="任务不存在、封面已存在，或 Google 搜索正在进行")
+    return {"ok": True}
+
+
+@app.post("/api/tasks/{task_id}/cover/upload")
+async def upload_task_cover(task_id: str, file: UploadFile = File(...), _: dict = Depends(current_user)) -> dict:
+    content = await file.read(16 * 1024 * 1024 + 1)
+    if not save_uploaded_cover(task_id, content):
+        raise HTTPException(status_code=400, detail="封面文件无效、过大，或该任务已有封面")
     return {"ok": True}
 
 
