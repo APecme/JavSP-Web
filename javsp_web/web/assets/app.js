@@ -1308,6 +1308,29 @@ function openTaskDetail(taskId) {
   if (!$('#task-detail-dialog').open) $('#task-detail-dialog').showModal();
 }
 
+function cookiecloudPayload() {
+  return {
+    enabled: $('#cookiecloud-enabled').checked,
+    server_url: $('#cookiecloud-server-url').value.trim(),
+    uuid: $('#cookiecloud-uuid').value.trim(),
+    password: $('#cookiecloud-password').value,
+    clear_password: $('#cookiecloud-clear-password').checked,
+  };
+}
+
+async function loadCookieCloud() {
+  const message = $('#cookiecloud-message');
+  try {
+    const settings = await api('/api/cookiecloud');
+    $('#cookiecloud-enabled').checked = Boolean(settings.enabled);
+    $('#cookiecloud-server-url').value = settings.server_url || '';
+    $('#cookiecloud-uuid').value = settings.uuid || '';
+    $('#cookiecloud-password').value = '';
+    $('#cookiecloud-clear-password').checked = false;
+    message.textContent = settings.has_password ? '已保存密码' : '';
+  } catch (error) { message.textContent = error.message; }
+}
+
 async function refreshConfiguredMediaLibraries() {
   if (state.user?.role !== 'admin') {
     showToast('当前账户无权刷新媒体库', 'error');
@@ -1816,7 +1839,7 @@ function showView(view) {
   if (view === 'downloads') { loadDownloadManagement(); loadDownloads(); }
   if (view === 'crawler-config') loadCrawlerConfig();
   if (view === 'presets') loadPresets();
-  if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); }
+  if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); loadCookieCloud(); }
   localStorage.setItem('javsp-web.active-view', view);
 }
 
@@ -2234,6 +2257,28 @@ document.addEventListener('click', async (event) => {
 });
 
 $('#refresh-downloads').addEventListener('click', loadDownloads);
+$('#cookiecloud-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const message = $('#cookiecloud-message');
+  try {
+    const saved = await api('/api/cookiecloud', { method: 'PUT', body: JSON.stringify(cookiecloudPayload()) });
+    $('#cookiecloud-password').value = '';
+    $('#cookiecloud-clear-password').checked = false;
+    message.textContent = saved.has_password ? 'CookieCloud 配置已保存' : 'CookieCloud 配置已保存；尚未设置密码';
+  } catch (error) { message.textContent = error.message; }
+});
+$('#test-cookiecloud').addEventListener('click', async () => {
+  const button = $('#test-cookiecloud');
+  const message = $('#cookiecloud-message');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = '正在同步';
+  try {
+    const result = await api('/api/cookiecloud/test', { method: 'POST', body: JSON.stringify(cookiecloudPayload()) });
+    message.textContent = `同步成功：${result.domains} 个站点，${result.cookies} 条 Cookie`;
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; button.textContent = original; }
+});
 $('#download-management-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const message = $('#download-management-message');

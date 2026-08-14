@@ -30,6 +30,7 @@ PATH_MAPPINGS_FILE = DATA_DIR / "path-mappings.json"
 AUTO_SCRAPE_HISTORY_FILE = DATA_DIR / "auto-scrape-history.json"
 AUTO_SCRAPE_SCHEDULES_FILE = DATA_DIR / "auto-scrape-schedules.json"
 MEDIA_SERVERS_FILE = DATA_DIR / "media-servers.json"
+COOKIECLOUD_FILE = DATA_DIR / "cookiecloud.json"
 CUSTOM_CRAWLERS_DIR = DATA_DIR / "crawlers"
 _lock = threading.RLock()
 
@@ -476,3 +477,40 @@ def save_media_servers(servers: list[dict[str, Any]]) -> None:
     ensure_seed_data()
     with _lock:
         _write_json(MEDIA_SERVERS_FILE, {"servers": servers})
+
+
+def get_cookiecloud_settings(include_password: bool = False) -> dict[str, Any]:
+    ensure_seed_data()
+    with _lock:
+        saved = _read_json(COOKIECLOUD_FILE, {})
+        saved = saved if isinstance(saved, dict) else {}
+        password = str(saved.get("password") or "")
+        result = {
+            "enabled": bool(saved.get("enabled")),
+            "server_url": str(saved.get("server_url") or ""),
+            "uuid": str(saved.get("uuid") or ""),
+            "has_password": bool(password),
+            "updated_at": str(saved.get("updated_at") or ""),
+        }
+        if include_password:
+            result["password"] = password
+        return result
+
+
+def save_cookiecloud_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    ensure_seed_data()
+    with _lock:
+        existing = _read_json(COOKIECLOUD_FILE, {})
+        existing = existing if isinstance(existing, dict) else {}
+        password = str(settings.get("password") or existing.get("password") or "")
+        if settings.get("clear_password"):
+            password = ""
+        saved = {
+            "enabled": bool(settings.get("enabled")),
+            "server_url": str(settings.get("server_url") or "").strip().rstrip("/"),
+            "uuid": str(settings.get("uuid") or "").strip(),
+            "password": password,
+            "updated_at": now_iso(),
+        }
+        _write_json(COOKIECLOUD_FILE, saved)
+    return get_cookiecloud_settings()

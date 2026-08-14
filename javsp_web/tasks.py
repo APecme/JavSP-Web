@@ -21,8 +21,9 @@ import yaml
 import requests
 from PIL import Image, ImageOps
 
-from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, get_preset, load_tasks, read_config, save_tasks
+from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, get_cookiecloud_settings, get_preset, load_tasks, read_config, save_tasks
 from .config_validation import load_base_config, validate_config_data
+from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
 from .timeutils import now_iso
 
 
@@ -37,6 +38,7 @@ _google_captcha_sessions: dict[str, dict] = {}
 _google_captcha_sessions_lock = threading.RLock()
 _google_browser_session_lock = threading.Lock()
 _TASK_COVERS_DIR = DATA_DIR / "task-covers"
+_TASK_COOKIECLOUD_DIR = DATA_DIR / "task-cookiecloud"
 _VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 _PROGRESS_RE = re.compile(r"^(?P<key>[^:]{1,120}):\s+(?P<percent>\d{1,3})%.*?(?:(?P<done>\d+)\s*/\s*(?P<total>\d+))?")
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -818,6 +820,19 @@ def _run_task(task: dict) -> None:
     env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
     # The embedded worker reports structured events; terminal tqdm redraws are disabled.
     env["JAVSP_PROGRESS"] = "1"
+    cookiecloud_file: Path | None = None
+    settings = get_cookiecloud_settings(include_password=True)
+    if settings.get("enabled"):
+        try:
+            cookies = fetch_cookiecloud(settings)
+            _TASK_COOKIECLOUD_DIR.mkdir(parents=True, exist_ok=True)
+            cookiecloud_file = _TASK_COOKIECLOUD_DIR / f"{task['id']}.json"
+            cookiecloud_file.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
+            env["JAVSP_COOKIECLOUD_FILE"] = str(cookiecloud_file)
+            summary = cookiecloud_summary(cookies)
+            _logs.setdefault(task["id"], []).append(f"CookieCloud 已同步：{summary['domains']} 个站点，{summary['cookies']} 条 Cookie")
+        except (CookieCloudError, OSError, ValueError) as exc:
+            _logs.setdefault(task["id"], []).append(f"CookieCloud 同步失败，继续使用其他凭据：{exc}")
     try:
         # Keep process creation and cancellation registration atomic so a queued
         # task cannot start after it has been cancelled.
@@ -869,6 +884,11 @@ def _run_task(task: dict) -> None:
         task["error"] = str(exc)
         _logs.setdefault(task["id"], []).append(f"启动失败: {exc}")
     finally:
+        if cookiecloud_file:
+            try:
+                cookiecloud_file.unlink(missing_ok=True)
+            except OSError:
+                pass
         task["finished_at"] = now_iso()
         task["log_tail"] = _clean_log_lines(_logs.get(task["id"], []))[-_MAX_LOG_LINES:]
         task["progress"] = _task_progress(task, task["log_tail"])

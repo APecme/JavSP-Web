@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .auth import SESSION_COOKIE, create_session, current_user, remove_session, require_admin
 from .config_validation import load_base_config, validate_config_data
+from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
 from .storage import (
     CUSTOM_CRAWLERS_DIR,
     delete_auto_scrape_schedule_run,
@@ -36,6 +37,7 @@ from .storage import (
     find_user,
     get_preset,
     get_qbittorrent_settings,
+    get_cookiecloud_settings,
     get_qbittorrent_management,
     IS_FROZEN,
     VENDOR_DIR,
@@ -52,6 +54,7 @@ from .storage import (
     load_auto_scrape_history,
     save_preset,
     save_qbittorrent_settings,
+    save_cookiecloud_settings,
     save_downloaders,
     save_path_mappings,
     save_auto_scrape_history,
@@ -138,6 +141,14 @@ class UserBody(BaseModel):
 
 class ConfigBody(BaseModel):
     content: str = Field(min_length=1)
+
+
+class CookieCloudBody(BaseModel):
+    enabled: bool = False
+    server_url: str = Field(default="", max_length=2048)
+    uuid: str = Field(default="", max_length=512)
+    password: str | None = Field(default=None, max_length=2048)
+    clear_password: bool = False
 
 
 class CustomCrawlerBody(BaseModel):
@@ -763,6 +774,35 @@ def get_config(_: dict = Depends(current_user)) -> dict:
     except yaml.YAMLError as exc:
         parsed = {"_error": str(exc)}
     return {"content": content, "parsed": parsed}
+
+
+@app.get("/api/cookiecloud")
+def get_cookiecloud(_: dict = Depends(require_admin)) -> dict:
+    return get_cookiecloud_settings()
+
+
+@app.put("/api/cookiecloud")
+def update_cookiecloud(body: CookieCloudBody, _: dict = Depends(require_admin)) -> dict:
+    if body.enabled and (not body.server_url.strip() or not body.uuid.strip()):
+        raise HTTPException(status_code=400, detail="启用 CookieCloud 前请填写服务地址和 UUID")
+    if body.enabled and body.clear_password:
+        raise HTTPException(status_code=400, detail="启用 CookieCloud 时不能清除密码")
+    if body.enabled and not (body.password or get_cookiecloud_settings(include_password=True).get("password")):
+        raise HTTPException(status_code=400, detail="启用 CookieCloud 前请填写密码")
+    return save_cookiecloud_settings(body.model_dump(exclude_none=True))
+
+
+@app.post("/api/cookiecloud/test")
+def test_cookiecloud(body: CookieCloudBody, _: dict = Depends(require_admin)) -> dict:
+    configured = get_cookiecloud_settings(include_password=True)
+    settings = {**configured, **body.model_dump(exclude_none=True)}
+    if not body.password:
+        settings["password"] = configured.get("password", "")
+    try:
+        cookies = fetch_cookiecloud(settings)
+    except CookieCloudError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, **cookiecloud_summary(cookies)}
 
 
 @app.get("/api/crawler-config")
