@@ -216,6 +216,8 @@ function renderConfigFields() {
       if (tab.section === 'scanner' && path === 'input_directory') return;
       if (tab.section === 'translator' && path === 'engine') {
         paths.push([path, value]);
+      } else if (tab.section === 'crawler' && path === 'selection') {
+        paths.push([path, value]);
       } else if (value && typeof value === 'object' && !Array.isArray(value)) {
         Object.entries(value).forEach(([key, item]) => walk(item, path ? `${path}.${key}` : key));
       } else if (path) paths.push([path, value]);
@@ -227,7 +229,7 @@ function renderConfigFields() {
       const sourcePath = `${tab.section}.${path}`;
       const placeholder = sourcePath === 'network.proxy_server' ? 'http://127.0.0.1:7890 或 socks5://127.0.0.1:7890' : '';
       const inputValue = value === null || value === undefined ? '' : displayFieldValue(value);
-      const control = sourcePath === 'translator.engine' ? translatorEngineControl(value) : (boolean ? `<select class="config-field-input" data-config-path="${sourcePath}"><option value="true"${value ? ' selected' : ''}>是</option><option value="false"${value ? '' : ' selected'}>否</option></select>` : (complex ? `<textarea class="config-field-input" data-config-path="${sourcePath}" spellcheck="false">${escapeHtml(inputValue)}</textarea>` : `<input class="config-field-input" data-config-path="${sourcePath}" value="${escapeHtml(inputValue)}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ''}>`));
+      const control = sourcePath === 'crawler.selection' ? crawlerConfigMarkup(value) : (sourcePath === 'translator.engine' ? translatorEngineControl(value) : (boolean ? `<select class="config-field-input" data-config-path="${sourcePath}"><option value="true"${value ? ' selected' : ''}>是</option><option value="false"${value ? '' : ' selected'}>否</option></select>` : (complex ? `<textarea class="config-field-input" data-config-path="${sourcePath}" spellcheck="false">${escapeHtml(inputValue)}</textarea>` : `<input class="config-field-input" data-config-path="${sourcePath}" value="${escapeHtml(inputValue)}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ''}>`)));
       const description = fieldDescription(sourcePath, value);
       const note = fieldNote(sourcePath, value);
       const outputDirectoryPicker = sourcePath === 'summarizer.path.output_folder_pattern'
@@ -256,6 +258,15 @@ function readConfigFields() {
     const [section, ...path] = control.dataset.configPath.split('.');
     setPathValue(values, `${section}.${path.join('.')}`, control.value);
   });
+  const crawlerSelection = {};
+  document.querySelectorAll('.crawler-config-group').forEach((group) => {
+    const name = group.dataset.crawlerGroup;
+    if (!name) return;
+    crawlerSelection[name] = [...group.querySelectorAll('[data-crawler-value]')]
+      .map((tag) => String(tag.dataset.crawlerValue || '').trim())
+      .filter(Boolean);
+  });
+  if (Object.keys(crawlerSelection).length) setPathValue(values, 'crawler.selection', crawlerSelection);
   return Object.fromEntries(FORM_SECTIONS.map((section) => [section, values[section] || {}]));
 }
 
@@ -271,10 +282,25 @@ function proxyConnectivityResultMarkup(result) {
 }
 
 function crawlerConfigMarkup(selection = {}) {
+  return crawlerConfigTagsMarkup(selection);
   return Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
     const selected = Array.isArray(selection[group]) ? selection[group] : [];
     const options = CRAWLER_IDS.filter((id) => !selected.includes(id)).map((id) => `<option value="${id}">${id}</option>`).join('');
     return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}爬虫</h3><div class="crawler-config-list">${selected.map((id, index) => `<div class="crawler-config-row"><select class="crawler-selection">${CRAWLER_IDS.map((option) => `<option value="${option}"${option === id ? ' selected' : ''}>${option}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up"${index ? '' : ' disabled'}>上移</button><button class="button secondary crawler-move" type="button" data-direction="down"${index === selected.length - 1 ? ' disabled' : ''}>下移</button><button class="button danger crawler-remove" type="button">删除</button></div>`).join('')}</div><div class="crawler-add"><select class="crawler-add-select"><option value="">添加爬虫</option>${options}</select><button class="button secondary crawler-add-button" type="button">添加</button></div></div>`;
+  }).join('');
+}
+
+function crawlerConfigTagsMarkup(selection = {}) {
+  const knownNames = [...new Set([
+    ...CRAWLER_IDS,
+    ...(state.crawlerSources || []).map((crawler) => String(crawler?.name || '')),
+    ...Object.values(selection || {}).flatMap((names) => Array.isArray(names) ? names : []),
+  ].filter((name) => /^[a-z][a-z0-9_]*$/.test(name)))].sort();
+  const options = knownNames.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
+  return Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
+    const selected = Array.isArray(selection[group]) ? selection[group].map((name) => String(name).trim()).filter(Boolean) : [];
+    const tags = selected.map((name) => `<span class="crawler-tag" data-crawler-value="${escapeHtml(name)}"><code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button></span>`).join('');
+    return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}\u722c\u866b</h3><div class="crawler-config-list crawler-tag-list">${tags}</div><div class="crawler-add"><input class="crawler-add-input" list="crawler-name-options" maxlength="80" autocomplete="off" placeholder="\u8f93\u5165\u722c\u866b\u540d\u79f0"><button class="icon-button crawler-add-button" type="button" title="\u6dfb\u52a0\u722c\u866b" aria-label="\u6dfb\u52a0\u722c\u866b">+</button><datalist id="crawler-name-options">${options}</datalist></div></div>`;
   }).join('');
 }
 
@@ -2233,11 +2259,28 @@ document.addEventListener('click', async (event) => {
   const crawlerAdd = event.target.closest('.crawler-add-button');
   if (crawlerAdd) {
     const group = crawlerAdd.closest('.crawler-config-group');
+    const input = group?.querySelector('.crawler-add-input');
+    if (input && group) {
+      const name = input.value.trim().toLowerCase();
+      if (!/^[a-z][a-z0-9_]*$/.test(name)) { input.setCustomValidity('\u722c\u866b\u540d\u79f0\u53ea\u80fd\u4f7f\u7528\u5c0f\u5199\u5b57\u6bcd\u3001\u6570\u5b57\u548c\u4e0b\u5212\u7ebf\uff0c\u5e76\u4e14\u5fc5\u987b\u4ee5\u5b57\u6bcd\u5f00\u5934'); input.reportValidity(); return; }
+      const duplicate = [...group.querySelectorAll('[data-crawler-value]')].some((tag) => tag.dataset.crawlerValue === name);
+      if (duplicate) { input.setCustomValidity('\u8be5\u722c\u866b\u5df2\u6dfb\u52a0'); input.reportValidity(); return; }
+      input.setCustomValidity('');
+      const tag = document.createElement('span');
+      tag.className = 'crawler-tag';
+      tag.dataset.crawlerValue = name;
+      tag.innerHTML = `<code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button>`;
+      group.querySelector('.crawler-config-list')?.append(tag);
+      input.value = '';
+      return;
+    }
     const select = group?.querySelector('.crawler-add-select');
     if (select?.value) { const row = document.createElement('div'); row.className = 'crawler-config-row'; row.innerHTML = `<select class="crawler-selection" data-group="${group.dataset.crawlerGroup}">${CRAWLER_IDS.map((id) => `<option value="${id}"${id === select.value ? ' selected' : ''}>${id}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up">上移</button><button class="button secondary crawler-move" type="button" data-direction="down">下移</button><button class="button danger crawler-remove" type="button">删除</button>`; group.querySelector('.crawler-config-list').append(row); select.value = ''; }
   }
   const crawlerRemove = event.target.closest('.crawler-remove');
   if (crawlerRemove) { crawlerRemove.closest('.crawler-config-row')?.remove(); }
+  const crawlerTagRemove = event.target.closest('.crawler-tag-remove');
+  if (crawlerTagRemove) crawlerTagRemove.closest('.crawler-tag')?.remove();
   const crawlerMove = event.target.closest('.crawler-move');
   if (crawlerMove) { const row = crawlerMove.closest('.crawler-config-row'); const list = row?.parentElement; if (row && list) { const sibling = crawlerMove.dataset.direction === 'up' ? row.previousElementSibling : row.nextElementSibling; if (sibling) crawlerMove.dataset.direction === 'up' ? list.insertBefore(row, sibling) : list.insertBefore(sibling, row); } }
   const restoreFiles = event.target.closest('[data-restore-task-files]');

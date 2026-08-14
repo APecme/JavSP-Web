@@ -54,19 +54,23 @@ _COVER_CRAWLER_MARKER = "JAVSP_WEB_COVER_CRAWL "
 _COVER_CRAWLER_SCRIPT = r'''
 import importlib
 import json
+import os
+from pathlib import Path
+import re
 import sys
 
-from javsp.config import Cfg
 from javsp.datatype import MovieInfo
 
 MARKER = "JAVSP_WEB_COVER_CRAWL "
 known = ("airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto", "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv")
 dvdid = sys.argv[-1]
 names = list(known)
-for _, selection in Cfg().crawler.selection.items():
-    for name in selection:
-        name = str(name)
-        if name not in names:
+custom_dir_value = os.environ.get("JAVSP_WEB_CUSTOM_CRAWLERS_DIR", "")
+custom_dir = Path(custom_dir_value) if custom_dir_value else None
+if custom_dir and custom_dir.is_dir():
+    for path in sorted(custom_dir.glob("*.py")):
+        name = path.stem
+        if name != "__init__" and re.fullmatch(r"[a-z][a-z0-9_]*", name) and name not in names:
             names.append(name)
 results = []
 for name in names:
@@ -1401,6 +1405,7 @@ def _search_google_cover(task: dict) -> None:
         _persist(task)
         env = os.environ.copy()
         env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+        env["JAVSP_WEB_CUSTOM_CRAWLERS_DIR"] = str(CUSTOM_CRAWLERS_DIR)
         settings = get_cookiecloud_settings(include_password=True)
         if settings.get("enabled"):
             try:

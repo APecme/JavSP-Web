@@ -254,6 +254,17 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .task-detail-log summary { cursor: pointer; color: #475467; font-size: 12px; font-weight: 600; }
 .task-detail-log .task-log-wrap { max-width: 100%; margin-top: 8px; overflow: hidden; }
 .task-detail-log .task-log { max-height: min(34vh, 260px); min-height: 0; overflow: auto; }
+.crawler-config-group { display: grid; gap: 8px; }
+.crawler-config-group h3 { margin-bottom: 0; }
+.crawler-tag-list { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
+.crawler-tag { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 4px 5px 4px 7px; border: 1px solid #b2ccff; border-radius: 5px; background: #eff8ff; color: #175cd3; }
+.crawler-tag code { overflow-wrap: anywhere; font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.crawler-tag-remove { display: grid; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 4px; padding: 0; background: transparent; color: #175cd3; cursor: pointer; font-size: 16px; line-height: 1; }
+.crawler-tag-remove:hover { background: #d1e9ff; color: #1849a9; }
+.crawler-add { align-items: center; margin-top: 0; }
+.crawler-add-input { flex: 1; min-width: 0; }
+.crawler-add-button { display: grid; width: 34px; min-width: 34px; height: 34px; place-items: center; padding: 0; color: #175cd3; font-size: 18px; line-height: 1; }
+@media (max-width: 560px) { .crawler-add-button { width: 42px; min-width: 42px; height: 42px; } }
 .google-captcha-panel { grid-column: 1 / -1; display: grid; gap: 10px; min-width: 0; }
 .google-captcha-panel > p { margin: 0; }
 .google-browser-frame { width: 100%; height: min(68vh, 720px); border: 1px solid #d0d5dd; border-radius: 5px; background: #f8fafc; }
