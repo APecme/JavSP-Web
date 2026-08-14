@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {} };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
@@ -345,6 +345,16 @@ function renderGoogleCoverLoading() {
   if (!target) return;
   target.innerHTML = '<section class="google-cover-loading" role="status"><i></i><strong>正在搜索 Google 图片</strong><span>请保持此窗口打开，结果会自动显示。</span></section>';
 }
+
+function renderGoogleCoverCandidates(taskId, candidates) {
+  const target = $('#google-cover-candidates');
+  if (!target) return;
+  target.innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="/api/tasks/${encodeURIComponent(taskId)}/cover/candidates/${encodeURIComponent(candidate.id)}/thumbnail" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
+}
+
+$('#google-cover-dialog')?.addEventListener('close', () => {
+  state.googleCoverDialogDismissed = true;
+});
 
 function showToast(message, tone = 'success') {
   const host = document.querySelector('dialog[open]') || document.body;
@@ -1147,7 +1157,8 @@ function openTaskDetail(taskId) {
   const googleStatus = task.google_cover_search_running ? '正在使用搜索引擎搜索封面' : (task.google_cover_search_status === 'failed' ? `搜索引擎搜索失败：${task.google_cover_search_error || '未找到可用封面'}` : '');
   const taskLogLines = (task.log_tail || []).join('\n');
   const taskLog = taskLogLines ? `<details class="task-detail-log" data-task-details="detail-${escapeHtml(task.id)}"><summary>查看任务日志（${task.log_tail.length} 行）</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="detail-${escapeHtml(task.id)}">${escapeHtml(taskLogLines)}</pre><button class="copy-log" type="button" data-copy-task="detail-${escapeHtml(task.id)}">复制日志</button></div></details>` : '<p class="muted">当前任务尚未输出日志。</p>';
-  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面')}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
+  const hasGoogleCandidates = task.google_cover_search_status === 'succeeded' && (task.google_cover_candidates || []).length;
+  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}"${task.google_cover_search_running ? ' disabled' : ''}>${task.google_cover_search_running ? '正在搜索封面' : (hasGoogleCandidates ? '查看搜索结果' : (task.google_cover_search_status === 'failed' ? '重试搜索引擎搜索' : '使用搜索引擎搜索封面'))}</button>${googleStatus ? `<p class="image-state${task.google_cover_search_status === 'failed' ? ' failed' : ''}">${escapeHtml(googleStatus)}</p>` : ''}</div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
@@ -1955,10 +1966,19 @@ document.addEventListener('click', async (event) => {
   }
   const googleCover = event.target.closest('[data-google-cover-task]');
   if (googleCover) {
+    const taskId = googleCover.dataset.googleCoverTask;
+    const currentTask = state.tasks.find((task) => task.id === taskId);
+    const dialog = $('#google-cover-dialog');
+    state.googleCoverDialogTaskId = taskId;
+    state.googleCoverDialogDismissed = false;
+    if (currentTask?.google_cover_search_status === 'succeeded' && currentTask.google_cover_candidates?.length) {
+      renderGoogleCoverCandidates(taskId, currentTask.google_cover_candidates);
+      $('#google-cover-message').textContent = '';
+      if (dialog && !dialog.open) dialog.showModal();
+      return;
+    }
     googleCover.disabled = true;
     googleCover.textContent = '正在搜索封面';
-    const taskId = googleCover.dataset.googleCoverTask;
-    const dialog = $('#google-cover-dialog');
     renderGoogleCoverLoading();
     $('#google-cover-message').textContent = '正在连接搜索引擎';
     if (dialog && !dialog.open) dialog.showModal();
@@ -1972,7 +1992,7 @@ document.addEventListener('click', async (event) => {
           const dialog = $('#google-cover-dialog');
           if (!$('#google-cover-candidates').querySelector('.google-browser-frame')) renderGoogleBrowser(taskId);
           $('#google-cover-message').textContent = '等待完成 Google 验证';
-          if (dialog && !dialog.open) dialog.showModal();
+          if (!state.googleCoverDialogDismissed && dialog && !dialog.open) dialog.showModal();
           continue;
         }
         if (!result.status || !['queued', 'running'].includes(result.status)) break;
@@ -1980,8 +2000,8 @@ document.addEventListener('click', async (event) => {
       const candidates = result?.candidates || [];
       const dialog = $('#google-cover-dialog');
       $('#google-cover-message').textContent = candidates.length ? '' : (result?.error || (result?.status === 'running' ? '搜索引擎仍在进行，请稍后重试。' : '搜索引擎未返回可用图片'));
-      $('#google-cover-candidates').innerHTML = candidates.map((candidate) => `<button class="google-cover-option" type="button" data-google-cover-select="${escapeHtml(taskId)}" data-candidate-id="${escapeHtml(candidate.id)}"><img src="/api/tasks/${encodeURIComponent(taskId)}/cover/candidates/${encodeURIComponent(candidate.id)}/thumbnail" loading="lazy" alt="候选封面"><span>${escapeHtml(candidate.source || '搜索结果')}${candidate.width && candidate.height ? ` · ${candidate.width}×${candidate.height}` : ''}</span><small>${escapeHtml(candidate.title || '选择此封面')}</small></button>`).join('');
-      if (dialog && !dialog.open) dialog.showModal();
+      renderGoogleCoverCandidates(taskId, candidates);
+      if (!state.googleCoverDialogDismissed && dialog && !dialog.open) dialog.showModal();
       await loadTasks();
     }).catch((error) => {
       googleCover.disabled = false;
