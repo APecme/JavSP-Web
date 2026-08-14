@@ -9,11 +9,12 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import uuid
 from pathlib import Path
 from html import unescape
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
 
 import yaml
 import requests
@@ -915,6 +916,40 @@ def _google_image_urls(page: str) -> list[tuple[str, str]]:
     return originals + thumbnails
 
 
+def _google_images_with_chromium(query: str, proxies: dict[str, str]) -> str:
+    """Render Google Images in Chromium when Google serves requests a script-only page."""
+    binary = os.environ.get("JAVSP_GOOGLE_CHROMIUM", "").strip()
+    if not binary:
+        binary = next((candidate for candidate in ("chromium", "chromium-browser", "google-chrome") if shutil.which(candidate)), "")
+    if not binary:
+        raise RuntimeError("Chromium 不可用")
+    proxy = str(proxies.get("https") or proxies.get("http") or "").strip()
+    search_url = f"https://www.google.com/search?tbm=isch&safe=off&filter=0&q={quote_plus(f'\"{query}\"')}"
+    with tempfile.TemporaryDirectory(prefix="javsp-google-") as profile:
+        command = [
+            binary,
+            "--headless=new",
+            "--no-sandbox",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-background-networking",
+            "--virtual-time-budget=8000",
+            f"--user-data-dir={profile}",
+            "--dump-dom",
+            search_url,
+        ]
+        if proxy:
+            command.insert(-2, f"--proxy-server={proxy}")
+        completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30, check=False)
+    page = completed.stdout.decode("utf-8", errors="replace")
+    if not page.strip():
+        detail = completed.stderr.decode("utf-8", errors="replace").strip().splitlines()
+        raise RuntimeError(detail[-1] if detail else "Chromium 未返回页面")
+    return page
+
+
 def _search_google_image_candidates(query: str, proxies: dict[str, str] | None = None) -> list[dict]:
     """Return image candidates exclusively from Google Images result pages."""
     if not query:
@@ -931,10 +966,10 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
     session.headers.update(headers)
     # Google may serve a JavaScript-only failure page on one regional endpoint.
     # All of these URLs are Google Images, not third-party search providers.
+    proxies = proxies or {}
     requests_to_try = (
         ("https://www.google.com/search", {"q": image_query, "tbm": "isch", "safe": "off", "filter": "0"}),
         ("https://www.google.com/search", {"q": image_query, "udm": "2", "safe": "off", "filter": "0"}),
-        ("https://www.google.co.jp/search", {"q": image_query, "tbm": "isch", "safe": "off", "filter": "0"}),
     )
     failures: list[str] = []
     for url, params in requests_to_try:
@@ -957,6 +992,19 @@ def _search_google_image_candidates(query: str, proxies: dict[str, str] | None =
             failures.append(f"{urlparse(url).netloc} 返回的图片与番号不匹配")
         except requests.RequestException as exc:
             failures.append(f"{urlparse(url).netloc}: {exc.__class__.__name__}")
+    try:
+        rendered_page = _google_images_with_chromium(query, proxies)
+        result_urls = _google_image_urls(rendered_page)
+        if not result_urls:
+            failures.append("Google Chromium 未返回图片数据")
+        for image_url, context in result_urls:
+            _append_candidate(candidates, seen, query, image_url, "Google", title=query, context=context)
+            if len(candidates) == 12:
+                return candidates
+        if candidates:
+            return candidates
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        failures.append(f"Google Chromium: {exc}")
     if failures:
         raise ValueError("Google 图片搜索未向服务器返回可用结果（" + "；".join(failures) + "）")
     return candidates

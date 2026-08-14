@@ -269,29 +269,8 @@ async function loadCrawlerConfig() {
   try {
     const result = await api('/api/crawler-config');
     state.crawlerSources = result.crawlers || [];
-    host.innerHTML = `<p class="muted">此页面设置全局爬虫规则与代码。刮削预设的“爬虫”页保持原有完整配置表单。</p>${crawlerRulesMarkup(result.rules || {}, result.available_required_keys || [])}<div class="form-actions"><button class="button primary" id="save-crawler-config" type="button">保存爬虫规则</button><span id="crawler-config-message" class="form-message"></span></div>${crawlerCodeMarkup(state.crawlerSources)}`;
+    host.innerHTML = crawlerCodeMarkup(state.crawlerSources);
   } catch (error) { host.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`; }
-}
-
-async function saveCrawlerConfig() {
-  const rules = {
-    required_keys: [...document.querySelectorAll('#crawler-rule-required-keys input:checked')].map((item) => item.value),
-    hardworking: $('#crawler-rule-hardworking').checked,
-    respect_site_avid: $('#crawler-rule-respect-site-avid').checked,
-    fc2fan_local_path: $('#crawler-rule-fc2fan-path').value.trim() || null,
-    sleep_after_scraping: $('#crawler-rule-sleep').value.trim(),
-    use_javdb_cover: $('#crawler-rule-javdb-cover').value,
-    normalize_actress_name: $('#crawler-rule-normalize-actress').checked,
-  };
-  const message = $('#crawler-config-message');
-  try { await api('/api/crawler-config', { method: 'PUT', body: JSON.stringify(rules) }); message.textContent = '爬虫配置已保存'; await loadCrawlerConfig(); } catch (error) { message.textContent = error.message; }
-}
-
-function crawlerRulesMarkup(rules, availableKeys) {
-  const required = new Set(Array.isArray(rules.required_keys) ? rules.required_keys : []);
-  const keys = availableKeys.length ? availableKeys : ['cover', 'title'];
-  const checked = (id, fallback = true) => rules[id] === undefined ? fallback : Boolean(rules[id]);
-  return `<div class="crawler-rules-editor"><label class="config-field"><span class="config-field-name">抓取成功必需字段 <small>(crawler.required_keys)</small></span><span id="crawler-rule-required-keys" class="crawler-required-keys">${keys.map((key) => `<label class="check-label"><input type="checkbox" value="${escapeHtml(key)}"${required.has(key) ? ' checked' : ''}>${escapeHtml(key)}</label>`).join('')}</span><small class="config-description">至少命中这些字段才将爬虫结果视为有效。</small></label><label class="check-label"><input id="crawler-rule-hardworking" type="checkbox"${checked('hardworking') ? ' checked' : ''}>深度抓取更多信息</label><label class="check-label"><input id="crawler-rule-respect-site-avid" type="checkbox"${checked('respect_site_avid') ? ' checked' : ''}>使用站点返回的番号</label><label class="config-field"><span class="config-field-name">FC2Fan 本地镜像目录</span><input id="crawler-rule-fc2fan-path" value="${escapeHtml(rules.fc2fan_local_path || '')}" placeholder="未设置"><small class="config-description">目录中应包含类似 FC2-12345.html 的镜像文件。</small></label><label class="config-field"><span class="config-field-name">每部影片刮削后等待时间</span><input id="crawler-rule-sleep" value="${escapeHtml(rules.sleep_after_scraping || 'PT1S')}" placeholder="PT1S"><small class="config-description">使用 ISO 8601 时长，例如 PT1S。</small></label><label class="config-field"><span class="config-field-name">JavDB 封面策略</span><select id="crawler-rule-javdb-cover"><option value="fallback"${rules.use_javdb_cover === 'fallback' ? ' selected' : ''}>fallback</option><option value="yes"${rules.use_javdb_cover === 'yes' ? ' selected' : ''}>yes</option><option value="no"${rules.use_javdb_cover === 'no' ? ' selected' : ''}>no</option></select></label><label class="check-label"><input id="crawler-rule-normalize-actress" type="checkbox"${checked('normalize_actress_name') ? ' checked' : ''}>统一女优艺名</label></div>`;
 }
 
 function crawlerCodeMarkup(crawlers) {
@@ -1720,7 +1699,6 @@ async function probeMediaLibraries(showMessage = true) {
 }
 
 document.addEventListener('click', async (event) => {
-  if (event.target.closest('#save-crawler-config')) { await saveCrawlerConfig(); return; }
   const crawlerCodeItem = event.target.closest('[data-crawler-code-name]');
   if (crawlerCodeItem) {
     document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.toggle('active', item === crawlerCodeItem));

@@ -133,16 +133,6 @@ class ConfigBody(BaseModel):
     content: str = Field(min_length=1)
 
 
-class CrawlerConfigBody(BaseModel):
-    required_keys: list[str] = Field(default_factory=list, max_length=32)
-    hardworking: bool = True
-    respect_site_avid: bool = True
-    fc2fan_local_path: str | None = Field(default=None, max_length=2048)
-    sleep_after_scraping: str = Field(default="PT1S", min_length=1, max_length=64)
-    use_javdb_cover: Literal["fallback", "yes", "no"] = "fallback"
-    normalize_actress_name: bool = True
-
-
 class CustomCrawlerBody(BaseModel):
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
     source: str = Field(min_length=1, max_length=200_000)
@@ -520,12 +510,6 @@ _CRAWLER_IDS = {
     "airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto",
     "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv",
 }
-_CRAWLER_GROUPS = {"normal", "fc2", "cid", "getchu", "gyutto"}
-_CRAWLER_REQUIRED_KEYS = {
-    "dvdid", "cid", "url", "plot", "cover", "big_cover", "genre", "genre_id", "genre_norm", "score",
-    "title", "ori_title", "magnet", "serial", "actress", "actress_pics", "director", "duration", "producer",
-    "publisher", "uncensored", "publish_date", "preview_pics", "preview_video",
-}
 
 
 def _crawler_sources() -> list[dict]:
@@ -543,19 +527,6 @@ def _crawler_sources() -> list[dict]:
 
 def _available_crawler_names() -> set[str]:
     return _CRAWLER_IDS | {item["name"] for item in _crawler_sources() if item["kind"] == "custom"}
-
-
-def _validated_crawler_selection(selection: dict[str, list[str]]) -> dict[str, list[str]]:
-    if set(selection) != _CRAWLER_GROUPS:
-        raise HTTPException(status_code=400, detail="爬虫配置必须包含普通影片、FC2、CID、Getchu 和 Gyutto 五类")
-    cleaned: dict[str, list[str]] = {}
-    for group, crawlers in selection.items():
-        if not isinstance(crawlers, list) or not all(isinstance(item, str) and item in _available_crawler_names() for item in crawlers):
-            raise HTTPException(status_code=400, detail=f"{group} 包含不支持的爬虫")
-        if len(crawlers) != len(set(crawlers)):
-            raise HTTPException(status_code=400, detail=f"{group} 不能重复添加同一爬虫")
-        cleaned[group] = crawlers
-    return cleaned
 
 
 def _normalize_form(form: dict, base: dict | None = None) -> dict:
@@ -656,49 +627,9 @@ def get_config(_: dict = Depends(current_user)) -> dict:
 
 @app.get("/api/crawler-config")
 def get_crawler_config(_: dict = Depends(current_user)) -> dict:
-    crawler = _base_config().get("crawler") or {}
     return {
-        "rules": {
-            "required_keys": list(crawler.get("required_keys") or []),
-            "hardworking": bool(crawler.get("hardworking", True)),
-            "respect_site_avid": bool(crawler.get("respect_site_avid", True)),
-            "fc2fan_local_path": str(crawler.get("fc2fan_local_path") or ""),
-            "sleep_after_scraping": str(crawler.get("sleep_after_scraping") or "PT1S"),
-            "use_javdb_cover": str(crawler.get("use_javdb_cover") or "fallback"),
-            "normalize_actress_name": bool(crawler.get("normalize_actress_name", True)),
-        },
-        "available_required_keys": sorted(_CRAWLER_REQUIRED_KEYS),
         "crawlers": _crawler_sources(),
     }
-
-
-@app.put("/api/crawler-config")
-def update_crawler_config(body: CrawlerConfigBody, _: dict = Depends(require_admin)) -> dict:
-    required_keys = list(dict.fromkeys(body.required_keys))
-    if any(key not in _CRAWLER_REQUIRED_KEYS for key in required_keys):
-        raise HTTPException(status_code=400, detail="required_keys 包含不支持的影片信息字段")
-    rules = {
-        "required_keys": required_keys,
-        "hardworking": body.hardworking,
-        "respect_site_avid": body.respect_site_avid,
-        "fc2fan_local_path": body.fc2fan_local_path or None,
-        "sleep_after_scraping": body.sleep_after_scraping,
-        "use_javdb_cover": body.use_javdb_cover,
-        "normalize_actress_name": body.normalize_actress_name,
-    }
-    try:
-        current = yaml.safe_load(read_config()) or {}
-    except yaml.YAMLError as exc:
-        raise HTTPException(status_code=400, detail=f"配置文件格式错误: {exc}") from exc
-    if not isinstance(current, dict):
-        raise HTTPException(status_code=400, detail="配置根节点必须是对象")
-    current.setdefault("crawler", {}).update(rules)
-    try:
-        validate_config_data(_deep_merge(_base_config(), {"crawler": rules}))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    write_config(yaml.safe_dump(current, allow_unicode=True, sort_keys=False))
-    return {"ok": True, "rules": rules}
 
 
 @app.put("/api/crawler-config/custom")
