@@ -333,6 +333,20 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
 
+function renderGoogleCaptcha(taskId, controls) {
+  const target = $('#google-cover-candidates');
+  if (!target) return;
+  const items = (controls || []).map((control) => {
+    const label = escapeHtml(control.label || '操作验证码');
+    const image = control.image_url ? `<img src="${escapeHtml(control.image_url)}" loading="lazy" alt="${label}">` : '';
+    if (control.kind === 'input') {
+      return `<div class="google-captcha-input"><label>${label}<input data-google-captcha-input="${escapeHtml(control.id)}" value="${escapeHtml(control.value || '')}" autocomplete="off"></label><button class="button secondary" type="button" data-google-captcha-action="${escapeHtml(control.id)}" data-google-captcha-task="${escapeHtml(taskId)}">提交</button></div>`;
+    }
+    return `<button class="google-captcha-control" type="button" data-google-captcha-action="${escapeHtml(control.id)}" data-google-captcha-task="${escapeHtml(taskId)}">${image}<span>${label}</span></button>`;
+  }).join('');
+  target.innerHTML = `<section class="google-captcha-panel"><strong>Google 要求完成验证码</strong><p class="muted">请使用下方控件完成验证，操作会直接发送到 Google 浏览器会话。</p><div class="google-captcha-controls">${items || '<span class="muted">正在读取验证码控件...</span>'}</div></section>`;
+}
+
 function showToast(message, tone = 'success') {
   const host = document.querySelector('dialog[open]') || document.body;
   let container = host.querySelector(':scope > #toast-container');
@@ -1985,10 +1999,10 @@ document.addEventListener('click', async (event) => {
         result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/candidates`);
         if (result.status === 'captcha') {
           const dialog = $('#google-cover-dialog');
-          const target = $('#google-cover-candidates');
-          if (!target.querySelector('[data-google-captcha-task]')) {
-            target.innerHTML = `<section class="google-captcha-panel"><strong>Google 要求完成验证码</strong><button class="google-captcha-screen" type="button" data-google-captcha-task="${escapeHtml(taskId)}"><img src="/api/tasks/${encodeURIComponent(taskId)}/cover/captcha?v=${Date.now()}" alt="Google 验证码"></button><span class="muted">请直接点击验证码画面中的选项和验证按钮</span></section>`;
-          }
+          try {
+            const captcha = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/captcha/state`);
+            renderGoogleCaptcha(taskId, captcha.controls);
+          } catch (_) { renderGoogleCaptcha(taskId, []); }
           $('#google-cover-message').textContent = '等待完成 Google 验证';
           if (dialog && !dialog.open) dialog.showModal();
           continue;
@@ -2006,19 +2020,15 @@ document.addEventListener('click', async (event) => {
       googleCover.textContent = error.message;
     });
   }
-  const googleCaptcha = event.target.closest('[data-google-captcha-task]');
+  const googleCaptcha = event.target.closest('[data-google-captcha-action]');
   if (googleCaptcha) {
-    const image = googleCaptcha.querySelector('img');
-    if (!image?.complete || !image.naturalWidth || googleCaptcha.disabled) return;
-    const rect = image.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * image.naturalWidth / rect.width;
-    const y = (event.clientY - rect.top) * image.naturalHeight / rect.height;
-    if (x < 0 || y < 0 || x > image.naturalWidth || y > image.naturalHeight) return;
+    const controlId = googleCaptcha.dataset.googleCaptchaAction;
+    const input = document.querySelector(`[data-google-captcha-input="${controlId}"]`);
     googleCaptcha.disabled = true;
     try {
-      const result = await api(`/api/tasks/${encodeURIComponent(googleCaptcha.dataset.googleCaptchaTask)}/cover/captcha/click`, { method: 'POST', body: JSON.stringify({ x, y }) });
+      const result = await api(`/api/tasks/${encodeURIComponent(googleCaptcha.dataset.googleCaptchaTask)}/cover/captcha/action`, { method: 'POST', body: JSON.stringify({ control_id: controlId, action: input ? 'input' : 'click', value: input?.value || '' }) });
       $('#google-cover-message').textContent = result.active ? '已传递验证码操作' : '验证已完成，正在继续搜索';
-      if (result.active) image.src = `/api/tasks/${encodeURIComponent(googleCaptcha.dataset.googleCaptchaTask)}/cover/captcha?v=${Date.now()}`;
+      if (result.active) renderGoogleCaptcha(googleCaptcha.dataset.googleCaptchaTask, result.controls);
     } catch (error) {
       $('#google-cover-message').textContent = error.message;
     } finally {
