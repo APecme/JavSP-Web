@@ -47,7 +47,6 @@ from javsp.datatype import Movie, MovieInfo
 from javsp.web.base import download, read_proxy
 from javsp.web.exceptions import *
 from javsp.web.translate import translate_movie_info
-from javsp.network_preflight import warn_restricted_crawler_network
 
 from javsp.config import Cfg, CrawlerID
 from javsp.prompt import prompt
@@ -793,7 +792,6 @@ def entry():
     logger.info(f'扫描影片文件：共找到 {movie_count} 部影片')
     if Cfg().scanner.manual:
         reviewMovieID(recognized, root)
-    warn_restricted_crawler_network()
     try:
         RunNormalMode(recognized + recognize_fail)
     except RuntimeError as exc:

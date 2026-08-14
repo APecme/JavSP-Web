@@ -12,7 +12,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
+import requests
 import yaml
 from croniter import croniter
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response, status
@@ -160,6 +162,12 @@ class PresetConvertBody(BaseModel):
     mode: Literal["yaml", "form"]
     content: str | None = None
     form: dict = Field(default_factory=dict)
+
+
+class ProxyConnectivityTestBody(BaseModel):
+    proxy_server: str | None = Field(default=None, max_length=2048)
+    crawler_selection: dict | str | None = None
+    timeout: str | None = Field(default=None, max_length=32)
 
 
 class PathSelectBody(BaseModel):
@@ -575,6 +583,92 @@ def _public_preset(preset: dict) -> dict:
     if "form_values" not in result:
         result["form_values"] = base
     return result
+
+
+_JAPAN_RESTRICTED_CRAWLERS = {
+    "mgstage": ("MGStage", "mgstage.com"),
+    "prestige": ("Prestige", "prestige-av.com"),
+    "fc2": ("FC2", "adult.contents.fc2.com"),
+    "fanza": ("FANZA", "dmm.co.jp"),
+}
+_GEO_IP_ENDPOINTS = ("https://ipwho.is/", "https://ipapi.co/json/")
+
+
+def _proxy_test_timeout(value: str | None) -> int:
+    """Keep the interactive test quick even if the preset has a long timeout."""
+    match = re.fullmatch(r"PT(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?", str(value or "").strip(), re.IGNORECASE)
+    if not match:
+        return 6
+    seconds = int(match.group(1) or 0) * 60 + float(match.group(2) or 0)
+    return max(2, min(10, int(seconds or 6)))
+
+
+def _selected_crawlers(value: dict | str | None) -> set[str]:
+    if isinstance(value, str):
+        try:
+            value = yaml.safe_load(value) or {}
+        except yaml.YAMLError:
+            return set()
+    if not isinstance(value, dict):
+        return set()
+    selected: set[str] = set()
+    for crawlers in value.values():
+        if isinstance(crawlers, list):
+            selected.update(str(crawler).strip().lower() for crawler in crawlers)
+    return selected
+
+
+def _proxy_connectivity_test(body: ProxyConnectivityTestBody) -> dict:
+    raw_proxy = str(body.proxy_server or "").strip()
+    if raw_proxy.lower() in {"", "null", "~"}:
+        raw_proxy = ""
+    if raw_proxy:
+        parsed = urlsplit(raw_proxy)
+        if parsed.scheme.lower() not in {"http", "https", "socks5", "socks5h"} or not parsed.hostname:
+            raise HTTPException(status_code=400, detail="代理服务器地址必须是 http、https、socks5 或 socks5h 地址")
+
+    session = requests.Session()
+    session.trust_env = False
+    if raw_proxy:
+        session.proxies.update({"http": raw_proxy, "https": raw_proxy})
+    result: dict[str, object] = {
+        "route": "配置代理" if raw_proxy else "直连",
+        "proxy_configured": bool(raw_proxy),
+        "reachable": False,
+        "ip": "",
+        "country": "",
+    }
+    for endpoint in _GEO_IP_ENDPOINTS:
+        try:
+            response = session.get(endpoint, timeout=_proxy_test_timeout(body.timeout), headers={"Accept": "application/json"})
+            response.raise_for_status()
+            data = response.json()
+            country = str(data.get("country_code") or data.get("country") or "").upper()
+            if country:
+                result.update({"reachable": True, "ip": str(data.get("ip") or "").strip(), "country": country})
+                break
+        except (requests.RequestException, ValueError, TypeError):
+            continue
+
+    restricted = [details for crawler, details in _JAPAN_RESTRICTED_CRAWLERS.items() if crawler in _selected_crawlers(body.crawler_selection)]
+    site_names = [name for name, _ in restricted]
+    domains = [domain for _, domain in restricted]
+    hint = ""
+    if domains:
+        rules = "\n".join(f"  - DOMAIN-SUFFIX,{domain},JP" for domain in sorted(set(domains)))
+        hint = "Clash/Mihomo 覆写提示（先确保存在名为 JP 的日本策略组）：\nrules:\n" + rules
+    result.update({
+        "restricted_sites": site_names,
+        "japan_required": bool(restricted),
+        "japan_compatible": bool(result["reachable"] and result["country"] == "JP") if restricted else None,
+        "clash_mihomo_hint": hint,
+    })
+    return result
+
+
+@app.post("/api/presets/network/proxy-test")
+def test_preset_proxy_connectivity(body: ProxyConnectivityTestBody, _: dict = Depends(require_admin)) -> dict:
+    return _proxy_connectivity_test(body)
 
 
 @app.post("/api/presets")

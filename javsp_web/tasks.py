@@ -297,14 +297,6 @@ def _progress_event_message(event: dict) -> str | None:
             return f"影片刮削失败: {event.get('error') or '未知错误'}"
     if stage == "task" and status == "completed":
         return f"全部任务完成，共处理 {event.get('total', 0)} 部影片"
-    if stage == "network_preflight":
-        sites = event.get("sites") or "已启用爬虫"
-        if status == "running":
-            return f"网络预检：正在检查 {sites} 所需的出口地区"
-        if status == "passed":
-            return f"网络预检通过：{sites} 的{event.get('route') or '当前'}出口地区满足已知限制"
-        if status == "warning":
-            return f"网络预检警告：{sites} 的 {event.get('routes') or '出口地区不满足已知限制'}，详见后续覆写提示"
     if stage == "crawler":
         name = str(event.get("name") or "").removeprefix("javsp.web.")
         labels = {"running": "开始抓取", "success": "抓取完成", "failed": "抓取失败", "not_found": "未找到影片", "duplicate": "发现重复结果"}

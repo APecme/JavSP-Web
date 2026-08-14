@@ -249,6 +249,12 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .auth-logo { display: block; width: 185px; height: 185px; margin: 0 auto 24px; padding: 8px; }
 .app-version { color: #667085; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .auth-version { display: block; margin: 10px 0 0; text-align: center; }
+.proxy-test-field .form-actions { margin-top: 8px; }
+.proxy-test-result { margin-top: 10px; padding: 10px; border: 1px solid #d0d5dd; background: #f8fafc; color: #344054; font-size: 12px; }
+.proxy-test-result p { margin: 0 0 6px; }
+.proxy-test-result p:last-of-type { margin-bottom: 0; }
+.proxy-test-result details { margin-top: 8px; }
+.proxy-test-result pre { margin: 7px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .auto-scrape-run-content { display: grid; gap: 14px; }
 .schedule-run-task { padding: 15px; border: 1px solid #eaecf0; border-radius: 6px; background: #fff; }
 .schedule-run-task .scrape-progress { margin-top: 14px; }

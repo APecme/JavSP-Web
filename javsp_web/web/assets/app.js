@@ -234,7 +234,12 @@ function renderConfigFields() {
         ? `<button class="button secondary config-directory-picker" type="button" data-select-output-directory="${sourcePath}">选择路径</button>`
         : '';
       const ruleControl = isNamingRulePath(sourcePath) ? `<div class="naming-rule-control">${control}${outputDirectoryPicker}${namingRuleHelp(sourcePath)}</div>` : control;
-      return `<label class="config-field"><span class="config-field-name">${escapeHtml(fieldLabel(sourcePath))} <small>(${escapeHtml(sourcePath)})</small></span>${ruleControl}${description ? `<small class="config-description">说明：${escapeHtml(description)}</small>` : ''}${note ? `<em>备注：${escapeHtml(note)}</em>` : ''}</label>`;
+      const heading = `<span class="config-field-name">${escapeHtml(fieldLabel(sourcePath))} <small>(${escapeHtml(sourcePath)})</small></span>`;
+      const help = `${description ? `<small class="config-description">说明：${escapeHtml(description)}</small>` : ''}${note ? `<em>备注：${escapeHtml(note)}</em>` : ''}`;
+      if (sourcePath === 'network.proxy_server') {
+        return `<div class="config-field proxy-test-field">${heading}${ruleControl}${help}<div class="form-actions"><button class="button secondary" type="button" id="test-preset-proxy">测试连通性</button><span id="preset-proxy-test-message" class="form-message"></span></div><div id="preset-proxy-test-result" class="proxy-test-result hidden"></div></div>`;
+      }
+      return `<label class="config-field">${heading}${ruleControl}${help}</label>`;
     }).join('') || '<p class="muted">此分类暂无可编辑项。</p>';
     if (tab.id === 'scanner') {
       container.insertAdjacentHTML('beforeend', `<label class="config-field web-config-field"><span class="config-field-name">多线程刮削 <small>(JavSP WEB)</small></span><input id="preset-task-concurrency" type="number" min="1" max="32" value="${Math.max(1, Math.min(32, Number(state.taskConcurrency) || 1))}"><small class="config-description">手动刮削目录内有多个影片时，同时运行的任务数量；超出的任务会保留在队列中等待。</small></label>`);
@@ -252,6 +257,16 @@ function readConfigFields() {
     setPathValue(values, `${section}.${path.join('.')}`, control.value);
   });
   return Object.fromEntries(FORM_SECTIONS.map((section) => [section, values[section] || {}]));
+}
+
+function proxyConnectivityResultMarkup(result) {
+  const route = result.proxy_configured ? '配置代理' : '直连出口';
+  const exit = result.reachable ? `${escapeHtml(result.ip || '未知 IP')}，地区 ${escapeHtml(result.country || '未知')}` : '无法查询出口地区';
+  const sites = (result.restricted_sites || []).join('、');
+  let compatibility = '';
+  if (sites) compatibility = result.japan_compatible ? `<p class="form-message">${escapeHtml(sites)} 的出口地区满足已知限制。</p>` : `<p class="form-error">${escapeHtml(sites)} 存在日本地区访问限制，当前${route}${result.reachable ? `为 ${escapeHtml(result.country || '未知')} 地区` : '无法确认地区'}。</p>`;
+  const hint = result.clash_mihomo_hint ? `<details><summary>Clash/Mihomo 覆写提示</summary><pre>${escapeHtml(result.clash_mihomo_hint)}</pre></details>` : '';
+  return `<p><strong>${route}：</strong>${exit}</p>${compatibility}${hint}`;
 }
 
 function crawlerConfigMarkup(selection = {}) {
@@ -1699,6 +1714,35 @@ async function probeMediaLibraries(showMessage = true) {
 }
 
 document.addEventListener('click', async (event) => {
+  const testPresetProxy = event.target.closest('#test-preset-proxy');
+  if (testPresetProxy) {
+    const message = $('#preset-proxy-test-message');
+    const result = $('#preset-proxy-test-result');
+    const values = readConfigFields();
+    const original = testPresetProxy.textContent;
+    testPresetProxy.disabled = true;
+    testPresetProxy.textContent = '正在测试';
+    if (message) { message.textContent = ''; message.classList.remove('form-error'); }
+    if (result) result.classList.add('hidden');
+    try {
+      const response = await api('/api/presets/network/proxy-test', {
+        method: 'POST',
+        body: JSON.stringify({
+          proxy_server: values.network?.proxy_server || '',
+          crawler_selection: values.crawler?.selection || state.formValues?.crawler?.selection || {},
+          timeout: values.network?.timeout || '',
+        }),
+      });
+      if (message) message.textContent = response.reachable ? '连通性测试完成' : '测试完成，但未能查询出口地区';
+      if (result) { result.innerHTML = proxyConnectivityResultMarkup(response); result.classList.remove('hidden'); }
+    } catch (error) {
+      if (message) { message.textContent = error.message; message.classList.add('form-error'); }
+    } finally {
+      testPresetProxy.disabled = false;
+      testPresetProxy.textContent = original;
+    }
+    return;
+  }
   const crawlerCodeItem = event.target.closest('[data-crawler-code-name]');
   if (crawlerCodeItem) {
     document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.toggle('active', item === crawlerCodeItem));
