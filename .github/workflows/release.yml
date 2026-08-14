@@ -29,6 +29,10 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Set beta release label
+        id: release
+        shell: bash
+        run: echo "label=bata.$(TZ=Asia/Shanghai date +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
       - uses: docker/metadata-action@v5
         id: meta
         with:
@@ -39,6 +43,8 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: |
+            JAVSP_WEB_RELEASE_LABEL=${{ steps.release.outputs.label }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

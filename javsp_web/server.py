@@ -12,7 +12,7 @@ from typing import Literal
 import yaml
 from croniter import croniter
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -64,6 +64,11 @@ ensure_seed_data()
 recover_interrupted_tasks()
 app = FastAPI(title="JavSP WEB", version=__version__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
+RELEASE_LABEL = os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").strip()
+
+
+def _display_version() -> str:
+    return RELEASE_LABEL or __version__
 
 
 @app.middleware("http")
@@ -202,7 +207,7 @@ class PathMappingsBody(BaseModel):
 
 @app.get("/api/runtime")
 def runtime(_: dict = Depends(current_user)) -> dict:
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": __version__, "timezone": timezone_name()}
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "timezone": timezone_name()}
 
 
 @app.post("/api/path/select")
@@ -297,7 +302,7 @@ def health() -> dict:
 
 @app.get("/api/public-info")
 def public_info() -> dict:
-    return {"name": "JavSP WEB", "version": __version__}
+    return {"name": "JavSP WEB", "version": _display_version()}
 
 
 @app.get("/login")
@@ -306,8 +311,10 @@ def login_page() -> FileResponse:
 
 
 @app.get("/")
-def index_page() -> FileResponse:
-    return FileResponse(WEB_DIR / "index.html")
+def index_page() -> HTMLResponse:
+    asset_version = _display_version()
+    document = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", asset_version)
+    return HTMLResponse(document, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/favicon.ico")
