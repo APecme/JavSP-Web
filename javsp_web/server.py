@@ -64,7 +64,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
 
 
@@ -153,6 +153,17 @@ class CrawlerTestBody(BaseModel):
 class TaskBody(BaseModel):
     input_directory: str = Field(min_length=1)
     preset_id: str = "default"
+
+
+class TaskMetadataBody(BaseModel):
+    dvdid: str = Field(default="", max_length=160)
+    title: str = Field(default="", max_length=1000)
+    actress: list[str] = Field(default_factory=list, max_length=100)
+    director: str = Field(default="", max_length=300)
+    producer: str = Field(default="", max_length=300)
+    publisher: str = Field(default="", max_length=300)
+    publish_date: str = Field(default="", max_length=32)
+    apply_to_folder: bool = False
 
 
 class PresetBody(BaseModel):
@@ -886,6 +897,14 @@ def task(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not item:
         raise HTTPException(status_code=404, detail="任务不存在")
     return item
+
+
+@app.patch("/api/tasks/{task_id}/metadata")
+def update_task_details(task_id: str, body: TaskMetadataBody, _: dict = Depends(current_user)) -> dict:
+    result = update_task_metadata(task_id, body.model_dump(), body.apply_to_folder)
+    if result is None:
+        raise HTTPException(status_code=400, detail="任务不存在，或任务仍在运行中")
+    return {"ok": True, **result}
 
 
 @app.get("/api/tasks/{task_id}/cover/{index:int}")

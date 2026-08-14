@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from html import unescape
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
@@ -255,6 +256,9 @@ def _task_progress(task: dict, lines: list[str]) -> dict:
     output = task.get("image_output")
     if isinstance(output, dict) and output.get("fanart_file"):
         progress["output"] = {key: str(output.get(key) or "") for key in {"save_dir", "fanart_file", "poster_file"}}
+    override = task.get("metadata_override")
+    if isinstance(override, dict):
+        progress["metadata"].update({key: value for key, value in override.items() if key in {"dvdid", "title", "actress", "director", "producer", "publisher", "publish_date"}})
     return progress
 
 
@@ -484,6 +488,101 @@ def get_task(task_id: str) -> dict | None:
     return next((task for task in list_tasks() if task["id"] == task_id), None)
 
 
+_EDITABLE_METADATA_KEYS = {"dvdid", "title", "actress", "director", "producer", "publisher", "publish_date"}
+
+
+def _metadata_folder(task: dict) -> Path:
+    output = task.get("image_output") if isinstance(task.get("image_output"), dict) else {}
+    save_dir = str(output.get("save_dir") or "").strip()
+    if save_dir:
+        return Path(save_dir)
+    target = Path(str(task.get("input_directory") or ""))
+    return target if target.is_dir() else target.parent
+
+
+def _metadata_nfo_path(task: dict) -> Path:
+    organizer = task.get("file_organizer") if isinstance(task.get("file_organizer"), dict) else {}
+    for value in organizer.get("generated_files") or []:
+        candidate = Path(str(value))
+        if candidate.suffix.lower() == ".nfo":
+            return candidate
+    folder = _metadata_folder(task)
+    try:
+        existing = sorted(folder.glob("*.nfo"), key=lambda item: item.name.lower())
+    except OSError:
+        existing = []
+    return existing[0] if existing else folder / "movie.nfo"
+
+
+def _replace_nfo_text(root: ET.Element, tag: str, value: str) -> None:
+    matches = list(root.findall(tag))
+    if value:
+        target = matches[0] if matches else ET.SubElement(root, tag)
+        target.text = value
+        for extra in matches[1:]:
+            root.remove(extra)
+    else:
+        for match in matches:
+            root.remove(match)
+
+
+def _write_metadata_nfo(task: dict, metadata: dict[str, object]) -> Path:
+    nfo_path = _metadata_nfo_path(task)
+    nfo_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        tree = ET.parse(nfo_path)
+        root = tree.getroot()
+        if root.tag != "movie":
+            raise ValueError("NFO 根节点不是 movie")
+    except (OSError, ET.ParseError, ValueError):
+        root = ET.Element("movie")
+        tree = ET.ElementTree(root)
+
+    _replace_nfo_text(root, "title", str(metadata.get("title") or ""))
+    _replace_nfo_text(root, "director", str(metadata.get("director") or ""))
+    _replace_nfo_text(root, "studio", str(metadata.get("producer") or ""))
+    _replace_nfo_text(root, "publisher", str(metadata.get("publisher") or ""))
+    _replace_nfo_text(root, "premiered", str(metadata.get("publish_date") or ""))
+    for item in list(root.findall("uniqueid")):
+        if item.get("type") == "num":
+            root.remove(item)
+    dvdid = str(metadata.get("dvdid") or "")
+    if dvdid:
+        ET.SubElement(root, "uniqueid", {"type": "num", "default": "true"}).text = dvdid
+    for item in list(root.findall("actor")):
+        root.remove(item)
+    for actress in metadata.get("actress") or []:
+        actor = ET.SubElement(root, "actor")
+        ET.SubElement(actor, "name").text = str(actress)
+    ET.indent(tree, space="  ")
+    temporary = nfo_path.with_suffix(nfo_path.suffix + ".tmp")
+    tree.write(temporary, encoding="utf-8", xml_declaration=True)
+    temporary.replace(nfo_path)
+    return nfo_path
+
+
+def update_task_metadata(task_id: str, values: dict[str, object], apply_to_folder: bool = False) -> dict | None:
+    with _lock:
+        tasks = load_tasks()
+        task = next((item for item in tasks if item.get("id") == task_id), None)
+        if not task or task.get("status") in {"queued", "running"}:
+            return None
+        metadata: dict[str, object] = {}
+        for key in _EDITABLE_METADATA_KEYS:
+            value = values.get(key)
+            if key == "actress":
+                metadata[key] = [str(item).strip() for item in (value or []) if str(item).strip()]
+            else:
+                metadata[key] = str(value or "").strip()
+        task["metadata_override"] = metadata
+        nfo_path = _write_metadata_nfo(task, metadata) if apply_to_folder else None
+        logs = _logs.setdefault(task_id, list(task.get("log_tail") or []))
+        logs.append("已手动更新影片资料" + (f"并同步 NFO：{nfo_path}" if nfo_path else ""))
+        task["log_tail"] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
+        save_tasks(tasks)
+        return {"metadata": metadata, "nfo_path": str(nfo_path) if nfo_path else ""}
+
+
 def _restore_plan(task: dict) -> dict | None:
     organizer = task.get("file_organizer") if isinstance(task.get("file_organizer"), dict) else {}
     original_files = [Path(path) for path in organizer.get("original_files") or []]
@@ -671,9 +770,19 @@ def create_tasks(
         raise ValueError(f"无法读取输入目录: {exc}") from exc
     if not video_files:
         raise ValueError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
+    # Some mounted filesystems can expose the same file through more than one
+    # directory entry. A duplicate task races against its own output directory.
+    unique_videos: list[Path] = []
+    seen_paths: set[str] = set()
+    for video in video_files:
+        identity = os.path.normcase(os.path.realpath(str(video)))
+        if identity in seen_paths:
+            continue
+        seen_paths.add(identity)
+        unique_videos.append(video)
     return [
         create_task(str(video), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id)
-        for video in video_files
+        for video in unique_videos
     ]
 
 

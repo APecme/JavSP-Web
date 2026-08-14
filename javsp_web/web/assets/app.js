@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
@@ -343,7 +343,7 @@ function renderGoogleBrowser(taskId) {
 function renderGoogleCoverLoading() {
   const target = $('#google-cover-candidates');
   if (!target) return;
-  target.innerHTML = '<section class="google-cover-loading" role="status"><i></i><strong>正在搜索 Google 图片</strong><span>请保持此窗口打开，结果会自动显示。</span></section>';
+  target.innerHTML = '<section class="google-cover-loading" role="status"><i></i><strong>正在搜索 Google 图片</strong></section>';
 }
 
 function renderGoogleCoverCandidates(taskId, candidates) {
@@ -558,7 +558,7 @@ async function loadTasks() {
     renderOverview();
     renderTasks();
     const detailOpen = $('#task-detail-dialog')?.open && state.activeTaskDetail;
-    if (detailOpen && !state.taskDetailLogSelecting && !hasTaskDetailLogSelection()) openTaskDetail(state.activeTaskDetail);
+    if (detailOpen && !state.taskMetadataEditing && !state.taskDetailLogSelecting && !hasTaskDetailLogSelection()) openTaskDetail(state.activeTaskDetail);
     window.requestAnimationFrame(restoreLogScroll);
   } catch (error) { console.error(error); }
   if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
@@ -671,6 +671,24 @@ async function deleteTaskInDialog(id) {
   $('#task-delete-text').textContent = `确定删除任务“${task?.name || id}”的刮削记录和日志吗？只删除 JavSP WEB 记录，不删除视频、NFO、封面或剧照文件。`;
   $('#task-delete-message').textContent = '';
   $('#task-delete-dialog').showModal();
+}
+
+function deleteTaskRecords(ids) {
+  const records = [...new Set(ids)].filter(Boolean);
+  if (records.length <= 1) {
+    deleteTaskInDialog(records[0]);
+    return;
+  }
+  confirmAction({
+    title: '删除重复任务记录',
+    text: `确定删除这 ${records.length} 条合并的任务记录吗？只删除 JavSP WEB 记录，不删除视频、NFO、封面或剧照文件。`,
+    confirmLabel: '删除记录',
+    danger: true,
+    run: async () => {
+      for (const id of records) await api(`/api/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await loadTasks();
+    },
+  });
 }
 
 async function copyTaskLog(button) {
@@ -879,6 +897,44 @@ $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) { event.stopPropagation(); deleteTaskInDialog(button.dataset.deleteTask); } });
 document.addEventListener('change', (event) => {
+  if (event.target.id === 'overview-sort-key' || event.target.id === 'overview-sort-direction') {
+    state.overviewSort = { key: $('#overview-sort-key').value, direction: $('#overview-sort-direction').value };
+    renderOverview();
+  }
+});
+document.addEventListener('contextmenu', (event) => {
+  const card = event.target.closest('[data-overview-task]');
+  if (!card) return;
+  event.preventDefault();
+  const menu = $('#overview-context-menu');
+  menu.dataset.taskId = card.dataset.overviewTask;
+  menu.dataset.taskIds = card.dataset.overviewTaskIds || card.dataset.overviewTask;
+  menu.style.left = `${Math.min(event.clientX, window.innerWidth - 164)}px`;
+  menu.style.top = `${Math.min(event.clientY, window.innerHeight - 48)}px`;
+  menu.hidden = false;
+});
+document.addEventListener('click', (event) => {
+  const menu = $('#overview-context-menu');
+  const remove = event.target.closest('[data-overview-context-delete]');
+  if (remove && menu?.dataset.taskIds) {
+    deleteTaskRecords(menu.dataset.taskIds.split(','));
+    menu.hidden = true;
+    return;
+  }
+  if (menu && !event.target.closest('#overview-context-menu')) menu.hidden = true;
+});
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-edit-task-metadata]')) {
+    state.taskMetadataEditing = true;
+    if (state.activeTaskDetail) openTaskDetail(state.activeTaskDetail);
+    return;
+  }
+  if (event.target.closest('[data-cancel-task-metadata]')) {
+    state.taskMetadataEditing = false;
+    if (state.activeTaskDetail) openTaskDetail(state.activeTaskDetail);
+  }
+});
+document.addEventListener('change', (event) => {
   const checkbox = event.target.closest('[data-overview-select]');
   if (checkbox) {
     if (checkbox.checked) state.selectedOverviewTasks.add(checkbox.dataset.overviewSelect);
@@ -957,6 +1013,50 @@ $('#task-delete-form').addEventListener('submit', async (event) => {
     state.pendingDeleteTask = null;
     await loadTasks();
   } catch (error) { $('#task-delete-message').textContent = error.message; }
+});
+document.addEventListener('submit', async (event) => {
+  const form = event.target.closest('#task-metadata-form');
+  if (!form) return;
+  event.preventDefault();
+  const button = form.querySelector('button[type="submit"]');
+  const data = new FormData(form);
+  const actress = String(data.get('actress') || '').split(/[\n,，、]/).map((value) => value.trim()).filter(Boolean);
+  const payload = {
+    dvdid: String(data.get('dvdid') || '').trim(),
+    title: String(data.get('title') || '').trim(),
+    actress,
+    director: String(data.get('director') || '').trim(),
+    producer: String(data.get('producer') || '').trim(),
+    publisher: String(data.get('publisher') || '').trim(),
+    publish_date: String(data.get('publish_date') || '').trim(),
+    apply_to_folder: data.get('apply_to_folder') === 'on',
+  };
+  button.disabled = true;
+  try {
+    await api(`/api/tasks/${encodeURIComponent(form.dataset.taskId)}/metadata`, { method: 'PATCH', body: JSON.stringify(payload) });
+    state.taskMetadataEditing = false;
+    await loadTasks();
+    showToast(payload.apply_to_folder ? '影片资料和文件夹 NFO 已保存' : '影片资料已保存');
+    requestMetadataRefresh();
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message, 'error');
+  }
+});
+$('#metadata-refresh-form')?.addEventListener('submit', async (event) => {
+  if (event.submitter?.id !== 'metadata-refresh-confirm') return;
+  event.preventDefault();
+  const button = $('#metadata-refresh-confirm');
+  button.disabled = true;
+  try {
+    if ($('#metadata-refresh-always').checked) localStorage.setItem('javsp-web.metadata-refresh-always', '1');
+    await refreshConfiguredMediaLibraries();
+    $('#metadata-refresh-dialog').close();
+  } catch (error) {
+    $('#metadata-refresh-message').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
 });
 $('#action-confirm-form').addEventListener('submit', async (event) => {
   if (event.submitter?.id !== 'action-confirm-button') return;
@@ -1139,9 +1239,11 @@ function openTaskDetail(taskId) {
   if (!task) return;
   state.activeTaskDetail = taskId;
   const metadata = task.progress?.metadata || {};
-  const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name]].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
+  const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name], ['文件路径', task.input_directory || '-'], ['整理路径', task.progress?.output?.save_dir || '-']].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
+  const actressInput = Array.isArray(metadata.actress) ? metadata.actress.join('\n') : (metadata.actress || '');
+  const metadataEditor = state.taskMetadataEditing ? `<form id="task-metadata-form" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="submit">保存资料</button></div></form>` : `<section class="task-metadata-summary"><div class="task-metadata-summary-heading"><h3>影片资料</h3><button class="button secondary" type="button" data-edit-task-metadata>修改</button></div><div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div></section>`;
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
@@ -1162,8 +1264,35 @@ function openTaskDetail(taskId) {
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
-  $('#task-detail-content').innerHTML = `<div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div><section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
+  $('#task-detail-content').innerHTML = `${metadataEditor}<section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
   if (!$('#task-detail-dialog').open) $('#task-detail-dialog').showModal();
+}
+
+async function refreshConfiguredMediaLibraries() {
+  if (state.user?.role !== 'admin') {
+    showToast('当前账户无权刷新媒体库', 'error');
+    return;
+  }
+  const servers = await api('/api/media-servers');
+  state.mediaServers = servers;
+  if (!servers.length) {
+    showToast('没有已配置的媒体服务器');
+    return;
+  }
+  const results = await Promise.allSettled(servers.map((server) => api(`/api/media-servers/${encodeURIComponent(server.id)}/sync`, { method: 'POST' })));
+  const failed = results.filter((result) => result.status === 'rejected').length;
+  showToast(failed ? `${servers.length - failed} 个媒体库已开始刷新，${failed} 个失败` : '媒体库扫描已启动', failed ? 'error' : 'success');
+}
+
+function requestMetadataRefresh() {
+  if (localStorage.getItem('javsp-web.metadata-refresh-always') === '1') {
+    refreshConfiguredMediaLibraries().catch((error) => showToast(error.message, 'error'));
+    return;
+  }
+  const dialog = $('#metadata-refresh-dialog');
+  $('#metadata-refresh-always').checked = false;
+  $('#metadata-refresh-message').textContent = '';
+  if (dialog && !dialog.open) dialog.showModal();
 }
 
 function renderOverview() {
@@ -1171,11 +1300,32 @@ function renderOverview() {
   $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
   const latest = state.tasks[0];
   $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  const completed = state.tasks.filter((task) => ['succeeded', 'failed'].includes(task.status) && ((task.cover_count || task.fanart_count) || (task.progress?.image_sources?.cover_urls?.length || task.progress?.image_sources?.preview_pics?.length))).slice(0, 24);
-  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map(overviewCoverCard).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || (task.progress?.image_sources?.cover_urls?.length || task.progress?.image_sources?.preview_pics?.length)));
+  const groups = new Map();
+  completed.forEach((task) => {
+    const outputPath = String(task.progress?.output?.save_dir || '').trim();
+    const identity = outputPath ? `output:${outputPath.toLowerCase()}` : `input:${String(task.input_directory || task.id).toLowerCase()}`;
+    const group = groups.get(identity) || [];
+    group.push(task);
+    groups.set(identity, group);
+  });
+  const cards = [...groups.values()].map((items) => {
+    const ordered = items.slice().sort((left, right) => {
+      const status = Number(right.status === 'succeeded') - Number(left.status === 'succeeded');
+      return status || Date.parse(right.created_at || '') - Date.parse(left.created_at || '');
+    });
+    return { task: ordered[0], taskCount: items.length, taskIds: items.map((item) => item.id) };
+  }).sort((left, right) => {
+    const key = state.overviewSort.key;
+    const value = (entry) => key === 'publish_date' ? Date.parse(entry.task.progress?.metadata?.publish_date || '') || 0 : Date.parse(entry.task.created_at || '') || 0;
+    const difference = value(left) - value(right);
+    return state.overviewSort.direction === 'asc' ? difference : -difference;
+  }).slice(0, 24);
+  const toolbar = `<div class="overview-cover-toolbar"><label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
+  $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
 }
 
-function overviewCoverCard(task) {
+function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const images = task.progress?.images || {};
   const coverReady = Number(task.cover_count) > 0;
   const total = Number(images.fanart_total) || Number(task.fanart_count) || 0;
@@ -1184,7 +1334,7 @@ function overviewCoverCard(task) {
   const artwork = coverReady
     ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
     : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
-  return `<article class="overview-cover-card"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span></button></article>`;
+  return `<article class="overview-cover-card" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}"><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span>${taskCount > 1 ? `<small>合并 ${taskCount} 条记录</small>` : ''}</button></article>`;
 }
 
 function artworkPlaceholder(className, label) {
@@ -2265,7 +2415,7 @@ function formatLocalDateTime(value) {
   return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '';
 }
 
-$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; });
+$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; state.taskMetadataEditing = false; });
 
 document.addEventListener('pointerdown', (event) => {
   state.taskDetailLogSelecting = Boolean(event.target.closest('#task-detail-content .task-log'));
