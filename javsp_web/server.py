@@ -103,9 +103,11 @@ _CRAWLER_TEST_MARKER = "JAVSP_WEB_CRAWLER_TEST "
 _CRAWLER_TEST_SCRIPT = r'''
 import importlib
 import json
+import logging
 import sys
 
 MARKER = "JAVSP_WEB_CRAWLER_TEST "
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 name, input_value = sys.argv[-2:]
 result = {"crawler": name, "input_value": input_value, "data": {}, "error": ""}
 try:
