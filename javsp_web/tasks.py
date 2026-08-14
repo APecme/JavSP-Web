@@ -34,6 +34,7 @@ _deleted_tasks: set[str] = set()
 _cancelled_tasks: set[str] = set()
 _google_captcha_sessions: dict[str, dict] = {}
 _google_captcha_sessions_lock = threading.RLock()
+_google_browser_session_lock = threading.Lock()
 _TASK_COVERS_DIR = DATA_DIR / "task-covers"
 _VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
 _PROGRESS_RE = re.compile(r"^(?P<key>[^:]{1,120}):\s+(?P<percent>\d{1,3})%.*?(?:(?P<done>\d+)\s*/\s*(?P<total>\d+))?")
@@ -916,89 +917,15 @@ def _google_captcha_present(driver) -> bool:
     return "/sorry/" in driver.current_url or "captcha-form" in page
 
 
-def _google_captcha_controls(driver, session: dict) -> list[dict]:
-    """Expose visible CAPTCHA controls without rasterizing the browser page."""
-    from selenium.webdriver.common.by import By
-
-    controls: dict[str, dict] = {}
-    result: list[dict] = []
-
-    def walk(frame_path: tuple[int, ...] = ()) -> None:
-        try:
-            driver.switch_to.default_content()
-            for frame_index in frame_path:
-                driver.switch_to.frame(driver.find_elements(By.TAG_NAME, "iframe")[frame_index])
-            elements = driver.find_elements(
-                By.CSS_SELECTOR,
-                "button,input,textarea,select,[role='button'],[role='checkbox'],[role='radio'],[role='option'],.rc-imageselect-tile",
-            )
-            for element in elements:
-                if not element.is_displayed():
-                    continue
-                try:
-                    bounds = element.rect or {}
-                    if not bounds.get("width") or not bounds.get("height"):
-                        continue
-                    tag = (element.tag_name or "").lower()
-                    role = (element.get_attribute("role") or "").strip().lower()
-                    input_type = (element.get_attribute("type") or "").strip().lower()
-                    label = (
-                        element.get_attribute("aria-label")
-                        or element.get_attribute("title")
-                        or (element.text or "").strip()
-                        or element.get_attribute("placeholder")
-                    ).strip()
-                    image_url = driver.execute_script(
-                        """
-                        const node = arguments[0];
-                        const image = node.matches('img') ? node : node.querySelector('img');
-                        if (image && image.currentSrc) return image.currentSrc;
-                        const background = getComputedStyle(node).backgroundImage || '';
-                        const match = background.match(/url\\([\"']?(.*?)[\"']?\\)/);
-                        return match ? match[1] : '';
-                        """,
-                        element,
-                    ) or ""
-                    kind = "input" if tag in {"input", "textarea"} and input_type not in {"checkbox", "radio", "button", "submit"} else "click"
-                    if not label:
-                        label = f"图片选项 {len(result) + 1}" if image_url or "imageselect" in (element.get_attribute("class") or "") else "操作"
-                    control_id = f"control-{len(result) + 1}"
-                    controls[control_id] = {"element": element, "frame_path": frame_path}
-                    item = {
-                        "id": control_id,
-                        "kind": kind,
-                        "label": label[:160],
-                        "role": role or input_type or tag,
-                    }
-                    if image_url.startswith(("http://", "https://", "data:")):
-                        item["image_url"] = image_url
-                    if kind == "input":
-                        item["value"] = element.get_attribute("value") or ""
-                    result.append(item)
-                except Exception:
-                    continue
-            if len(frame_path) >= 4:
-                return
-            for index, _ in enumerate(driver.find_elements(By.TAG_NAME, "iframe")):
-                walk(frame_path + (index,))
-        except Exception:
-            return
-
-    walk()
-    driver.switch_to.default_content()
-    session["controls"] = controls
-    return result
-
-
 def _wait_for_google_captcha(task_id: str, task: dict, driver) -> None:
-    session = {"driver": driver, "lock": threading.RLock(), "controls": {}}
+    if os.environ.get("JAVSP_GOOGLE_BROWSER_VNC") != "1":
+        raise RuntimeError("Google 验证需要启用浏览器远程操作环境")
+    session = {"driver": driver, "lock": threading.RLock()}
     with _google_captcha_sessions_lock:
         _google_captcha_sessions[task_id] = session
-    with session["lock"]:
-        _google_captcha_controls(driver, session)
     task["google_cover_search_status"] = "captcha"
-    task["google_cover_search_error"] = "Google 要求验证，请在封面选择窗口中完成验证码"
-    _logs.setdefault(task_id, list(task.get("log_tail") or [])).append("Google 要求验证，等待用户在封面选择窗口操作验证码")
+    task["google_cover_search_error"] = "Google 要求验证，请在浏览器窗口中直接完成验证码"
+    _logs.setdefault(task_id, list(task.get("log_tail") or [])).append("Google 要求验证，等待用户操作真实浏览器会话")
     task["log_tail"] = _clean_log_lines(_logs[task_id])[-_MAX_LOG_LINES:]
     _persist(task)
     deadline = time.monotonic() + _GOOGLE_CAPTCHA_TIMEOUT
@@ -1020,43 +947,10 @@ def _wait_for_google_captcha(task_id: str, task: dict, driver) -> None:
                 _google_captcha_sessions.pop(task_id, None)
 
 
-def google_captcha_state(task_id: str) -> dict | None:
+def google_captcha_browser_active(task_id: str) -> bool:
     with _google_captcha_sessions_lock:
         session = _google_captcha_sessions.get(task_id)
-    if not session:
-        return None
-    with session["lock"]:
-        driver = session["driver"]
-        if not _google_captcha_present(driver):
-            return {"active": False, "controls": []}
-        return {"active": True, "controls": _google_captcha_controls(driver, session)}
-
-
-def act_google_captcha(task_id: str, control_id: str, action: str = "click", value: str = "") -> dict | None:
-    with _google_captcha_sessions_lock:
-        session = _google_captcha_sessions.get(task_id)
-    if not session:
-        return None
-    with session["lock"]:
-        control = session.get("controls", {}).get(control_id)
-        if not control:
-            return None
-        driver = session["driver"]
-        driver.switch_to.default_content()
-        try:
-            for frame_index in control["frame_path"]:
-                driver.switch_to.frame(driver.find_elements("tag name", "iframe")[frame_index])
-            element = control["element"]
-            if action == "input":
-                element.clear()
-                element.send_keys(value)
-            else:
-                element.click()
-            time.sleep(0.35)
-        finally:
-            driver.switch_to.default_content()
-        controls = _google_captcha_controls(driver, session) if _google_captcha_present(driver) else []
-        return {"active": _google_captcha_present(driver), "controls": controls}
+    return bool(session) and os.environ.get("JAVSP_GOOGLE_BROWSER_VNC") == "1"
 
 
 def _google_images_with_chromium(query: str, proxies: dict[str, str], task_id: str = "", task: dict | None = None) -> str:
@@ -1084,10 +978,10 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str], task_id: s
     if proxy.lower().startswith("socks5h://"):
         proxy = "socks5://" + proxy[len("socks5h://"):]
     search_url = f"https://www.google.com/search?tbm=isch&safe=off&filter=0&hl=zh-CN&gl=JP&q={quote_plus(query)}"
+    interactive_browser = os.environ.get("JAVSP_GOOGLE_BROWSER_VNC") == "1"
     options = Options()
     options.binary_location = binary
     for argument in (
-        "--headless=new",
         "--no-sandbox",
         "--disable-gpu",
         "--disable-dev-shm-usage",
@@ -1101,13 +995,20 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str], task_id: s
         "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     ):
         options.add_argument(argument)
+    if not interactive_browser:
+        options.add_argument("--headless=new")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     if proxy:
         options.add_argument(f"--proxy-server={proxy}")
 
+    if not _google_browser_session_lock.acquire(timeout=30):
+        raise RuntimeError("Google 浏览器正在供其他任务操作，请稍后重试")
     driver = None
     try:
         driver = webdriver.Chrome(service=Service(executable_path=driver_binary), options=options)
+        if interactive_browser:
+            driver.set_window_position(0, 0)
+            driver.set_window_size(1440, 900)
         driver.set_page_load_timeout(18)
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
@@ -1194,6 +1095,7 @@ def _google_images_with_chromium(query: str, proxies: dict[str, str], task_id: s
                 driver.quit()
             except Exception:
                 pass
+        _google_browser_session_lock.release()
 
 
 def _search_google_image_candidates(query: str, proxies: dict[str, str] | None = None, task_id: str = "", task: dict | None = None) -> list[dict]:

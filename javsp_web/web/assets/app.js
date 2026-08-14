@@ -333,18 +333,11 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
 
-function renderGoogleCaptcha(taskId, controls) {
+function renderGoogleBrowser(taskId) {
   const target = $('#google-cover-candidates');
   if (!target) return;
-  const items = (controls || []).map((control) => {
-    const label = escapeHtml(control.label || '操作验证码');
-    const image = control.image_url ? `<img src="${escapeHtml(control.image_url)}" loading="lazy" alt="${label}">` : '';
-    if (control.kind === 'input') {
-      return `<div class="google-captcha-input"><label>${label}<input data-google-captcha-input="${escapeHtml(control.id)}" value="${escapeHtml(control.value || '')}" autocomplete="off"></label><button class="button secondary" type="button" data-google-captcha-action="${escapeHtml(control.id)}" data-google-captcha-task="${escapeHtml(taskId)}">提交</button></div>`;
-    }
-    return `<button class="google-captcha-control" type="button" data-google-captcha-action="${escapeHtml(control.id)}" data-google-captcha-task="${escapeHtml(taskId)}">${image}<span>${label}</span></button>`;
-  }).join('');
-  target.innerHTML = `<section class="google-captcha-panel"><strong>Google 要求完成验证码</strong><p class="muted">请使用下方控件完成验证，操作会直接发送到 Google 浏览器会话。</p><div class="google-captcha-controls">${items || '<span class="muted">正在读取验证码控件...</span>'}</div></section>`;
+  const path = encodeURIComponent(`api/tasks/${taskId}/cover/browser`);
+  target.innerHTML = `<section class="google-captcha-panel"><strong>Google 要求完成验证码</strong><p class="muted">请直接在下方真实 Google 浏览器窗口中完成验证。</p><iframe class="google-browser-frame" src="/google-browser/vnc.html?autoconnect=true&resize=remote&path=${path}" title="Google 浏览器"></iframe></section>`;
 }
 
 function showToast(message, tone = 'success') {
@@ -1999,10 +1992,7 @@ document.addEventListener('click', async (event) => {
         result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/candidates`);
         if (result.status === 'captcha') {
           const dialog = $('#google-cover-dialog');
-          try {
-            const captcha = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/captcha/state`);
-            renderGoogleCaptcha(taskId, captcha.controls);
-          } catch (_) { renderGoogleCaptcha(taskId, []); }
+          if (!$('#google-cover-candidates').querySelector('.google-browser-frame')) renderGoogleBrowser(taskId);
           $('#google-cover-message').textContent = '等待完成 Google 验证';
           if (dialog && !dialog.open) dialog.showModal();
           continue;
@@ -2019,21 +2009,6 @@ document.addEventListener('click', async (event) => {
       googleCover.disabled = false;
       googleCover.textContent = error.message;
     });
-  }
-  const googleCaptcha = event.target.closest('[data-google-captcha-action]');
-  if (googleCaptcha) {
-    const controlId = googleCaptcha.dataset.googleCaptchaAction;
-    const input = document.querySelector(`[data-google-captcha-input="${controlId}"]`);
-    googleCaptcha.disabled = true;
-    try {
-      const result = await api(`/api/tasks/${encodeURIComponent(googleCaptcha.dataset.googleCaptchaTask)}/cover/captcha/action`, { method: 'POST', body: JSON.stringify({ control_id: controlId, action: input ? 'input' : 'click', value: input?.value || '' }) });
-      $('#google-cover-message').textContent = result.active ? '已传递验证码操作' : '验证已完成，正在继续搜索';
-      if (result.active) renderGoogleCaptcha(googleCaptcha.dataset.googleCaptchaTask, result.controls);
-    } catch (error) {
-      $('#google-cover-message').textContent = error.message;
-    } finally {
-      googleCaptcha.disabled = false;
-    }
   }
   const coverOption = event.target.closest('[data-google-cover-select]');
   if (coverOption) {

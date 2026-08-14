@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import json
@@ -17,7 +18,7 @@ from urllib.parse import urlsplit
 import requests
 import yaml
 from croniter import croniter
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response, status
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response, WebSocket, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -63,7 +64,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, media_links_for_task, sync_media_server
-from .tasks import act_google_captcha, active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_state, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, search_google_cover, select_google_cover
 from .timeutils import local_now, timezone_name
 
 
@@ -72,6 +73,9 @@ recover_interrupted_tasks()
 app = FastAPI(title="JavSP WEB", version=__version__)
 WEB_DIR = Path(__file__).resolve().parent / "web"
 RELEASE_LABEL = os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").strip()
+NOVNC_DIR = Path(os.environ.get("JAVSP_NOVNC_DIR", "/usr/share/novnc"))
+GOOGLE_VNC_HOST = os.environ.get("JAVSP_GOOGLE_VNC_HOST", "127.0.0.1")
+GOOGLE_VNC_PORT = int(os.environ.get("JAVSP_GOOGLE_VNC_PORT", "5900"))
 
 
 def _display_version() -> str:
@@ -87,6 +91,7 @@ async def disable_asset_cache(request, call_next):
 
 
 app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
+app.mount("/google-browser", StaticFiles(directory=NOVNC_DIR, check_dir=False), name="google-browser")
 IS_DOCKER = Path("/.dockerenv").exists() or os.environ.get("JAVSP_WEB_DOCKER") == "1"
 CONTAINER_BROWSE_ROOT = Path("/")
 VIDEO_EXTENSIONS = {".3gp", ".avi", ".f4v", ".flv", ".iso", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".rm", ".rmvb", ".ts", ".vob", ".webm", ".wmv", ".strm", ".mpg"}
@@ -1629,28 +1634,46 @@ def google_cover_candidates(task_id: str, _: dict = Depends(current_user)) -> di
     return {"candidates": task.get("google_cover_candidates") or [], "status": task.get("google_cover_search_status") or "idle", "error": task.get("google_cover_search_error") or ""}
 
 
-@app.get("/api/tasks/{task_id}/cover/captcha/state")
-def google_cover_captcha_state(task_id: str, _: dict = Depends(current_user)) -> dict:
-    state = google_captcha_state(task_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="当前任务没有等待处理的 Google 验证码")
-    return state
-
-
-@app.post("/api/tasks/{task_id}/cover/captcha/action")
-def act_google_cover_captcha(task_id: str, body: dict, _: dict = Depends(current_user)) -> dict:
-    control_id = str(body.get("control_id") or "").strip()
-    action = str(body.get("action") or "click").strip().lower()
-    value = str(body.get("value") or "")
-    if not control_id or action not in {"click", "input"}:
-        raise HTTPException(status_code=400, detail="验证码控件操作无效")
+@app.websocket("/api/tasks/{task_id}/cover/browser")
+async def google_cover_browser(task_id: str, websocket: WebSocket) -> None:
     try:
-        result = act_google_captcha(task_id, control_id, action=action, value=value)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"验证码操作失败：{exc.__class__.__name__}") from exc
-    if result is None:
-        raise HTTPException(status_code=400, detail="验证码会话已结束或控件无效")
-    return result
+        current_user(websocket.cookies.get(SESSION_COOKIE))
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+    if not google_captcha_browser_active(task_id):
+        await websocket.close(code=1008)
+        return
+    try:
+        reader, writer = await asyncio.open_connection(GOOGLE_VNC_HOST, GOOGLE_VNC_PORT)
+    except OSError:
+        await websocket.close(code=1011)
+        return
+    await websocket.accept()
+
+    async def client_to_vnc() -> None:
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+            payload = message.get("bytes")
+            if payload is None and message.get("text") is not None:
+                payload = message["text"].encode()
+            if payload:
+                writer.write(payload)
+                await writer.drain()
+
+    async def vnc_to_client() -> None:
+        while payload := await reader.read(65536):
+            await websocket.send_bytes(payload)
+
+    client_task = asyncio.create_task(client_to_vnc())
+    vnc_task = asyncio.create_task(vnc_to_client())
+    done, pending = await asyncio.wait({client_task, vnc_task}, return_when=asyncio.FIRST_COMPLETED)
+    for task in pending:
+        task.cancel()
+    writer.close()
+    await writer.wait_closed()
 
 
 @app.post("/api/tasks/{task_id}/cover/select")
