@@ -20,3 +20,5 @@ pendulum>=3,<4
 slimeface>=2024.9.27
 croniter>=3.0,<7
 tzdata>=2025.1
+backports.zoneinfo>=0.2.1; python_version < "3.9"
+eval-type-backport>=0.2.0; python_version < "3.10"

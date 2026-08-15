@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+try:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+except ImportError:  # Python 3.8 packaged builds
+    from backports.zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 DEFAULT_TIMEZONE = "Asia/Shanghai"
