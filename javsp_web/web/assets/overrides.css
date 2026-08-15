@@ -74,11 +74,17 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .overview-selection-toggle svg,
 .overview-selection-tools .icon-button svg,
 .overview-cover-select svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.overview-selection-toggle svg { width: 20px; height: 20px; }
 .overview-selection-toggle.active,
 .overview-cover-select.selected { color: #175cd3; background: #eff8ff; border-color: #175cd3; }
 .overview-cover-card { position: relative; }
 .overview-cover-card.selected .overview-cover { box-shadow: 0 0 0 3px #175cd3; }
 .overview-cover-select { position: absolute; z-index: 2; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid #d0d5dd; border-radius: 5px; background: #fff; box-shadow: 0 2px 8px #10182833; cursor: pointer; }
+.crawler-code-list-row { display: flex; align-items: stretch; gap: 5px; }
+.crawler-code-list-row .crawler-code-item { flex: 1; min-width: 0; }
+.crawler-code-list-delete { flex: 0 0 30px; width: 30px; min-height: 0; padding: 0; color: #b42318; }
+.crawler-code-list-delete:hover { border-color: #fecdca; background: #fef3f2; color: #b42318; }
+.crawler-code-list-delete svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 @media(max-width:560px){.overview-cover-toolbar{align-items:stretch}.overview-selection-toggle{margin-left:0}.overview-selection-tools{width:100%;justify-content:space-between}.overview-selection-tools .button{width:auto}}
 
 .detail-fanart-empty {
