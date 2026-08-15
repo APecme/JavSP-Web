@@ -3,6 +3,13 @@ const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
 const CRAWLER_IDS = ['airav','avsox','avwiki','dl_getchu','fanza','fc2','fc2fan','fc2ppvdb','gyutto','jav321','javbus','javdb','javlib','javmenu','mgstage','njav','prestige','arzon','arzon_iv'];
+const REQUIRED_MOVIE_FIELDS = [
+  ['dvdid', '\u756a\u53f7'], ['cid', 'CID'], ['url', 'URL'], ['plot', '\u5267\u60c5'],
+  ['cover', '\u5c01\u9762'], ['big_cover', '\u9ad8\u6e05\u5c01\u9762'], ['genre', '\u7c7b\u578b'], ['score', '\u8bc4\u5206'],
+  ['title', '\u6807\u9898'], ['ori_title', '\u539f\u59cb\u6807\u9898'], ['magnet', '\u4e0b\u8f7d\u94fe\u63a5'], ['serial', '\u7cfb\u5217'],
+  ['actress', '\u6f14\u5458'], ['director', '\u5bfc\u6f14'], ['duration', '\u65f6\u957f'], ['producer', '\u5236\u4f5c\u5546'],
+  ['publisher', '\u53d1\u884c\u5546'], ['publish_date', '\u53d1\u884c\u65e5\u671f'], ['preview_pics', '\u5267\u7167'], ['preview_video', '\u9884\u544a\u7247'],
+];
 const FORM_TABS = [
   { id: 'scanner', section: 'scanner', label: '扫描器', description: '负责识别影片文件、过滤目录和设置扫描规则。' },
   { id: 'network', section: 'network', label: '网络', description: '设置代理、重试次数和网络请求超时。' },
@@ -41,13 +48,13 @@ FIELD_LABELS['summarizer.cover.google_search_fallback'] = 'Google 搜索封面�
 
 const FIELD_NOTES = {
   input_directory: '手动刮削时会由任务路径覆盖。',
-  ignored_id_pattern: '每行一个正则表达式。',
-  filename_extensions: '数组可直接输入 YAML，例如 [.mkv, .mp4]。',
-  ignored_folder_name_pattern: '每行一个目录过滤正则。',
+  ignored_id_pattern: '输入后点击加号添加；每个标签是一条正则表达式。',
+  filename_extensions: '输入后点击加号添加；每个标签是一个文件扩展名。',
+  ignored_folder_name_pattern: '输入后点击加号添加；每个标签是一条目录过滤正则。',
   proxy_server: '留空或输入 null 表示不使用代理。',
   proxy_free: '站点地址对象，可按 YAML 格式填写。',
   selection: '按影片类型选择爬虫列表，可直接输入 YAML 对象。',
-  required_keys: '数组可直接输入 YAML，例如 [cover, title]。',
+  required_keys: '勾选影片成功抓取时必须取得的字段。',
   engine: '引擎配置可输入 null 或 YAML 对象。',
   path: '路径相关配置对象，可按 YAML 格式填写。',
   nfo: 'NFO 文件生成配置对象。',
@@ -166,6 +173,31 @@ function displayFieldValue(value) {
   return String(value);
 }
 
+function configArrayTagMarkup(value) {
+  return `<span class="config-array-tag" data-array-value="${escapeHtml(value)}"><code>${escapeHtml(value)}</code><button class="config-array-remove" type="button" title="\u5220\u9664 ${escapeHtml(value)}" aria-label="\u5220\u9664 ${escapeHtml(value)}">\u00d7</button></span>`;
+}
+
+function arrayConfigMarkup(path, values) {
+  const items = Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : [];
+  return `<div class="config-array" data-config-path="${escapeHtml(path)}"><div class="config-array-list">${items.map(configArrayTagMarkup).join('')}</div><div class="config-array-add"><input class="config-array-input" type="text" maxlength="256" autocomplete="off" placeholder="\u8f93\u5165\u503c"><button class="icon-button config-array-add-button" type="button" title="\u6dfb\u52a0" aria-label="\u6dfb\u52a0">+</button></div></div>`;
+}
+
+function requiredKeysMarkup(values) {
+  const selected = new Set(Array.isArray(values) ? values.map(String) : []);
+  const fields = REQUIRED_MOVIE_FIELDS.map(([name, label]) => `<label class="required-key-option"><input type="checkbox" data-required-key value="${name}"${selected.has(name) ? ' checked' : ''}><span>${escapeHtml(label)}</span><code>${name}</code></label>`).join('');
+  return `<fieldset class="required-key-list" data-config-path="crawler.required_keys">${fields}</fieldset>`;
+}
+
+function hydrateCollectionControls() {
+  document.querySelectorAll('textarea.config-field-input[data-config-path]').forEach((control) => {
+    let values;
+    try { values = JSON.parse(control.value); } catch (_) { return; }
+    if (!Array.isArray(values)) return;
+    const path = control.dataset.configPath;
+    control.outerHTML = path === 'crawler.required_keys' ? requiredKeysMarkup(values) : arrayConfigMarkup(path, values);
+  });
+}
+
 function isNamingRulePath(path) {
   return [
     'summarizer.path.output_folder_pattern', 'summarizer.path.basename_pattern',
@@ -247,6 +279,7 @@ function renderConfigFields() {
       container.insertAdjacentHTML('beforeend', `<label class="config-field web-config-field"><span class="config-field-name">多线程刮削 <small>(JavSP WEB)</small></span><input id="preset-task-concurrency" type="number" min="1" max="32" value="${Math.max(1, Math.min(32, Number(state.taskConcurrency) || 1))}"><small class="config-description">手动刮削目录内有多个影片时，同时运行的任务数量；超出的任务会保留在队列中等待。</small></label>`);
     }
   });
+  hydrateCollectionControls();
 }
 
 renderPresetNavigation();
@@ -258,6 +291,16 @@ function readConfigFields() {
     const [section, ...path] = control.dataset.configPath.split('.');
     setPathValue(values, `${section}.${path.join('.')}`, control.value);
   });
+  document.querySelectorAll('.config-array[data-config-path]').forEach((control) => {
+    const items = [...control.querySelectorAll('[data-array-value]')]
+      .map((tag) => String(tag.dataset.arrayValue || '').trim())
+      .filter(Boolean);
+    setPathValue(values, control.dataset.configPath, items);
+  });
+  const requiredKeys = [...document.querySelectorAll('[data-required-key]:checked')].map((control) => control.value);
+  if (document.querySelector('[data-config-path="crawler.required_keys"]')) {
+    setPathValue(values, 'crawler.required_keys', requiredKeys);
+  }
   const crawlerSelection = {};
   document.querySelectorAll('.crawler-config-group').forEach((group) => {
     const name = group.dataset.crawlerGroup;
@@ -433,6 +476,16 @@ async function waitForCrawlerCoverCandidates(taskId) {
     }
   }
   $('#google-cover-message').textContent = '爬虫封面搜索超时，请查看任务日志';
+}
+
+async function waitForCrawlerCoverSelection(taskId) {
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    const result = await api(`/api/tasks/${encodeURIComponent(taskId)}/cover/candidates`);
+    if (result.status === 'selected') return;
+    if (result.status === 'failed') throw new Error(result.error || '封面下载失败');
+  }
+  throw new Error('封面下载超时，请查看任务日志');
 }
 
 $('#google-cover-dialog')?.addEventListener('close', () => {
@@ -2260,10 +2313,26 @@ document.addEventListener('click', async (event) => {
     coverOption.disabled = true;
     try {
       await api(`/api/tasks/${encodeURIComponent(coverOption.dataset.googleCoverSelect)}/cover/select`, { method: 'POST', body: JSON.stringify({ candidate_id: coverOption.dataset.candidateId }) });
+      await waitForCrawlerCoverSelection(coverOption.dataset.googleCoverSelect);
       $('#google-cover-dialog')?.close();
       await loadTasks();
     } catch (error) { coverOption.disabled = false; $('#google-cover-message').textContent = error.message; }
   }
+  const arrayAdd = event.target.closest('.config-array-add-button');
+  if (arrayAdd) {
+    const control = arrayAdd.closest('.config-array');
+    const input = control?.querySelector('.config-array-input');
+    const value = input?.value.trim();
+    if (!control || !input || !value) return;
+    const duplicate = [...control.querySelectorAll('[data-array-value]')].some((tag) => tag.dataset.arrayValue === value);
+    if (duplicate) { input.setCustomValidity('\u8be5\u503c\u5df2\u6dfb\u52a0'); input.reportValidity(); return; }
+    input.setCustomValidity('');
+    control.querySelector('.config-array-list')?.insertAdjacentHTML('beforeend', configArrayTagMarkup(value));
+    input.value = '';
+    return;
+  }
+  const arrayRemove = event.target.closest('.config-array-remove');
+  if (arrayRemove) { arrayRemove.closest('.config-array-tag')?.remove(); return; }
   const crawlerAdd = event.target.closest('.crawler-add-button');
   if (crawlerAdd) {
     const group = crawlerAdd.closest('.crawler-config-group');

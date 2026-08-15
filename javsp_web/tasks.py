@@ -1372,7 +1372,7 @@ def _task_cover_query(task: dict) -> str:
 
 
 def _google_cover_destination(task: dict) -> Path:
-    """Return the poster path emitted by JavSP, never a web-only cache path."""
+    """Return the output poster path, or the task cover cache before output exists."""
     output = task.get("image_output") if isinstance(task.get("image_output"), dict) else {}
     poster_file = str(output.get("poster_file") or "").strip()
     if poster_file:
@@ -1380,7 +1380,34 @@ def _google_cover_destination(task: dict) -> Path:
     save_dir = str(output.get("save_dir") or "").strip()
     if save_dir:
         return Path(save_dir) / "poster.jpg"
-    raise ValueError("无法确定刮削后的封面保存位置，请先完成影片整理后再下载封面")
+    return _TASK_COVERS_DIR / f"{task['id']}.jpg"
+
+
+def _is_t66y_candidate(candidate: dict | None) -> bool:
+    return str((candidate or {}).get("source") or "").strip().lower() == "t66y"
+
+
+def _t66y_poster(image: Image.Image) -> Image.Image:
+    """Turn t66y's landscape DMM image into the requested right-side poster."""
+    target_width, target_height = 378, 538
+    source_width = min(image.width, max(1, round(image.height * target_width / target_height)))
+    source = image.crop((image.width - source_width, 0, image.width, image.height))
+    return source.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+
+def _write_selected_cover(content: bytes, destination: Path | io.BytesIO, candidate: dict | None = None) -> None:
+    with Image.open(io.BytesIO(content)) as image:
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        if _is_t66y_candidate(candidate):
+            image = _t66y_poster(image)
+        if isinstance(destination, Path):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+        image.save(destination, "JPEG", quality=92)
+
+
+def _looks_like_image_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and Path(parsed.path).suffix.lower() in _IMAGE_EXTENSIONS
 
 
 def save_uploaded_cover(task_id: str, content: bytes) -> bool:
@@ -1395,9 +1422,7 @@ def save_uploaded_cover(task_id: str, content: bytes) -> bool:
             destination = _google_cover_destination(task)
             with Image.open(io.BytesIO(content)) as image:
                 image.verify()
-            with Image.open(io.BytesIO(content)) as image:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                image.convert("RGB").save(destination, "JPEG", quality=92)
+            _write_selected_cover(content, destination)
         except (OSError, ValueError):
             return False
         output = task.setdefault("image_output", {})
@@ -1451,7 +1476,7 @@ def _search_google_cover(task: dict) -> None:
         candidates, seen = [], set()
         for item in result.get("results") or []:
             url = str(item.get("image_url") or "") if isinstance(item, dict) else ""
-            if not url.startswith(("http://", "https://")) or len(url) > 4096 or url in seen:
+            if not _looks_like_image_url(url) or len(url) > 4096 or url in seen:
                 continue
             seen.add(url)
             candidates.append({"image_url": url, "thumbnail_url": url, "referer_url": str(item.get("referer_url") or ""), "source": str(item.get("source") or "爬虫"), "title": str(item.get("title") or "")[:160]})
@@ -1512,9 +1537,7 @@ def select_google_cover(task_id: str, candidate_id: str) -> bool:
             response = _request_public_image(url, _task_proxy(task), referer_url)
             with Image.open(io.BytesIO(response.content)) as image:
                 image.verify()
-            with Image.open(io.BytesIO(response.content)) as image:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                image.convert("RGB").save(destination, "JPEG", quality=92)
+            _write_selected_cover(response.content, destination, candidate)
             output = task.setdefault("image_output", {})
             output["poster_file"] = str(destination)
             output.setdefault("save_dir", str(destination.parent))
@@ -1550,6 +1573,10 @@ def google_cover_thumbnail(task_id: str, candidate_id: str) -> tuple[bytes, str]
         raise ValueError("候选封面图片无效或过大")
     with Image.open(io.BytesIO(content)) as image:
         image.verify()
+    if _is_t66y_candidate(candidate):
+        preview = io.BytesIO()
+        _write_selected_cover(content, preview, candidate)
+        return preview.getvalue(), "image/jpeg"
     media_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
     return content, media_type if media_type.startswith("image/") else "image/jpeg"
 

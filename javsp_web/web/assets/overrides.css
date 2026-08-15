@@ -265,6 +265,21 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .crawler-add-input { flex: 1; min-width: 0; }
 .crawler-add-button { display: grid; width: 34px; min-width: 34px; height: 34px; place-items: center; padding: 0; color: #175cd3; font-size: 18px; line-height: 1; }
 @media (max-width: 560px) { .crawler-add-button { width: 42px; min-width: 42px; height: 42px; } }
+.config-array { display: grid; gap: 7px; }
+.config-array-list { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
+.config-array-tag { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 4px 5px 4px 7px; border: 1px solid #d0d5dd; border-radius: 5px; background: #f8fafc; color: #344054; }
+.config-array-tag code { overflow-wrap: anywhere; font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.config-array-remove { display: grid; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 4px; padding: 0; background: transparent; color: #667085; cursor: pointer; font-size: 16px; line-height: 1; }
+.config-array-remove:hover { background: #eaecf0; color: #344054; }
+.config-array-add { display: flex; align-items: center; gap: 7px; }
+.config-array-input { flex: 1; min-width: 0; }
+.config-array-add-button { display: grid; width: 34px; min-width: 34px; height: 34px; place-items: center; padding: 0; color: #175cd3; font-size: 18px; line-height: 1; }
+.required-key-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 7px 10px; margin: 0; padding: 10px; border: 1px solid #d0d5dd; border-radius: 6px; background: #f8fafc; }
+.required-key-option { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; font-weight: 500; }
+.required-key-option input { width: auto; min-height: 0; margin: 0; }
+.required-key-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.required-key-option code { margin-left: auto; color: #667085; font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+@media (max-width: 560px) { .config-array-add-button { width: 42px; min-width: 42px; height: 42px; } .required-key-list { grid-template-columns: 1fr; } }
 .google-captcha-panel { grid-column: 1 / -1; display: grid; gap: 10px; min-width: 0; }
 .google-captcha-panel > p { margin: 0; }
 .google-browser-frame { width: 100%; height: min(68vh, 720px); border: 1px solid #d0d5dd; border-radius: 5px; background: #f8fafc; }
