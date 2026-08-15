@@ -163,6 +163,7 @@ class CookieCloudBody(BaseModel):
 class CustomCrawlerBody(BaseModel):
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
     source: str = Field(min_length=1, max_length=200_000)
+    original_name: str | None = Field(default=None, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
 
 
 class CrawlerTestBody(BaseModel):
@@ -574,14 +575,17 @@ def _built_in_crawler_paths() -> dict[str, Path]:
 
 def _crawler_catalog() -> list[dict]:
     disabled = get_disabled_built_in_crawlers()
+    custom_paths = {
+        path.stem: path
+        for path in CUSTOM_CRAWLERS_DIR.glob("*.py")
+        if not path.stem.startswith("_")
+    }
     sources = [
         {"name": name, "kind": "built_in"}
         for name in _built_in_crawler_paths()
-        if name not in disabled
+        if name not in disabled and name not in custom_paths
     ]
-    for path in sorted(CUSTOM_CRAWLERS_DIR.glob("*.py")):
-        if not path.stem.startswith("_"):
-            sources.append({"name": path.stem, "kind": "custom"})
+    sources.extend({"name": name, "kind": "custom"} for name in sorted(custom_paths))
     return sources
 
 
@@ -592,12 +596,12 @@ def _available_crawler_names() -> set[str]:
 def _crawler_source(name: str) -> dict | None:
     if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
         return None
-    built_in = _built_in_crawler_paths()
-    if name in built_in and name not in get_disabled_built_in_crawlers():
-        return {"name": name, "kind": "built_in", "source": built_in[name].read_text(encoding="utf-8")}
     path = (CUSTOM_CRAWLERS_DIR / f"{name}.py").resolve()
     if path.parent == CUSTOM_CRAWLERS_DIR.resolve() and path.is_file():
         return {"name": name, "kind": "custom", "source": path.read_text(encoding="utf-8")}
+    built_in = _built_in_crawler_paths()
+    if name in built_in and name not in get_disabled_built_in_crawlers():
+        return {"name": name, "kind": "built_in", "source": built_in[name].read_text(encoding="utf-8")}
     return None
 
 
@@ -877,7 +881,19 @@ def save_custom_crawler(body: CustomCrawlerBody, _: dict = Depends(require_admin
     path = (CUSTOM_CRAWLERS_DIR / f"{body.name}.py").resolve()
     if path.parent != CUSTOM_CRAWLERS_DIR.resolve():
         raise HTTPException(status_code=400, detail="爬虫名称无效")
+    original_name = body.original_name or ""
+    if body.name in _built_in_crawler_paths() and original_name != body.name:
+        raise HTTPException(status_code=409, detail="爬虫名称已被内置爬虫使用，请使用其他名称")
+    if path.exists() and original_name != body.name:
+        raise HTTPException(status_code=409, detail="爬虫名称已存在，请使用其他名称")
+    old_path = None
+    if original_name and original_name != body.name:
+        old_path = (CUSTOM_CRAWLERS_DIR / f"{original_name}.py").resolve()
+        if old_path.parent != CUSTOM_CRAWLERS_DIR.resolve() or not old_path.is_file():
+            raise HTTPException(status_code=404, detail="原自定义爬虫不存在，无法重命名")
     path.write_text(body.source, encoding="utf-8")
+    if old_path:
+        old_path.unlink()
     return {"ok": True, "name": body.name}
 
 

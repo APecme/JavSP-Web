@@ -374,14 +374,14 @@ function crawlerCodeMarkup(crawlers) {
   const items = Array.isArray(crawlers) ? crawlers : [];
   const selected = items[0] || null;
   const disabled = (state.disabledBuiltInCrawlers || []).map((name) => `<div class="crawler-code-list-row"><span class="crawler-code-item disabled"><strong>${escapeHtml(name)}</strong><span>已移除</span></span><button class="icon-button" type="button" data-restore-built-in-crawler="${escapeHtml(name)}" title="恢复 ${escapeHtml(name)}" aria-label="恢复 ${escapeHtml(name)}">恢复</button></div>`).join('');
-  return `<section class="crawler-code-editor"><div class="crawler-code-heading"><div><h3>爬虫代码</h3><p class="muted">选择爬虫后再读取代码；内置爬虫可移除并随时恢复。</p></div><button class="button secondary" type="button" id="add-custom-crawler">添加爬虫</button></div><div class="crawler-code-layout"><div id="crawler-code-list" class="crawler-code-list">${items.map((item, index) => `<div class="crawler-code-list-row"><button type="button" class="crawler-code-item${index ? '' : ' active'}" data-crawler-code-name="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong><span>${item.kind === 'custom' ? '自定义' : '内置'}</span></button>${item.kind === 'custom' ? `<button class="icon-button crawler-code-list-delete" type="button" data-delete-custom-crawler="${escapeHtml(item.name)}" title="删除 ${escapeHtml(item.name)}" aria-label="删除 ${escapeHtml(item.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button>` : ''}</div>`).join('') || '<p class="muted">没有可用爬虫。</p>'}${disabled ? `<div class="crawler-code-disabled"><p class="muted">已移除的内置爬虫</p>${disabled}</div>` : ''}</div><div id="crawler-code-detail" class="crawler-code-detail">${selected ? crawlerCodeDetail(selected) : ''}</div></div></section>`;
+  const deleteButton = (item) => `<button class="icon-button crawler-code-list-delete" type="button" ${item.kind === 'custom' ? `data-delete-custom-crawler="${escapeHtml(item.name)}"` : `data-disable-built-in-crawler="${escapeHtml(item.name)}"`} title="删除 ${escapeHtml(item.name)}" aria-label="删除 ${escapeHtml(item.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button>`;
+  return `<section class="crawler-code-editor"><div class="crawler-code-heading"><div><h3>爬虫代码</h3><p class="muted">选择爬虫后再读取代码；内置爬虫可移除并随时恢复。</p></div><button class="button secondary" type="button" id="add-custom-crawler">添加爬虫</button></div><div class="crawler-code-layout"><div id="crawler-code-list" class="crawler-code-list">${items.map((item, index) => `<div class="crawler-code-list-row"><button type="button" class="crawler-code-item${index ? '' : ' active'}" data-crawler-code-name="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong><span>${item.kind === 'custom' ? '自定义' : '内置'}</span></button>${deleteButton(item)}</div>`).join('') || '<p class="muted">没有可用爬虫。</p>'}${disabled ? `<div class="crawler-code-disabled"><p class="muted">已移除的内置爬虫</p>${disabled}</div>` : ''}</div><div id="crawler-code-detail" class="crawler-code-detail">${selected ? crawlerCodeDetail(selected) : ''}</div></div></section>`;
 }
 
 function crawlerCodeDetail(crawler, source = null) {
   const editable = crawler.kind === 'custom';
-  const actions = editable ? `<button class="button danger" type="button" data-delete-custom-crawler="${escapeHtml(crawler.name)}">删除</button>` : `<button class="button danger" type="button" data-disable-built-in-crawler="${escapeHtml(crawler.name)}">删除</button>`;
-  if (source === null) return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${actions}</div><p class="muted">正在读取爬虫代码...</p>`;
-  return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${actions}</div><label class="config-field"><span class="config-field-name">爬虫名称</span><input id="crawler-code-name" value="${escapeHtml(crawler.name)}"${editable ? '' : ' disabled'}></label><label class="config-field"><span class="config-field-name">Python 代码</span><textarea id="crawler-code-source" class="code-editor" spellcheck="false"${editable ? '' : ' readonly'}>${escapeHtml(source)}</textarea></label>${editable ? '<div class="form-actions"><button class="button primary" type="button" id="save-custom-crawler">保存爬虫代码</button><span id="crawler-code-message" class="form-message"></span></div>' : ''}<section class="crawler-test-panel"><div><h4>爬虫测试</h4><p class="muted">使用当前网络与代理配置，单独抓取一次。</p></div><label class="config-field"><span class="config-field-name">测试输入</span><input id="crawler-test-input" maxlength="256" placeholder="例如 DANDYA-044"></label><div class="form-actions"><button class="button secondary" type="button" data-test-crawler="${escapeHtml(crawler.name)}">测试爬虫</button><span id="crawler-test-message" class="form-message"></span></div><div id="crawler-test-result" class="crawler-test-result hidden"><details open><summary>抓取结果</summary><pre id="crawler-test-data" class="crawler-test-output"></pre></details><details id="crawler-test-output-wrap"><summary>运行输出</summary><pre id="crawler-test-output" class="crawler-test-output"></pre></details></div></section>`;
+  if (source === null) return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span></div><p class="muted">正在读取爬虫代码...</p>`;
+  return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span></div><label class="config-field"><span class="config-field-name">爬虫名称</span><input id="crawler-code-name" value="${escapeHtml(crawler.name)}"${editable ? '' : ' disabled'}></label><label class="config-field"><span class="config-field-name">Python 代码</span><textarea id="crawler-code-source" class="code-editor" spellcheck="false"${editable ? '' : ' readonly'}>${escapeHtml(source)}</textarea></label>${editable ? '<div class="form-actions"><button class="button primary" type="button" id="save-custom-crawler">保存爬虫代码</button><span id="crawler-code-message" class="form-message"></span></div>' : ''}<section class="crawler-test-panel"><div><h4>爬虫测试</h4><p class="muted">使用当前网络与代理配置，单独抓取一次。</p></div><label class="config-field"><span class="config-field-name">测试输入</span><input id="crawler-test-input" maxlength="256" placeholder="例如 DANDYA-044"></label><div class="form-actions"><button class="button secondary" type="button" data-test-crawler="${escapeHtml(crawler.name)}">测试爬虫</button><span id="crawler-test-message" class="form-message"></span></div><div id="crawler-test-result" class="crawler-test-result hidden"><details open><summary>抓取结果</summary><pre id="crawler-test-data" class="crawler-test-output"></pre></details><details id="crawler-test-output-wrap"><summary>运行输出</summary><pre id="crawler-test-output" class="crawler-test-output"></pre></details></div></section>`;
 }
 
 async function loadCrawlerSource(name) {
@@ -780,7 +780,10 @@ function scheduleGitHubStarInvite() {
       return;
     }
     if (document.querySelector('.github-star-invite')) return;
-    document.body.insertAdjacentHTML('beforeend', '<aside class="github-star-invite" role="status"><strong>喜欢 JavSP WEB 吗？</strong><p>欢迎前往 GitHub 点亮一颗 Star，帮助项目持续改进。</p><div class="github-star-invite-actions"><button class="button secondary" type="button" data-disable-github-star-invite>不再提示</button><a class="button primary" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noopener noreferrer">前往 GitHub</a></div></aside>');
+    document.body.insertAdjacentHTML('beforeend', '<aside class="github-star-invite" role="status"><button class="icon-button github-star-invite-close" type="button" data-close-github-star-invite title="关闭提示" aria-label="关闭提示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button><strong>喜欢 JavSP WEB 吗？</strong><p>欢迎前往 GitHub 点亮一颗 Star，帮助项目持续改进。</p><div class="github-star-invite-actions"><button class="button secondary" type="button" data-disable-github-star-invite>不再提示</button><a class="button primary" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noopener noreferrer">前往 GitHub</a></div></aside>');
+    document.querySelector('[data-close-github-star-invite]')?.addEventListener('click', () => {
+      document.querySelector('.github-star-invite')?.remove();
+    });
     document.querySelector('[data-disable-github-star-invite]')?.addEventListener('click', () => {
       localStorage.setItem(preferenceKey, '1');
       document.querySelector('.github-star-invite')?.remove();
@@ -1644,7 +1647,7 @@ function renderOverview() {
   const visibleIds = new Set(cards.flatMap((entry) => entry.taskIds));
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => visibleIds.has(id)));
   const allSelected = visibleIds.size > 0 && [...visibleIds].every((id) => state.selectedOverviewTasks.has(id));
-  const selectionTools = `<div class="overview-selection-tools"><button class="icon-button" type="button" data-overview-select-all title="${allSelected ? '取消全选' : '全选'}" aria-label="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}</button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
+  const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
   $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
   if (state.overviewSelectionFeedback.size) window.setTimeout(() => state.overviewSelectionFeedback.clear(), 260);
@@ -2311,8 +2314,21 @@ document.addEventListener('click', async (event) => {
   }
   if (event.target.closest('#save-custom-crawler')) {
     const message = $('#crawler-code-message');
+    const nameInput = $('#crawler-code-name');
+    const name = nameInput.value.trim();
+    const originalName = state.activeCrawlerCodeName || '';
+    const existingNames = new Set([
+      ...(state.crawlerSources || []).map((crawler) => crawler.name),
+      ...(state.disabledBuiltInCrawlers || []),
+    ]);
+    if (name !== originalName && existingNames.has(name)) {
+      nameInput.setCustomValidity('爬虫名称已存在，请使用其他名称');
+      nameInput.reportValidity();
+      return;
+    }
+    nameInput.setCustomValidity('');
     try {
-      const saved = await api('/api/crawler-config/custom', { method: 'PUT', body: JSON.stringify({ name: $('#crawler-code-name').value.trim(), source: $('#crawler-code-source').value }) });
+      const saved = await api('/api/crawler-config/custom', { method: 'PUT', body: JSON.stringify({ name, original_name: originalName || null, source: $('#crawler-code-source').value }) });
       if (message) message.textContent = `已保存 ${saved.name}`;
       await loadCrawlerConfig();
     } catch (error) { if (message) message.textContent = error.message; }
@@ -2502,6 +2518,13 @@ document.addEventListener('click', async (event) => {
   const overviewSelect = event.target.closest('[data-overview-select-ids]');
   if (overviewSelect) {
     toggleOverviewSelection(overviewTaskIds(overviewSelect.dataset.overviewSelectIds));
+    renderOverview();
+    return;
+  }
+  const overviewSelectionMode = event.target.closest('[data-overview-selection-mode]');
+  if (overviewSelectionMode) {
+    if (state.overviewSelectionMode) state.selectedOverviewTasks.clear();
+    state.overviewSelectionMode = !state.overviewSelectionMode;
     renderOverview();
     return;
   }
