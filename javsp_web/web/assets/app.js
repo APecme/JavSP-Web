@@ -1059,17 +1059,38 @@ document.addEventListener('contextmenu', (event) => {
   if (!card) return;
   event.preventDefault();
   const menu = $('#overview-context-menu');
+  const select = menu?.querySelector('[data-overview-context-select]');
+  const remove = menu?.querySelector('[data-overview-context-delete]');
+  const selecting = state.overviewSelectionMode;
+  if (select) select.textContent = selecting ? '退出选择' : '选择';
+  if (remove) {
+    remove.textContent = selecting ? '删除所选记录' : '删除任务记录';
+    remove.disabled = selecting && !state.selectedOverviewTasks.size;
+  }
   menu.dataset.taskId = card.dataset.overviewTask;
   menu.dataset.taskIds = card.dataset.overviewTaskIds || card.dataset.overviewTask;
   menu.style.left = `${Math.min(event.clientX, window.innerWidth - 164)}px`;
-  menu.style.top = `${Math.min(event.clientY, window.innerHeight - 48)}px`;
+  menu.style.top = `${Math.min(event.clientY, window.innerHeight - 88)}px`;
   menu.hidden = false;
 });
 document.addEventListener('click', (event) => {
   const menu = $('#overview-context-menu');
+  const select = event.target.closest('[data-overview-context-select]');
+  if (select && menu) {
+    state.overviewSelectionMode = !state.overviewSelectionMode;
+    if (!state.overviewSelectionMode) state.selectedOverviewTasks.clear();
+    menu.hidden = true;
+    renderOverview();
+    return;
+  }
   const remove = event.target.closest('[data-overview-context-delete]');
   if (remove && menu?.dataset.taskIds) {
-    deleteTaskRecords(menu.dataset.taskIds.split(','));
+    if (state.overviewSelectionMode) {
+      const selectedIds = [...state.selectedOverviewTasks];
+      if (selectedIds.length) document.querySelector('#overview-delete-selected')?.click();
+    } else {
+      deleteTaskRecords(menu.dataset.taskIds.split(','));
+    }
     menu.hidden = true;
     return;
   }
@@ -1483,10 +1504,6 @@ function overviewSelectionIcon(selected = false) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect>${selected ? '<path d="m8 12 2.7 2.7L16.5 9"></path>' : ''}</svg>`;
 }
 
-function overviewSelectionModeIcon(active = false) {
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 6.5 1.8 1.8 3-3"></path><path d="M11 6h10M11 12h10M11 18h10"></path><rect x="3.5" y="10.5" width="4" height="4" rx=".7"></rect><rect x="3.5" y="15.5" width="4" height="4" rx=".7"></rect>${active ? '<path d="m4.2 12 1.1 1.1 2-2"></path>' : ''}</svg>`;
-}
-
 function renderOverview() {
   $('#metric-total').textContent = state.tasks.length;
   $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
@@ -1515,12 +1532,11 @@ function renderOverview() {
   }).slice(0, 24);
   const visibleIds = new Set(cards.flatMap((entry) => entry.taskIds));
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => visibleIds.has(id)));
-  const selectedCount = state.selectedOverviewTasks.size;
   const allSelected = visibleIds.size > 0 && [...visibleIds].every((id) => state.selectedOverviewTasks.has(id));
   const selectionTools = state.overviewSelectionMode
-    ? `<div class="overview-selection-tools"><span class="muted">已选择 ${selectedCount} 条记录</span><button class="icon-button" type="button" data-overview-select-all title="${allSelected ? '取消全选' : '全选'}" aria-label="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}</button><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>`
+    ? `<div class="overview-selection-tools"><button class="icon-button" type="button" data-overview-select-all title="${allSelected ? '取消全选' : '全选'}" aria-label="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}</button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`
     : '';
-  const toolbar = `<div class="overview-cover-toolbar"><label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label><button id="overview-selection-toggle" class="icon-button overview-selection-toggle${state.overviewSelectionMode ? ' active' : ''}" type="button" aria-pressed="${state.overviewSelectionMode}" title="${state.overviewSelectionMode ? '退出多选' : '多选记录'}" aria-label="${state.overviewSelectionMode ? '退出多选' : '多选记录'}">${overviewSelectionModeIcon(state.overviewSelectionMode)}</button>${selectionTools}</div>`;
+  const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
   $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
 }
 
@@ -2296,13 +2312,6 @@ document.addEventListener('click', async (event) => {
     toggle.textContent = expanded ? '+' : '-';
     toggle.setAttribute('aria-expanded', String(!expanded));
     toggle.title = expanded ? '展开任务' : '收起任务';
-  }
-  const overviewSelectionToggle = event.target.closest('#overview-selection-toggle');
-  if (overviewSelectionToggle) {
-    state.overviewSelectionMode = !state.overviewSelectionMode;
-    if (!state.overviewSelectionMode) state.selectedOverviewTasks.clear();
-    renderOverview();
-    return;
   }
   const overviewSelect = event.target.closest('[data-overview-select-ids]');
   if (overviewSelect) {
