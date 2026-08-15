@@ -69,7 +69,7 @@ from .storage import (
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
 from .media import list_media_libraries, sync_media_server
-from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_tasks, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
+from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_task_summaries, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
 
 
@@ -282,7 +282,7 @@ class PathMappingsBody(BaseModel):
 
 @app.get("/api/runtime")
 def runtime(_: dict = Depends(current_user)) -> dict:
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "timezone": timezone_name()}
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": __version__, "timezone": timezone_name()}
 
 
 @app.post("/api/path/select")
@@ -1007,7 +1007,7 @@ def tasks(_: dict = Depends(current_user)) -> list[dict]:
         if isinstance(entry, dict)
         for task_id in entry.get("task_ids") or []
     }
-    items = list_tasks()
+    items = list_task_summaries()
     for item in items:
         if item.get("source"):
             continue

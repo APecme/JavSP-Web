@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
@@ -532,6 +532,10 @@ function showToast(message, tone = 'success') {
   window.setTimeout(() => { toast.remove(); }, 3200);
 }
 
+function expandControlIcon(expanded) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${expanded ? 'm7 15 5-5 5 5' : 'm7 9 5 5 5-5'}"/></svg>`;
+}
+
 function taskCard(task) {
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
   const lines = (task.log_tail || []).join('\n');
@@ -722,11 +726,74 @@ async function loadTasks() {
   window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
 }
 
+function compareReleaseVersions(left, right) {
+  const parse = (value) => String(value || '').replace(/^v/i, '').match(/^(\d+)\.(\d+)\.(\d+)/);
+  const leftParts = parse(left);
+  const rightParts = parse(right);
+  if (!leftParts || !rightParts) return null;
+  for (let index = 1; index <= 3; index += 1) {
+    const difference = Number(leftParts[index]) - Number(rightParts[index]);
+    if (difference) return difference;
+  }
+  return 0;
+}
+
+async function checkForAppUpdate(runtime) {
+  const tag = $('#app-version');
+  if (!tag) return;
+  const displayVersion = runtime.version || runtime.app_version || tag.textContent.replace(/^v/, '');
+  const currentVersion = runtime.app_version || displayVersion;
+  tag.textContent = `v${displayVersion}`;
+  tag.dataset.updateStatus = 'checking';
+  tag.title = '正在检查 GitHub Releases 更新';
+  try {
+    const response = await fetch('https://api.github.com/repos/APecme/JavSP-Web/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (!response.ok) throw new Error(`GitHub 返回 ${response.status}`);
+    const release = await response.json();
+    const latestVersion = release.tag_name || '';
+    const comparison = compareReleaseVersions(currentVersion, latestVersion);
+    if (comparison !== null && comparison < 0) {
+      tag.dataset.updateStatus = 'available';
+      tag.textContent = `v${displayVersion} 可更新`;
+      tag.title = `发现新版本 ${latestVersion}`;
+    } else if (comparison !== null) {
+      tag.dataset.updateStatus = 'current';
+      tag.textContent = `v${displayVersion} 已是最新`;
+      tag.title = `已是最新版本 ${latestVersion}`;
+    } else {
+      tag.dataset.updateStatus = 'unknown';
+      tag.title = '当前部署版本无法与 GitHub Release 标签比较';
+    }
+  } catch (_) {
+    tag.dataset.updateStatus = 'unknown';
+    tag.title = '暂时无法检查 GitHub Releases 更新';
+  }
+}
+
+function scheduleGitHubStarInvite() {
+  const preferenceKey = 'javsp-web.github-star-invite-disabled';
+  if (localStorage.getItem(preferenceKey) === '1') return;
+  const delay = 60_000 + Math.floor(Math.random() * 60_001);
+  const showInvite = () => {
+    if (document.hidden) {
+      window.setTimeout(showInvite, 10_000);
+      return;
+    }
+    if (document.querySelector('.github-star-invite')) return;
+    document.body.insertAdjacentHTML('beforeend', '<aside class="github-star-invite" role="status"><strong>喜欢 JavSP WEB 吗？</strong><p>欢迎前往 GitHub 点亮一颗 Star，帮助项目持续改进。</p><div class="github-star-invite-actions"><button class="button secondary" type="button" data-disable-github-star-invite>不再提示</button><a class="button primary" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noopener noreferrer">前往 GitHub</a></div></aside>');
+    document.querySelector('[data-disable-github-star-invite]')?.addEventListener('click', () => {
+      localStorage.setItem(preferenceKey, '1');
+      document.querySelector('.github-star-invite')?.remove();
+    });
+  };
+  window.setTimeout(showInvite, delay);
+}
+
 async function loadPathTools() {
   try {
     const runtime = await api('/api/runtime');
     state.runtime = runtime;
-    if ($('#app-version') && runtime.version) $('#app-version').textContent = `v${runtime.version}`;
+    checkForAppUpdate(runtime);
     const tools = $('#path-tools');
     tools.classList.remove('hidden');
     const nativeButtons = tools.querySelectorAll('.native-path-button');
@@ -1098,8 +1165,17 @@ document.addEventListener('click', (event) => {
   const menu = $('#overview-context-menu');
   const select = event.target.closest('[data-overview-context-select]');
   if (select && menu) {
-    state.overviewSelectionMode = !state.overviewSelectionMode;
-    if (!state.overviewSelectionMode) state.selectedOverviewTasks.clear();
+    if (state.overviewSelectionMode) {
+      state.overviewSelectionMode = false;
+      state.selectedOverviewTasks.clear();
+    } else {
+      state.overviewSelectionMode = true;
+      const ids = overviewTaskIds(menu.dataset.taskIds);
+      ids.forEach((id) => {
+        state.selectedOverviewTasks.add(id);
+        state.overviewSelectionFeedback.add(id);
+      });
+    }
     menu.hidden = true;
     renderOverview();
     return;
@@ -1354,8 +1430,6 @@ function syncTaskExpansion(tasks) {
 function taskCard(task) {
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
   const expanded = state.taskOpen?.[task.id] ?? task.status === 'running';
-  const lines = (task.log_tail || []).join('\n');
-  const rawLog = lines ? `<details class="task-raw-log" data-task-details="${escapeHtml(task.id)}"><summary>查看日志 (${task.log_tail.length} 行)</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(task.id)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(task.id)}">复制日志</button></div></details>` : '';
   const active = ['queued', 'running'].includes(task.status);
   const fileName = task.file_name || task.name || task.id;
   const titleMeta = task.title ? `<span>文件：${escapeHtml(fileName)}</span>` : '';
@@ -1363,7 +1437,7 @@ function taskCard(task) {
   const detailButton = `<button class="icon-button" type="button" data-task-detail="${escapeHtml(task.id)}" title="查看任务详情">详情</button>`;
   const stopButton = active ? `<button class="button secondary task-stop" type="button" onclick="cancelTask('${escapeHtml(task.id)}')">停止任务</button>` : '';
   const deleteButton = `<button class="task-delete" type="button" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ' title="删除任务"'}>删除</button>`;
-  return `<article class="task-card task-card-collapsible" data-task-card="${escapeHtml(task.id)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta">${titleMeta}<span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${detailButton}${stopButton}${deleteButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(task.id)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expanded ? '-' : '+'}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(task.id)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${rawLog}${actions}</div></article>`;
+  return `<article class="task-card task-card-collapsible" data-task-card="${escapeHtml(task.id)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta">${titleMeta}<span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${detailButton}${stopButton}${deleteButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(task.id)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expandControlIcon(expanded)}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(task.id)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${actions}</div></article>`;
 }
 
 function rememberTaskCards() {
@@ -1427,10 +1501,23 @@ function renderTasks() {
   restoreLogScroll();
 }
 
-function openTaskDetail(taskId) {
-  const task = state.tasks.find((item) => item.id === taskId);
-  if (!task) return;
+async function openTaskDetail(taskId) {
+  const summary = state.tasks.find((item) => item.id === taskId);
+  if (!summary) return;
   state.activeTaskDetail = taskId;
+  const dialog = $('#task-detail-dialog');
+  $('#task-detail-title').textContent = taskDisplayName(summary);
+  $('#task-detail-subtitle').textContent = summary.file_name || summary.name || '';
+  $('#task-detail-content').innerHTML = '<p class="muted">正在读取任务详情与日志...</p>';
+  if (!dialog.open) dialog.showModal();
+  let task;
+  try {
+    task = await api(`/api/tasks/${encodeURIComponent(taskId)}`);
+  } catch (error) {
+    if (state.activeTaskDetail === taskId) $('#task-detail-content').innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  if (state.activeTaskDetail !== taskId || !dialog.open) return;
   const metadata = task.progress?.metadata || {};
   const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name], ['文件路径', task.input_directory || '-'], ['整理路径', task.progress?.output?.save_dir || '-']].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
@@ -1456,7 +1543,6 @@ function openTaskDetail(taskId) {
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
   $('#task-detail-content').innerHTML = `${metadataEditor}<section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
-  if (!$('#task-detail-dialog').open) $('#task-detail-dialog').showModal();
 }
 
 function cookiecloudPayload() {
@@ -1518,7 +1604,11 @@ function overviewTaskIds(value) {
 function toggleOverviewSelection(ids) {
   if (!ids.length) return;
   const selected = ids.every((id) => state.selectedOverviewTasks.has(id));
-  ids.forEach((id) => selected ? state.selectedOverviewTasks.delete(id) : state.selectedOverviewTasks.add(id));
+  ids.forEach((id) => {
+    if (selected) state.selectedOverviewTasks.delete(id);
+    else state.selectedOverviewTasks.add(id);
+    state.overviewSelectionFeedback.add(id);
+  });
 }
 
 function overviewSelectionIcon(selected = false) {
@@ -1530,7 +1620,7 @@ function renderOverview() {
   $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
   const latest = state.tasks[0];
   $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || (task.progress?.image_sources?.cover_urls?.length || task.progress?.image_sources?.preview_pics?.length)));
+  const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || task.has_artwork_sources));
   const groups = new Map();
   completed.forEach((task) => {
     const outputPath = String(task.progress?.output?.save_dir || '').trim();
@@ -1554,11 +1644,10 @@ function renderOverview() {
   const visibleIds = new Set(cards.flatMap((entry) => entry.taskIds));
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => visibleIds.has(id)));
   const allSelected = visibleIds.size > 0 && [...visibleIds].every((id) => state.selectedOverviewTasks.has(id));
-  const selectionTools = state.overviewSelectionMode
-    ? `<div class="overview-selection-tools"><button class="icon-button" type="button" data-overview-select-all title="${allSelected ? '取消全选' : '全选'}" aria-label="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}</button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`
-    : '';
+  const selectionTools = `<div class="overview-selection-tools"><button class="icon-button" type="button" data-overview-select-all title="${allSelected ? '取消全选' : '全选'}" aria-label="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}</button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
   $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  if (state.overviewSelectionFeedback.size) window.setTimeout(() => state.overviewSelectionFeedback.clear(), 260);
 }
 
 function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
@@ -1572,7 +1661,8 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
     : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const selected = taskIds.every((id) => state.selectedOverviewTasks.has(id));
   const selector = state.overviewSelectionMode ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
-  return `<article class="overview-cover-card${selected ? ' selected' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span>${taskCount > 1 ? `<small>合并 ${taskCount} 条记录</small>` : ''}</button></article>`;
+  const feedback = taskIds.some((id) => state.overviewSelectionFeedback.has(id));
+  return `<article class="overview-cover-card${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span>${taskCount > 1 ? `<small>合并 ${taskCount} 条记录</small>` : ''}</button></article>`;
 }
 
 function artworkPlaceholder(className, label) {
@@ -1910,7 +2000,7 @@ function scheduleRunTaskMarkup(task) {
   const lines = (task.log_tail || []).join('\n');
   const log = lines ? `<details class="task-raw-log" data-task-details="${escapeHtml(logKey)}"><summary>查看日志 (${task.log_tail.length} 行)</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(logKey)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(logKey)}">复制日志</button></div></details>` : '<p class="muted">任务尚未输出日志。</p>';
   const stopButton = task.status === 'running' ? `<button class="button secondary task-stop" type="button" onclick="cancelTask('${escapeHtml(task.id)}')">中止任务</button>` : '';
-  return `<article class="task-card task-card-collapsible schedule-run-task" data-task-card="${escapeHtml(logKey)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${stopButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(logKey)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expanded ? '-' : '+'}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(logKey)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${log}</div></article>`;
+  return `<article class="task-card task-card-collapsible schedule-run-task" data-task-card="${escapeHtml(logKey)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${stopButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(logKey)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expandControlIcon(expanded)}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(logKey)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${log}</div></article>`;
 }
 
 async function refreshAutoScrapeRun() {
@@ -1926,11 +2016,9 @@ async function refreshAutoScrapeRun() {
   rememberTaskCards();
   $('#auto-scrape-run-title').textContent = `${schedule.name} - 任务日志`;
   $('#auto-scrape-run-subtitle').textContent = `${run.started_at ? run.started_at.replace('T', ' ') : ''} · ${run.result || '正在读取任务'}`;
-  const cachedTasks = new Map(state.tasks.map((task) => [String(task.id), task]));
-  const missingIds = run.task_ids.map(String).filter((taskId) => !cachedTasks.has(taskId));
-  const results = await Promise.all(missingIds.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
+  const results = await Promise.all(run.task_ids.map(String).map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
   if (!dialog.open || state.activeAutoScrapeRun?.runId !== active.runId) return;
-  const taskById = new Map([...cachedTasks, ...results.filter(Boolean).map((task) => [String(task.id), task])]);
+  const taskById = new Map(results.filter(Boolean).map((task) => [String(task.id), task]));
   const tasks = run.task_ids.map(String).map((taskId) => taskById.get(taskId)).filter(Boolean).sort((left, right) => {
     const byCreatedAt = Date.parse(left.created_at || '') - Date.parse(right.created_at || '');
     return Number.isFinite(byCreatedAt) && byCreatedAt !== 0 ? byCreatedAt : String(left.id).localeCompare(String(right.id));
@@ -1959,11 +2047,9 @@ async function refreshDownloadAutoScrapeRun() {
   const run = state.downloadAutoScrapeRuns.find((item) => item.id === runId);
   if (!run || !dialog?.open) return;
   const taskIds = Array.isArray(run.task_ids) ? run.task_ids.map(String) : [];
-  const known = new Map(state.tasks.map((task) => [String(task.id), task]));
-  const missing = taskIds.filter((taskId) => !known.has(taskId));
-  const fetched = await Promise.all(missing.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
+  const fetched = await Promise.all(taskIds.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
   if (!dialog.open || state.activeDownloadAutoScrapeRun !== runId) return;
-  const tasks = taskIds.map((taskId) => known.get(taskId) || fetched.find((task) => String(task?.id) === taskId)).filter(Boolean);
+  const tasks = taskIds.map((taskId) => fetched.find((task) => String(task?.id) === taskId)).filter(Boolean);
   syncTaskExpansion(tasks);
   $('#auto-scrape-run-title').textContent = `${run.download_name || '下载任务'} - 任务日志`;
   $('#auto-scrape-run-subtitle').textContent = `${run.downloader_name || '下载器'} · ${formatLocalDateTime(run.created_at) || ''}`;
@@ -2409,7 +2495,7 @@ document.addEventListener('click', async (event) => {
     const expanded = body.classList.toggle('hidden');
     state.taskOpen ||= {};
     state.taskOpen[toggle.dataset.taskToggle] = !expanded;
-    toggle.textContent = expanded ? '+' : '-';
+    toggle.innerHTML = expandControlIcon(!expanded);
     toggle.setAttribute('aria-expanded', String(!expanded));
     toggle.title = expanded ? '展开任务' : '收起任务';
   }
@@ -2423,7 +2509,12 @@ document.addEventListener('click', async (event) => {
   if (overviewSelectAll) {
     const ids = [...document.querySelectorAll('[data-overview-task-ids]')].flatMap((card) => overviewTaskIds(card.dataset.overviewTaskIds));
     const allSelected = ids.length > 0 && ids.every((id) => state.selectedOverviewTasks.has(id));
-    ids.forEach((id) => allSelected ? state.selectedOverviewTasks.delete(id) : state.selectedOverviewTasks.add(id));
+    if (!allSelected) state.overviewSelectionMode = true;
+    ids.forEach((id) => {
+      if (allSelected) state.selectedOverviewTasks.delete(id);
+      else state.selectedOverviewTasks.add(id);
+      state.overviewSelectionFeedback.add(id);
+    });
     renderOverview();
     return;
   }
@@ -2772,6 +2863,7 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); }
     await Promise.all([loadTasks(), loadPresets(), loadPathTools(), loadCrawlerNames()]);
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || (savedView !== 'settings' && savedView !== 'auto-scrape'))) showView(savedView);
+    scheduleGitHubStarInvite();
   } catch (error) { return; }
   setInterval(() => {
     loadTasks();

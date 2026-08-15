@@ -468,14 +468,17 @@ def _fanart_paths(input_path: str, output: dict | None = None) -> list[Path]:
 
 def _persist(task: dict) -> None:
     with _lock:
+        task.pop("list_summary", None)
         tasks = [item for item in load_tasks() if item.get("id") != task["id"]]
         tasks.append(task)
         save_tasks(tasks)
 
 
-def list_tasks() -> list[dict]:
+def list_tasks(task_ids: set[str] | None = None) -> list[dict]:
     with _lock:
         items = load_tasks()
+        if task_ids is not None:
+            items = [item for item in items if str(item.get("id") or "") in task_ids]
         for item in items:
             item["file_name"] = str(item.get("file_name") or _task_name(item.get("input_directory", "")))
             item["size_bytes"] = int(item.get("size_bytes") or _file_size(item.get("input_directory", "")))
@@ -534,8 +537,103 @@ def list_tasks() -> list[dict]:
         return active + completed
 
 
+def _task_list_summary(item: dict) -> dict:
+    """Keep polling payloads independent from task logs and source URLs."""
+    progress = item.get("progress") if isinstance(item.get("progress"), dict) else {}
+    image_sources = progress.get("image_sources") if isinstance(progress.get("image_sources"), dict) else {}
+    output = progress.get("output") if isinstance(progress.get("output"), dict) else {}
+    return {
+        key: item.get(key)
+        for key in (
+            "id", "name", "input_directory", "status", "created_at", "started_at", "finished_at",
+            "return_code", "error", "batch_id", "task_concurrency", "source", "schedule_id",
+            "preset_id", "preset_name", "file_name", "size_bytes", "title", "cover_count",
+            "fanart_count", "image_retry_available", "image_retry_running", "restore_available",
+        )
+    } | {
+        "has_artwork_sources": bool(image_sources.get("cover_urls") or image_sources.get("preview_pics")),
+        "progress": {
+            "stages": progress.get("stages") or {},
+            "crawlers": progress.get("crawlers") or {},
+            "crawler_details": progress.get("crawler_details") or {},
+            "metadata": progress.get("metadata") or {},
+            "images": progress.get("images") or {},
+            "output": {"save_dir": str(output.get("save_dir") or "")},
+        }
+    }
+
+
+def _stored_task_summary(item: dict) -> dict:
+    """Create a legacy summary without parsing a completed task's log history."""
+    output = item.get("image_output") if isinstance(item.get("image_output"), dict) else {}
+    image_sources = item.get("image_sources") if isinstance(item.get("image_sources"), dict) else {}
+    poster_file = Path(str(output.get("poster_file") or ""))
+    fallback_cover = _TASK_COVERS_DIR / f"{item['id']}.jpg"
+    cover_count = int(poster_file.is_file()) + int(fallback_cover.is_file() and fallback_cover != poster_file)
+    metadata = item.get("metadata_override") if isinstance(item.get("metadata_override"), dict) else {}
+    file_name = str(item.get("file_name") or Path(str(item.get("input_directory") or "")).name)
+    title = str(item.get("title") or metadata.get("title") or "")
+    succeeded = item.get("status") == "succeeded"
+    return {
+        key: item.get(key)
+        for key in (
+            "id", "input_directory", "status", "created_at", "started_at", "finished_at",
+            "return_code", "error", "batch_id", "task_concurrency", "source", "schedule_id",
+            "preset_id", "preset_name", "size_bytes", "image_retry_running",
+        )
+    } | {
+        "name": title if succeeded and title else file_name,
+        "file_name": file_name,
+        "title": title,
+        "cover_count": cover_count,
+        "fanart_count": int(item.get("fanart_count") or 0),
+        "image_retry_available": False,
+        "restore_available": bool((item.get("file_organizer") or {}).get("original_files") and (item.get("file_organizer") or {}).get("organized_files")),
+        "has_artwork_sources": bool(cover_count or item.get("fanart_count") or image_sources.get("cover_urls") or image_sources.get("preview_pics")),
+        "progress": {
+            "stages": {
+                "concurrent": {"percent": 100 if succeeded else 0, "done": 1 if succeeded else 0, "total": 1 if succeeded else 0},
+                "summary": {"percent": 100 if succeeded else 0, "done": 1 if succeeded else 0, "total": 1 if succeeded else 0},
+                "images": {"percent": 100 if succeeded else 0, "done": 1 if succeeded else 0, "total": 1 if succeeded else 0},
+            },
+            "crawlers": {},
+            "crawler_details": {},
+            "metadata": metadata,
+            "images": {"cover_done": cover_count, "cover_status": "done" if cover_count else "pending", "fanart_done": int(item.get("fanart_count") or 0), "fanart_total": int(item.get("fanart_count") or 0), "fanart_status": "done" if succeeded else "pending", "fanart_failures": [], "failed": False, "errors": []},
+            "output": {"save_dir": str(output.get("save_dir") or "")},
+        },
+    }
+
+
+def list_task_summaries() -> list[dict]:
+    """Return cached summaries for completed tasks and live data for active tasks."""
+    with _lock:
+        items = load_tasks()
+        active_ids = {str(item.get("id") or "") for item in items if item.get("status") in {"queued", "running"}}
+        summaries = []
+        changed = False
+        for item in items:
+            if str(item.get("id") or "") in active_ids:
+                continue
+            summary = item.get("list_summary")
+            if not isinstance(summary, dict):
+                summary = _stored_task_summary(item)
+                item["list_summary"] = summary
+                changed = True
+        if changed:
+            save_tasks(items)
+
+    live = {_task["id"]: _task_list_summary(_task) for _task in list_tasks(active_ids)} if active_ids else {}
+    summaries = [live.get(str(item.get("id") or ""), item.get("list_summary")) for item in items]
+    active_items = [item for item in summaries if item and item.get("status") in {"queued", "running"}]
+    completed_items = [item for item in summaries if item and item.get("status") not in {"queued", "running"}]
+    active_items.sort(key=lambda item: str(item.get("created_at") or ""))
+    completed_items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    return active_items + completed_items
+
+
 def get_task(task_id: str) -> dict | None:
-    return next((task for task in list_tasks() if task["id"] == task_id), None)
+    return next((task for task in list_tasks({task_id}) if task["id"] == task_id), None)
 
 
 _EDITABLE_METADATA_KEYS = {"dvdid", "title", "actress", "director", "producer", "publisher", "publish_date"}
