@@ -1012,7 +1012,10 @@ def _is_public_image_url(value: str, proxies: dict[str, str]) -> bool:
             ip = ipaddress.ip_address(address)
         except ValueError:
             return False
-        if not ip.is_global and not (proxies and ip in _CLASH_FAKE_IP_NETWORK):
+        # Clash Fake-IP is a DNS indirection for public hosts.  It must be
+        # accepted even when Clash is running in transparent/TUN mode, where
+        # the application has no explicit proxy URL configured.
+        if not ip.is_global and ip not in _CLASH_FAKE_IP_NETWORK:
             return False
     return True
 
