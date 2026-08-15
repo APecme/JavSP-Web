@@ -174,7 +174,7 @@ function displayFieldValue(value) {
 }
 
 function configArrayTagMarkup(value) {
-  return `<span class="config-array-tag" data-array-value="${escapeHtml(value)}"><code>${escapeHtml(value)}</code><button class="config-array-remove" type="button" title="\u5220\u9664 ${escapeHtml(value)}" aria-label="\u5220\u9664 ${escapeHtml(value)}">\u00d7</button></span>`;
+  return `<span class="config-array-tag" data-array-value="${escapeHtml(value)}"><code>${escapeHtml(value)}</code><button class="config-array-remove" type="button" data-remove-config-array-tag title="\u5220\u9664 ${escapeHtml(value)}" aria-label="\u5220\u9664 ${escapeHtml(value)}">\u00d7</button></span>`;
 }
 
 function arrayConfigMarkup(path, values) {
@@ -343,7 +343,7 @@ function crawlerConfigTagsMarkup(selection = {}) {
   const options = knownNames.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
   return Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
     const selected = Array.isArray(selection[group]) ? selection[group].map((name) => String(name).trim()).filter((name) => name && !disabled.has(name)) : [];
-    const tags = selected.map((name) => `<span class="crawler-tag" data-crawler-value="${escapeHtml(name)}"><code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button></span>`).join('');
+    const tags = selected.map((name) => `<span class="crawler-tag" data-crawler-value="${escapeHtml(name)}"><code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" data-remove-crawler-tag title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button></span>`).join('');
     return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}\u722c\u866b</h3><div class="crawler-config-list crawler-tag-list">${tags}</div><div class="crawler-add"><input class="crawler-add-input" list="crawler-name-options" maxlength="80" autocomplete="off" placeholder="\u8f93\u5165\u722c\u866b\u540d\u79f0"><button class="icon-button crawler-add-button" type="button" title="\u6dfb\u52a0\u722c\u866b" aria-label="\u6dfb\u52a0\u722c\u866b">+</button><datalist id="crawler-name-options">${options}</datalist></div></div>`;
   }).join('');
 }
@@ -2610,8 +2610,13 @@ document.addEventListener('click', async (event) => {
     input.value = '';
     return;
   }
-  const arrayRemove = event.target.closest('.config-array-remove');
-  if (arrayRemove) { arrayRemove.closest('.config-array-tag')?.remove(); return; }
+  const arrayRemove = event.target.closest('button[data-remove-config-array-tag]');
+  if (arrayRemove?.parentElement?.matches('.config-array-tag')) {
+    event.preventDefault();
+    event.stopPropagation();
+    arrayRemove.parentElement.remove();
+    return;
+  }
   const crawlerAdd = event.target.closest('.crawler-add-button');
   if (crawlerAdd) {
     const group = crawlerAdd.closest('.crawler-config-group');
@@ -2625,7 +2630,7 @@ document.addEventListener('click', async (event) => {
       const tag = document.createElement('span');
       tag.className = 'crawler-tag';
       tag.dataset.crawlerValue = name;
-      tag.innerHTML = `<code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button>`;
+      tag.innerHTML = `<code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" data-remove-crawler-tag title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button>`;
       group.querySelector('.crawler-config-list')?.append(tag);
       input.value = '';
       return;
@@ -2635,8 +2640,13 @@ document.addEventListener('click', async (event) => {
   }
   const crawlerRemove = event.target.closest('.crawler-remove');
   if (crawlerRemove) { crawlerRemove.closest('.crawler-config-row')?.remove(); }
-  const crawlerTagRemove = event.target.closest('.crawler-tag-remove');
-  if (crawlerTagRemove) crawlerTagRemove.closest('.crawler-tag')?.remove();
+  const crawlerTagRemove = event.target.closest('button[data-remove-crawler-tag]');
+  if (crawlerTagRemove?.parentElement?.matches('.crawler-tag')) {
+    event.preventDefault();
+    event.stopPropagation();
+    crawlerTagRemove.parentElement.remove();
+    return;
+  }
   const crawlerMove = event.target.closest('.crawler-move');
   if (crawlerMove) { const row = crawlerMove.closest('.crawler-config-row'); const list = row?.parentElement; if (row && list) { const sibling = crawlerMove.dataset.direction === 'up' ? row.previousElementSibling : row.nextElementSibling; if (sibling) crawlerMove.dataset.direction === 'up' ? list.insertBefore(row, sibling) : list.insertBefore(sibling, row); } }
   const restoreFiles = event.target.closest('[data-restore-task-files]');
