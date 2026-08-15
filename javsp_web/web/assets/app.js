@@ -12,6 +12,7 @@ const REQUIRED_MOVIE_FIELDS = [
 ];
 const FORM_TABS = [
   { id: 'scanner', section: 'scanner', label: '扫描器', description: '负责识别影片文件、过滤目录和设置扫描规则。' },
+  { id: 'media-types', section: 'scanner', prefixes: ['media_types'], label: '影片分类', description: '为当前预设填写影片分类规则；支持 YAML 或 JSON。' },
   { id: 'network', section: 'network', label: '网络', description: '设置代理、重试次数和网络请求超时。' },
   { id: 'crawler', section: 'crawler', label: '爬虫', description: '选择此预设实际使用的数据来源和爬虫顺序。' },
   { id: 'folder', section: 'summarizer', prefixes: ['move_files', 'path', 'title'], label: '文件夹整理', description: '设置输出目录、文件名、路径长度和文件移动规则。' },
@@ -64,6 +65,7 @@ const FIELD_NOTES = {
   extra_fanarts: '剧照下载配置对象。',
   fields: '需要翻译的字段开关。',
 };
+FIELD_NOTES.media_types = '填写 YAML 或 JSON 数组；保存时会校验分类 ID、识别方式、兜底分类和对应的爬虫分组。保存后，爬虫标签页会按新分类生成分组。';
 const FIELD_DESCRIPTIONS = {
   'summarizer.cover.google_search_fallback': '启用后，封面下载失败时仅使用 Google 图片搜索查找候选封面，并使用预设中的代理。',
   'scanner.ignored_id_pattern': '推测番号前会忽略文件名中匹配的字符串；除非熟悉正则表达式，否则不要修改。',
@@ -336,7 +338,7 @@ function renderConfigFields() {
     const paths = [];
     const walk = (value, path) => {
       if (!pathMatchesTab(path, tab.prefixes)) return;
-      if (tab.section === 'scanner' && path === 'input_directory') return;
+      if (tab.section === 'scanner' && (path === 'input_directory' || (tab.id === 'scanner' && path === 'media_types'))) return;
       if (tab.section === 'translator' && path === 'engine') {
         paths.push([path, value]);
       } else if (tab.section === 'crawler' && path === 'selection') {
@@ -346,16 +348,13 @@ function renderConfigFields() {
       } else if (path) paths.push([path, value]);
     };
     walk(values, '');
-    if (tab.id === 'scanner' && !paths.some(([path]) => path === 'media_types')) {
-      paths.push(['media_types', mediaTypesFromForm()]);
-    }
     container.innerHTML = paths.map(([path, value]) => {
       const complex = Array.isArray(value) || (value && typeof value === 'object');
       const boolean = typeof value === 'boolean';
       const sourcePath = `${tab.section}.${path}`;
       const placeholder = sourcePath === 'network.proxy_server' ? 'http://127.0.0.1:7890 或 socks5://127.0.0.1:7890' : '';
-      const inputValue = value === null || value === undefined ? '' : displayFieldValue(value);
-      const control = sourcePath === 'scanner.media_types' ? mediaTypesMarkup(value) : (sourcePath === 'crawler.selection' ? crawlerConfigMarkup(value) : (sourcePath === 'translator.engine' ? translatorEngineControl(value) : (boolean ? `<select class="config-field-input" data-config-path="${sourcePath}"><option value="true"${value ? ' selected' : ''}>是</option><option value="false"${value ? '' : ' selected'}>否</option></select>` : (complex ? `<textarea class="config-field-input" data-config-path="${sourcePath}" spellcheck="false">${escapeHtml(inputValue)}</textarea>` : `<input class="config-field-input" data-config-path="${sourcePath}" value="${escapeHtml(inputValue)}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ''}>`))));
+      const inputValue = value === null || value === undefined ? '' : (sourcePath === 'scanner.media_types' ? JSON.stringify(value, null, 2) : displayFieldValue(value));
+      const control = sourcePath === 'crawler.selection' ? crawlerConfigMarkup(value) : (sourcePath === 'translator.engine' ? translatorEngineControl(value) : (boolean ? `<select class="config-field-input" data-config-path="${sourcePath}"><option value="true"${value ? ' selected' : ''}>是</option><option value="false"${value ? '' : ' selected'}>否</option></select>` : (complex ? `<textarea class="config-field-input" data-config-path="${sourcePath}" spellcheck="false">${escapeHtml(inputValue)}</textarea>` : `<input class="config-field-input" data-config-path="${sourcePath}" value="${escapeHtml(inputValue)}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ''}>`)));
       const description = fieldDescription(sourcePath, value);
       const note = fieldNote(sourcePath, value);
       const outputDirectoryPicker = sourcePath === 'summarizer.path.output_folder_pattern'
@@ -394,9 +393,6 @@ function readConfigFields() {
       .filter(Boolean);
     setPathValue(values, control.dataset.configPath, items);
   });
-  if (document.querySelector('[data-media-type-control]')) {
-    setPathValue(values, 'scanner.media_types', readMediaTypesControl());
-  }
   const requiredKeys = [...document.querySelectorAll('[data-required-key]:checked')].map((control) => control.value);
   if (document.querySelector('[data-config-path="crawler.required_keys"]')) {
     setPathValue(values, 'crawler.required_keys', requiredKeys);
@@ -1161,6 +1157,9 @@ async function savePreset() {
     const path = state.editingPreset ? `/api/presets/${state.editingPreset}` : '/api/presets';
     const saved = await api(path, { method: state.editingPreset ? 'PUT' : 'POST', body: JSON.stringify(payload) });
     state.editingPreset = saved.id;
+    state.formValues = cloneValue(saved.form_values || state.formValues);
+    state.taskConcurrency = saved.task_concurrency || state.taskConcurrency;
+    renderConfigFields();
     message.textContent = '预设已保存';
     showToast(`预设“${saved.name}”已保存`, 'success');
     await loadPresets();
