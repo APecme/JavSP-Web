@@ -4,17 +4,45 @@ import re
 from pathlib import Path
 
 
-__all__ = ['get_id', 'get_cid', 'guess_av_type']
+__all__ = ['get_id', 'get_cid', 'guess_av_type', 'configured_media_type']
 
 
 from javsp.config import Cfg
+
+
+def _normalized_filename(filepath_str: str) -> str:
+    filepath = Path(filepath_str)
+    patterns = Cfg().scanner.ignored_id_pattern
+    ignore_pattern = re.compile('|'.join(patterns)) if patterns else None
+    stem = filepath.stem
+    return (ignore_pattern.sub('', stem) if ignore_pattern else stem).upper()
+
+
+def configured_media_type(filepath_str: str):
+    """Return the configured category, identifier kind and normalized ID for a filename."""
+    norm = _normalized_filename(filepath_str)
+    categories = sorted(Cfg().scanner.media_types, key=lambda item: item.priority, reverse=True)
+    for category in categories:
+        if category.fallback or not category.pattern:
+            continue
+        match = re.search(category.pattern, norm, re.I)
+        if not match:
+            continue
+        avid = match.groupdict().get('avid')
+        if not avid:
+            continue
+        value = category.avid_format.format(avid=avid)
+        return category.id, category.identifier_kind, value.lower() if category.identifier_kind == 'cid' else value.upper()
+    return None
 
 def get_id(filepath_str: str) -> str:
     """从给定的文件路径中提取番号（DVD ID）"""
     filepath = Path(filepath_str)
     # 通常是接收文件的路径，当然如果是普通字符串也可以
-    ignore_pattern = re.compile('|'.join(Cfg().scanner.ignored_id_pattern))
-    norm = ignore_pattern.sub('', filepath.stem).upper()
+    configured = configured_media_type(filepath_str)
+    if configured and configured[1] == 'dvdid':
+        return configured[2]
+    norm = _normalized_filename(filepath_str)
     if 'FC2' in norm:
         # 根据FC2 Club的影片数据，FC2编号为5-7个数字
         match = re.search(r'FC2[^A-Z\d]{0,5}(PPV[^A-Z\d]{0,5})?(\d{5,7})', norm, re.I)
@@ -106,6 +134,9 @@ def get_id(filepath_str: str) -> str:
 CD_POSTFIX = re.compile(r'([-_]\w|cd\d)$')
 def get_cid(filepath: str) -> str:
     """尝试将给定的文件名匹配为CID（Content ID）"""
+    configured = configured_media_type(filepath)
+    if configured and configured[1] == 'cid':
+        return configured[2]
     basename = os.path.splitext(os.path.basename(filepath))[0]
     # 移除末尾可能带有的分段影片序号
     possible = CD_POSTFIX.sub('', basename)
@@ -130,8 +161,18 @@ def get_cid(filepath: str) -> str:
     return ''
 
 
-def guess_av_type(avid: str) -> str:
+def guess_av_type(avid: str, filepath: str | None = None) -> str:
     """识别给定的番号所属的分类: normal, fc2, cid"""
+    if filepath:
+        configured = configured_media_type(filepath)
+        if configured and configured[2].lower() == avid.lower():
+            return configured[0]
+    for category in sorted(Cfg().scanner.media_types, key=lambda item: item.priority, reverse=True):
+        if category.fallback or not category.pattern:
+            continue
+        if re.search(category.pattern, avid, re.I):
+            return category.id
+    fallback = next((item.id for item in Cfg().scanner.media_types if item.fallback), 'normal')
     match = re.match(r'^FC2-\d{5,7}$', avid, re.I)
     if match:
         return 'fc2'
@@ -146,7 +187,7 @@ def guess_av_type(avid: str) -> str:
     if cid == avid:
         return 'cid'
     # 以上都不是: 默认归类为normal
-    return 'normal'
+    return fallback
 
 
 if __name__ == "__main__":

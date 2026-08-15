@@ -145,10 +145,10 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
     all_info = {str(i).removeprefix('javsp.web.'): MovieInfo(movie) for i in crawler_mods}
     # 番号为cid但同时也有有效的dvdid时，也尝试使用普通模式进行抓取
     if movie.data_src == 'cid' and movie.dvdid:
-        crawler_mods = crawler_mods + Cfg().crawler.selection.normal
+        crawler_mods = crawler_mods + Cfg().crawler.selection["normal"]
         for i in all_info.values():
             i.dvdid = None
-        for i in Cfg().crawler.selection.normal:
+        for i in Cfg().crawler.selection["normal"]:
             all_info[str(i).removeprefix('javsp.web.')] = MovieInfo(movie.dvdid)
     crawler_total = len(all_info)
     thread_pool = []

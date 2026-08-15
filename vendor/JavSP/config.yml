@@ -21,6 +21,40 @@ scanner:
   minimum_size: 232MiB
   skip_nfo_dir: yes
   manual: yes
+  # 影片分类决定文件名的识别规则以及后续使用的爬虫列表。
+  # pattern 必须包含命名捕获组 (?P<avid>...)；avid_format 用于生成标准番号。
+  media_types:
+    - id: fc2
+      name: FC2
+      priority: 100
+      identifier_kind: dvdid
+      pattern: 'FC2[^A-Z\d]{0,5}(?:PPV[^A-Z\d]{0,5})?(?P<avid>\d{5,7})'
+      avid_format: 'FC2-{avid}'
+    - id: getchu
+      name: Getchu
+      priority: 90
+      identifier_kind: dvdid
+      pattern: 'GETCHU[-_]*(?P<avid>\d+)'
+      avid_format: 'GETCHU-{avid}'
+    - id: gyutto
+      name: Gyutto
+      priority: 90
+      identifier_kind: dvdid
+      pattern: 'GYUTTO[-_]*(?P<avid>\d+)'
+      avid_format: 'GYUTTO-{avid}'
+    - id: cid
+      name: CID
+      priority: 80
+      identifier_kind: cid
+      pattern: ''
+      avid_format: '{avid}'
+    - id: normal
+      name: 普通影片
+      priority: 0
+      identifier_kind: dvdid
+      pattern: ''
+      avid_format: '{avid}'
+      fallback: true
 ################################
 network:
   # 设置代理服务器地址，支持 http, socks5/socks5h 代理，比如'http://127.0.0.1:1080'
