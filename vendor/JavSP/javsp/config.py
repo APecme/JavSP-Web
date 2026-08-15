@@ -15,19 +15,36 @@ class MediaType(BaseConfig):
     id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,39}$")
     name: str = Field(min_length=1, max_length=80)
     priority: int = 0
+    detector: Literal["regex", "cid", "fallback"] = "regex"
     identifier_kind: Literal["dvdid", "cid"] = "dvdid"
     pattern: str = ""
     avid_format: str = "{avid}"
     fallback: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_detector(cls, value):
+        if not isinstance(value, dict) or value.get("detector"):
+            return value
+        value = dict(value)
+        if value.get("fallback"):
+            value["detector"] = "fallback"
+        elif value.get("id") == "cid" and value.get("identifier_kind") == "cid" and not value.get("pattern"):
+            value["detector"] = "cid"
+        return value
+
     @model_validator(mode="after")
     def validate_pattern(self):
+        if self.detector == "fallback":
+            return self
         if self.fallback:
+            raise ValueError("兜底分类必须使用 fallback 识别方式")
+        if self.detector == "cid":
+            if self.identifier_kind != "cid":
+                raise ValueError("CID 识别方式只能用于 CID 编号")
             return self
-        if not self.pattern and not (self.id == "cid" and self.identifier_kind == "cid"):
-            raise ValueError("影片分类必须配置识别规则，只有兜底分类可以留空")
         if not self.pattern:
-            return self
+            raise ValueError("正则识别方式必须配置文件名识别规则")
         if "(?P<avid>" not in self.pattern:
             raise ValueError("影片分类识别规则必须包含命名捕获组 (?P<avid>...)")
         if "{avid}" not in self.avid_format:
@@ -44,8 +61,8 @@ def default_media_types() -> list[MediaType]:
         MediaType(id="fc2", name="FC2", priority=100, pattern=r"FC2[^A-Z\d]{0,5}(?:PPV[^A-Z\d]{0,5})?(?P<avid>\d{5,7})", avid_format="FC2-{avid}"),
         MediaType(id="getchu", name="Getchu", priority=90, pattern=r"GETCHU[-_]*(?P<avid>\d+)", avid_format="GETCHU-{avid}"),
         MediaType(id="gyutto", name="Gyutto", priority=90, pattern=r"GYUTTO[-_]*(?P<avid>\d+)", avid_format="GYUTTO-{avid}"),
-        MediaType(id="cid", name="CID", priority=80, identifier_kind="cid"),
-        MediaType(id="normal", name="普通影片", priority=0, fallback=True),
+        MediaType(id="cid", name="CID", priority=80, detector="cid", identifier_kind="cid"),
+        MediaType(id="normal", name="普通影片", priority=0, detector="fallback", fallback=True),
     ]
 
 class Scanner(BaseConfig):
@@ -63,7 +80,7 @@ class Scanner(BaseConfig):
         ids = [item.id for item in self.media_types]
         if len(ids) != len(set(ids)):
             raise ValueError("影片分类 ID 不能重复")
-        if sum(item.fallback for item in self.media_types) != 1:
+        if sum(item.detector == "fallback" for item in self.media_types) != 1:
             raise ValueError("必须且只能保留一个兜底影片分类")
         return self
 

@@ -148,7 +148,7 @@ def scan_movies(root: str) -> List[Movie]:
     movies: List[Movie] = []
     for avid, files in dic.items():
         src = guess_av_type(avid, files[0])
-        if src != 'cid':
+        if not is_cid_media_type(src):
             mov = Movie(avid)
         else:
             mov = Movie(cid=avid)

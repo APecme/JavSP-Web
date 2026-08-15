@@ -27,33 +27,34 @@ scanner:
     - id: fc2
       name: FC2
       priority: 100
+      detector: regex
       identifier_kind: dvdid
       pattern: 'FC2[^A-Z\d]{0,5}(?:PPV[^A-Z\d]{0,5})?(?P<avid>\d{5,7})'
       avid_format: 'FC2-{avid}'
     - id: getchu
       name: Getchu
       priority: 90
+      detector: regex
       identifier_kind: dvdid
       pattern: 'GETCHU[-_]*(?P<avid>\d+)'
       avid_format: 'GETCHU-{avid}'
     - id: gyutto
       name: Gyutto
       priority: 90
+      detector: regex
       identifier_kind: dvdid
       pattern: 'GYUTTO[-_]*(?P<avid>\d+)'
       avid_format: 'GYUTTO-{avid}'
     - id: cid
       name: CID
       priority: 80
+      detector: cid
       identifier_kind: cid
-      pattern: ''
-      avid_format: '{avid}'
     - id: normal
       name: 普通影片
       priority: 0
+      detector: fallback
       identifier_kind: dvdid
-      pattern: ''
-      avid_format: '{avid}'
       fallback: true
 ################################
 network:

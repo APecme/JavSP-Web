@@ -41,6 +41,7 @@ logger = logging.getLogger('main')
 from javsp.lib import resource_path
 from javsp.nfo import write_nfo
 from javsp.file import *
+from javsp.avid import fallback_media_type_id, is_cid_media_type
 from javsp.func import *
 from javsp.image import *
 from javsp.datatype import Movie, MovieInfo
@@ -141,14 +142,18 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
 
     # 根据影片的数据源获取对应的抓取器
     crawler_mods: List[str] = Cfg().crawler.selection[movie.data_src]
+    source_crawler_keys = {str(item).removeprefix('javsp.web.') for item in crawler_mods}
+    fallback_source = fallback_media_type_id()
+    fallback_crawlers: List[str] = Cfg().crawler.selection[fallback_source]
+    cid_with_dvdid = is_cid_media_type(movie.data_src) and bool(movie.dvdid)
 
     all_info = {str(i).removeprefix('javsp.web.'): MovieInfo(movie) for i in crawler_mods}
-    # 番号为cid但同时也有有效的dvdid时，也尝试使用普通模式进行抓取
-    if movie.data_src == 'cid' and movie.dvdid:
-        crawler_mods = crawler_mods + Cfg().crawler.selection["normal"]
+    # CID 影片同时带有有效 DVDID 时，也尝试兜底分类的爬虫。
+    if cid_with_dvdid:
+        crawler_mods = crawler_mods + fallback_crawlers
         for i in all_info.values():
             i.dvdid = None
-        for i in Cfg().crawler.selection["normal"]:
+        for i in fallback_crawlers:
             all_info[str(i).removeprefix('javsp.web.')] = MovieInfo(movie.dvdid)
     crawler_total = len(all_info)
     thread_pool = []
@@ -171,16 +176,16 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
         th: threading.Thread
         th.join(timeout=timeout)
     # 根据抓取结果更新影片类型判定
-    if movie.data_src == 'cid' and movie.dvdid:
-        titles = [all_info[i].title for i in Cfg().crawler.selection[movie.data_src]]
+    if cid_with_dvdid:
+        titles = [all_info[key].title for key in source_crawler_keys if key in all_info]
         if any(titles):
             movie.dvdid = None
-            all_info = {k: v for k, v in all_info.items() if k in Cfg().crawler.selection['cid']}
+            all_info = {k: v for k, v in all_info.items() if k in source_crawler_keys}
         else:
-            logger.debug(f'自动更正影片数据源类型: {movie.dvdid} ({movie.cid}): normal')
-            movie.data_src = 'normal'
+            logger.debug(f'自动更正影片数据源类型: {movie.dvdid} ({movie.cid}): {fallback_source}')
+            movie.data_src = fallback_source
             movie.cid = None
-            all_info = {k: v for k, v in all_info.items() if k not in Cfg().crawler.selection['cid']}
+            all_info = {k: v for k, v in all_info.items() if k not in source_crawler_keys}
     # 删除抓取失败的站点对应的数据
     all_info = {k:v for k,v in all_info.items() if hasattr(v, 'success')}
     for info in all_info.values():

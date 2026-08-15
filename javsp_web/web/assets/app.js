@@ -1,13 +1,7 @@
 const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
-const DEFAULT_MEDIA_TYPES = [
-  { id: 'fc2', name: 'FC2', priority: 100, identifier_kind: 'dvdid', pattern: 'FC2[^A-Z\\d]{0,5}(?:PPV[^A-Z\\d]{0,5})?(?P<avid>\\d{5,7})', avid_format: 'FC2-{avid}', examples: 'FC2-123456' },
-  { id: 'getchu', name: 'Getchu', priority: 90, identifier_kind: 'dvdid', pattern: 'GETCHU[-_]*(?P<avid>\\d+)', avid_format: 'GETCHU-{avid}', examples: 'GETCHU-12345' },
-  { id: 'gyutto', name: 'Gyutto', priority: 90, identifier_kind: 'dvdid', pattern: 'GYUTTO[-_]*(?P<avid>\\d+)', avid_format: 'GYUTTO-{avid}', examples: 'GYUTTO-12345' },
-  { id: 'cid', name: 'CID', priority: 80, identifier_kind: 'cid', pattern: '', avid_format: '{avid}', examples: 'ssni00123' },
-  { id: 'normal', name: '\u666e\u901a\u5f71\u7247', priority: 0, identifier_kind: 'dvdid', pattern: '', avid_format: '{avid}', fallback: true, examples: 'PTS-553\u3001ABP-123' },
-];
+const BUILT_IN_MEDIA_TYPE_IDS = new Set(['fc2', 'getchu', 'gyutto', 'cid', 'normal']);
 const CRAWLER_IDS = ['airav','avsox','avwiki','dl_getchu','fanza','fc2','fc2fan','fc2ppvdb','gyutto','jav321','javbus','javdb','javlib','javmenu','mgstage','njav','prestige','arzon','arzon_iv'];
 const REQUIRED_MOVIE_FIELDS = [
   ['dvdid', '\u756a\u53f7'], ['cid', 'CID'], ['url', 'URL'], ['plot', '\u5267\u60c5'],
@@ -182,18 +176,15 @@ function displayFieldValue(value) {
 
 function normalizeMediaTypes(value) {
   const saved = Array.isArray(value) ? value.filter((item) => item && typeof item === 'object') : [];
-  const savedById = new Map(saved.map((item) => [String(item.id || '').trim().toLowerCase(), item]));
-  const defaults = DEFAULT_MEDIA_TYPES.map((item) => ({ ...item, ...(savedById.get(item.id) || {}), id: item.id, fallback: Boolean(item.fallback) }));
-  const custom = saved.filter((item) => !DEFAULT_MEDIA_TYPES.some((defaultItem) => defaultItem.id === String(item.id || '').trim().toLowerCase()));
-  return [...defaults, ...custom].map((item) => ({
+  return saved.map((item) => ({
     id: String(item.id || '').trim().toLowerCase(),
     name: String(item.name || '').trim(),
     priority: Number.isFinite(Number(item.priority)) ? Number(item.priority) : 0,
+    detector: ['regex', 'cid', 'fallback'].includes(item.detector) ? item.detector : (item.fallback ? 'fallback' : (item.id === 'cid' && item.identifier_kind === 'cid' && !item.pattern ? 'cid' : 'regex')),
     identifier_kind: item.identifier_kind === 'cid' ? 'cid' : 'dvdid',
     pattern: String(item.pattern || ''),
     avid_format: String(item.avid_format || '{avid}'),
-    fallback: Boolean(item.fallback),
-    examples: String(item.examples || ''),
+    fallback: item.detector === 'fallback' || Boolean(item.fallback),
   })).sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id));
 }
 
@@ -202,13 +193,25 @@ function mediaTypesFromForm() {
 }
 
 function mediaTypeRuleMarkup(type) {
-  const builtIn = DEFAULT_MEDIA_TYPES.some((item) => item.id === type.id);
+  {
+    const builtIn = BUILT_IN_MEDIA_TYPE_IDS.has(type.id);
+    if (builtIn) {
+      const detector = type.detector === 'cid' ? 'CID \u5185\u7f6e\u8bc6\u522b' : (type.detector === 'fallback' ? '\u9ed8\u8ba4\u515c\u5e95' : '\u5185\u7f6e\u6587\u4ef6\u540d\u8bc6\u522b');
+      const identifier = type.identifier_kind === 'cid' ? 'CID' : 'DVDID';
+      return `<article class="media-type-rule media-type-built-in" data-media-type-rule data-built-in="true"><input data-media-type-id value="${escapeHtml(type.id)}" type="hidden"><input data-media-type-name value="${escapeHtml(type.name)}" type="hidden"><input data-media-type-priority value="${escapeHtml(type.priority)}" type="hidden"><input data-media-type-kind value="${escapeHtml(type.identifier_kind)}" type="hidden"><input data-media-type-detector value="${escapeHtml(type.detector)}" type="hidden"><input data-media-type-pattern value="${escapeHtml(type.pattern)}" type="hidden"><input data-media-type-format value="${escapeHtml(type.avid_format)}" type="hidden"><div class="media-type-rule-heading"><strong>${escapeHtml(type.name)}</strong><span>${detector} \u00b7 ${identifier}</span></div><p class="muted">${type.detector === 'fallback' ? '\u5176\u4ed6\u5f71\u7247\u5206\u7c7b\u672a\u547d\u4e2d\u65f6\u4f7f\u7528\u3002' : '\u7531\u626b\u63cf\u5668\u5185\u7f6e\u89c4\u5219\u8bc6\u522b\uff1b\u722c\u866b\u987a\u5e8f\u8bf7\u5728\u300c\u722c\u866b\u300d\u9009\u9879\u5361\u914d\u7f6e\u3002'}</p></article>`;
+    }
+    return `<article class="media-type-rule" data-media-type-rule data-built-in="false"><div class="media-type-rule-heading"><strong>\u81ea\u5b9a\u4e49\u5206\u7c7b</strong><button class="icon-button media-type-remove" type="button" data-remove-media-type title="\u5220\u9664\u5206\u7c7b" aria-label="\u5220\u9664\u5206\u7c7b">\u00d7</button></div><div class="media-type-rule-fields"><label>\u5206\u7c7b ID<input data-media-type-id maxlength="40" value="${escapeHtml(type.id)}" placeholder="my_source"></label><label>\u5206\u7c7b\u540d\u79f0<input data-media-type-name maxlength="80" value="${escapeHtml(type.name)}" placeholder="\u4f8b\u5982 My Source"></label><label>\u4f18\u5148\u7ea7<input data-media-type-priority type="number" step="1" value="${escapeHtml(type.priority)}"></label><label>\u7f16\u53f7\u7c7b\u578b<select data-media-type-kind><option value="dvdid"${type.identifier_kind === 'dvdid' ? ' selected' : ''}>DVDID</option><option value="cid"${type.identifier_kind === 'cid' ? ' selected' : ''}>CID</option></select></label><label class="media-type-rule-pattern">\u6587\u4ef6\u540d\u8bc6\u522b\u89c4\u5219<input data-media-type-pattern value="${escapeHtml(type.pattern)}" placeholder="\u5fc5\u987b\u5305\u542b (?P<avid>...)"></label><label>\u756a\u53f7\u683c\u5f0f<input data-media-type-format value="${escapeHtml(type.avid_format)}" placeholder="{avid}"></label></div><p class="muted">\u7528\u4e8e\u81ea\u5b9a\u4e49\u6587\u4ef6\u540d\u89c4\u5219\uff1b\u89c4\u5219\u547d\u4e2d\u540e\u4f1a\u751f\u6210\u6807\u51c6\u756a\u53f7\u3002</p></article>`;
+  }
+  /* Legacy editor markup retained below temporarily for source compatibility.
+  const builtIn = BUILT_IN_MEDIA_TYPE_IDS.has(type.id);
   const patternHint = type.fallback ? '\u5179\u5e95\u5206\u7c7b\u65e0\u9700\u89c4\u5219' : '\u5fc5\u987b\u5305\u542b (?P<avid>...)';
   return `<article class="media-type-rule" data-media-type-rule data-built-in="${builtIn}"><div class="media-type-rule-heading"><strong>${builtIn ? '\u5185\u7f6e\u5206\u7c7b' : '\u81ea\u5b9a\u4e49\u5206\u7c7b'}</strong>${builtIn ? '' : '<button class="icon-button media-type-remove" type="button" data-remove-media-type title="\u5220\u9664\u5206\u7c7b" aria-label="\u5220\u9664\u5206\u7c7b">\u00d7</button>'}</div><div class="media-type-rule-fields"><label>\u5206\u7c7b ID<input data-media-type-id maxlength="40" value="${escapeHtml(type.id)}"${builtIn ? ' readonly' : ''} placeholder="my_source"></label><label>\u5206\u7c7b\u540d\u79f0<input data-media-type-name maxlength="80" value="${escapeHtml(type.name)}" placeholder="\u4f8b\u5982 My Source"></label><label>\u4f18\u5148\u7ea7<input data-media-type-priority type="number" step="1" value="${escapeHtml(type.priority)}"></label><label>\u7f16\u53f7\u7c7b\u578b<select data-media-type-kind><option value="dvdid"${type.identifier_kind === 'dvdid' ? ' selected' : ''}>DVDID</option><option value="cid"${type.identifier_kind === 'cid' ? ' selected' : ''}>CID</option></select></label><label class="media-type-rule-pattern">\u8bc6\u522b\u89c4\u5219<input data-media-type-pattern value="${escapeHtml(type.pattern)}" placeholder="${patternHint}"${type.fallback ? ' readonly' : ''}></label><label>\u756a\u53f7\u683c\u5f0f<input data-media-type-format value="${escapeHtml(type.avid_format)}" placeholder="{avid}"></label></div><p class="muted">${type.fallback ? '\u5728\u5176\u4ed6\u89c4\u5219\u672a\u547d\u4e2d\u65f6\u4f7f\u7528\u3002' : `\u89c4\u5219\u547d\u4e2d\u540e\u4f7f\u7528 ${escapeHtml(type.avid_format || '{avid}')} \u751f\u6210\u6807\u51c6\u756a\u53f7\u3002`}</p></article>`;
+*/
 }
 
 function mediaTypesMarkup(value) {
   const types = normalizeMediaTypes(value);
+  return `<div class="media-type-control" data-media-type-control><div class="media-type-control-heading"><div><strong>\u5f71\u7247\u5206\u7c7b</strong><span>\u626b\u63cf\u5668\u6839\u636e\u6587\u4ef6\u540d\u786e\u5b9a\u5f71\u7247\u5206\u7c7b\uff0c\u722c\u866b\u9875\u9762\u518d\u6309\u6b64\u5206\u7c7b\u9009\u62e9\u6570\u636e\u6e90\u3002</span></div><button class="button secondary" type="button" data-add-media-type>\u6dfb\u52a0\u81ea\u5b9a\u4e49\u5206\u7c7b</button></div><div class="media-type-rule-list">${types.map(mediaTypeRuleMarkup).join('')}</div></div>`;
   return `<div class="media-type-control" data-media-type-control><div class="media-type-control-heading"><div><strong>\u5f71\u7247\u5206\u7c7b</strong><span>\u626b\u63cf\u5668\u6309\u4f18\u5148\u7ea7\u4ece\u6587\u4ef6\u540d\u8bc6\u522b\u7f16\u53f7\uff0c\u5e76\u5c06\u547d\u4e2d\u5206\u7c7b\u4ea4\u7ed9\u540c\u540d\u722c\u866b\u5217\u8868\u3002</span></div><button class="button secondary" type="button" data-add-media-type>\u6dfb\u52a0\u5206\u7c7b</button></div><div class="media-type-rule-list">${types.map(mediaTypeRuleMarkup).join('')}</div></div>`;
 }
 
@@ -217,10 +220,11 @@ function readMediaTypesControl() {
     id: rule.querySelector('[data-media-type-id]')?.value.trim().toLowerCase() || '',
     name: rule.querySelector('[data-media-type-name]')?.value.trim() || '',
     priority: Number(rule.querySelector('[data-media-type-priority]')?.value || 0),
+    detector: rule.querySelector('[data-media-type-detector]')?.value || 'regex',
     identifier_kind: rule.querySelector('[data-media-type-kind]')?.value === 'cid' ? 'cid' : 'dvdid',
     pattern: rule.querySelector('[data-media-type-pattern]')?.value || '',
     avid_format: rule.querySelector('[data-media-type-format]')?.value || '{avid}',
-    fallback: rule.dataset.builtIn === 'true' && rule.querySelector('[data-media-type-id]')?.value === 'normal',
+    fallback: rule.querySelector('[data-media-type-detector]')?.value === 'fallback',
   }));
   return normalizeMediaTypes(rules);
 }
@@ -442,7 +446,9 @@ function crawlerConfigTagsMarkup(selection = {}) {
     const selected = Array.isArray(selection[group]) ? selection[group].map((name) => String(name).trim()).filter((name) => name && !disabled.has(name)) : [];
     const tags = selected.map((name) => `<span class="crawler-tag" data-crawler-value="${escapeHtml(name)}"><code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" data-remove-crawler-tag title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button></span>`).join('');
     const source = definition.identifier_kind === 'cid' ? 'CID' : 'DVDID';
-    const detail = definition.fallback ? '\u5176\u4ed6\u5206\u7c7b\u672a\u547d\u4e2d\u65f6\u4f7f\u7528' : (definition.pattern || '\u8bc6\u522b\u89c4\u5219\u672a\u914d\u7f6e');
+    const detail = definition.detector === 'cid'
+      ? 'CID \u5185\u7f6e\u8bc6\u522b'
+      : (definition.detector === 'fallback' ? '\u9ed8\u8ba4\u515c\u5e95\u5206\u7c7b' : (BUILT_IN_MEDIA_TYPE_IDS.has(definition.id) ? '\u5185\u7f6e\u6587\u4ef6\u540d\u8bc6\u522b' : '\u81ea\u5b9a\u4e49\u6587\u4ef6\u540d\u8bc6\u522b'));
     return `<section class="crawler-config-group" data-crawler-group="${escapeHtml(group)}"><div class="crawler-group-heading"><div><span class="crawler-group-source">${source}</span><h3>${escapeHtml(definition.name || definition.id)}</h3><p>${escapeHtml(detail)}</p></div></div><div class="crawler-group-selection"><span class="crawler-group-selection-label">\u7528\u4e8e\u6b64\u5206\u7c7b\u7684\u722c\u866b</span><div class="crawler-config-list crawler-tag-list">${tags}</div><div class="crawler-add"><input class="crawler-add-input" list="crawler-name-options" maxlength="80" autocomplete="off" placeholder="\u8f93\u5165\u722c\u866b\u540d\u79f0"><button class="icon-button crawler-add-button" type="button" title="\u6dfb\u52a0\u722c\u866b" aria-label="\u6dfb\u52a0\u722c\u866b">+</button><datalist id="crawler-name-options">${options}</datalist></div></div></section>`;
   }).join('');
 }
@@ -2699,7 +2705,7 @@ document.addEventListener('click', async (event) => {
   const addMediaType = event.target.closest('[data-add-media-type]');
   if (addMediaType) {
     const types = readMediaTypesControl();
-    const index = types.filter((item) => !DEFAULT_MEDIA_TYPES.some((defaultItem) => defaultItem.id === item.id)).length + 1;
+    const index = types.filter((item) => !BUILT_IN_MEDIA_TYPE_IDS.has(item.id)).length + 1;
     const id = `custom_${index}`;
     types.push({ id, name: '\u65b0\u5f71\u7247\u5206\u7c7b', priority: 50, identifier_kind: 'dvdid', pattern: '(?P<avid>[A-Z]{2,10}-\\d{2,8})', avid_format: '{avid}' });
     state.formValues ||= {};
@@ -2713,7 +2719,7 @@ document.addEventListener('click', async (event) => {
   if (removeMediaType) {
     const rule = removeMediaType.closest('[data-media-type-rule]');
     const id = rule?.querySelector('[data-media-type-id]')?.value.trim().toLowerCase();
-    if (!id || DEFAULT_MEDIA_TYPES.some((item) => item.id === id)) return;
+    if (!id || BUILT_IN_MEDIA_TYPE_IDS.has(id)) return;
     const selection = crawlerSelectionFromDom();
     delete selection[id];
     const types = readMediaTypesControl().filter((item) => item.id !== id);

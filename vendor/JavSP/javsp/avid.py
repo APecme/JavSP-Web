@@ -4,10 +4,26 @@ import re
 from pathlib import Path
 
 
-__all__ = ['get_id', 'get_cid', 'guess_av_type', 'configured_media_type']
+__all__ = [
+    'get_id', 'get_cid', 'guess_av_type', 'configured_media_type',
+    'media_type_for_id', 'fallback_media_type_id', 'is_cid_media_type',
+]
 
 
 from javsp.config import Cfg
+
+
+def media_type_for_id(category_id: str):
+    return next((item for item in Cfg().scanner.media_types if item.id == category_id), None)
+
+
+def fallback_media_type_id() -> str:
+    return next(item.id for item in Cfg().scanner.media_types if item.detector == 'fallback')
+
+
+def is_cid_media_type(category_id: str) -> bool:
+    category = media_type_for_id(category_id)
+    return bool(category and category.identifier_kind == 'cid')
 
 
 def _normalized_filename(filepath_str: str) -> str:
@@ -23,7 +39,12 @@ def configured_media_type(filepath_str: str):
     norm = _normalized_filename(filepath_str)
     categories = sorted(Cfg().scanner.media_types, key=lambda item: item.priority, reverse=True)
     for category in categories:
-        if category.fallback or not category.pattern:
+        if category.detector == 'fallback':
+            continue
+        if category.detector == 'cid':
+            value = _get_legacy_cid(filepath_str)
+            if value:
+                return category.id, category.identifier_kind, value.lower()
             continue
         match = re.search(category.pattern, norm, re.I)
         if not match:
@@ -132,11 +153,8 @@ def get_id(filepath_str: str) -> str:
 
 
 CD_POSTFIX = re.compile(r'([-_]\w|cd\d)$')
-def get_cid(filepath: str) -> str:
-    """尝试将给定的文件名匹配为CID（Content ID）"""
-    configured = configured_media_type(filepath)
-    if configured and configured[1] == 'cid':
-        return configured[2]
+def _get_legacy_cid(filepath: str) -> str:
+    """Recognize a DMM Content ID without consulting the media type configuration."""
     basename = os.path.splitext(os.path.basename(filepath))[0]
     # 移除末尾可能带有的分段影片序号
     possible = CD_POSTFIX.sub('', basename)
@@ -161,33 +179,30 @@ def get_cid(filepath: str) -> str:
     return ''
 
 
+def get_cid(filepath: str) -> str:
+    """尝试将给定的文件名匹配为CID（Content ID）"""
+    configured = configured_media_type(filepath)
+    if configured and configured[1] == 'cid':
+        return configured[2]
+    return _get_legacy_cid(filepath)
+
+
 def guess_av_type(avid: str, filepath: str | None = None) -> str:
-    """识别给定的番号所属的分类: normal, fc2, cid"""
+    """识别给定番号所属的已配置影片分类。"""
     if filepath:
         configured = configured_media_type(filepath)
         if configured and configured[2].lower() == avid.lower():
             return configured[0]
-    for category in sorted(Cfg().scanner.media_types, key=lambda item: item.priority, reverse=True):
-        if category.fallback or not category.pattern:
+    categories = sorted(Cfg().scanner.media_types, key=lambda item: item.priority, reverse=True)
+    for category in categories:
+        if category.detector != 'regex':
             continue
         if re.search(category.pattern, avid, re.I):
             return category.id
-    fallback = next((item.id for item in Cfg().scanner.media_types if item.fallback), 'normal')
-    match = re.match(r'^FC2-\d{5,7}$', avid, re.I)
-    if match:
-        return 'fc2'
-    match = re.match(r'^GETCHU-(\d+)',avid,re.I)
-    if match:
-        return 'getchu'
-    match = re.match(r'^GYUTTO-(\d+)',avid,re.I)
-    if match:
-        return 'gyutto'
-    # 如果传入的avid完全匹配cid的模式，则将影片归类为cid
-    cid = get_cid(avid)
-    if cid == avid:
-        return 'cid'
-    # 以上都不是: 默认归类为normal
-    return fallback
+    for category in categories:
+        if category.detector == 'cid' and _get_legacy_cid(avid).lower() == avid.lower():
+            return category.id
+    return fallback_media_type_id()
 
 
 if __name__ == "__main__":
