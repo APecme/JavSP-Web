@@ -283,10 +283,11 @@ function requiredKeysMarkup(values) {
 
 function hydrateCollectionControls() {
   document.querySelectorAll('textarea.config-field-input[data-config-path]').forEach((control) => {
+    const path = control.dataset.configPath;
+    if (path === 'scanner.media_types') return;
     let values;
     try { values = JSON.parse(control.value); } catch (_) { return; }
     if (!Array.isArray(values)) return;
-    const path = control.dataset.configPath;
     control.outerHTML = path === 'crawler.required_keys' ? requiredKeysMarkup(values) : arrayConfigMarkup(path, values);
   });
 }
@@ -369,7 +370,8 @@ function renderConfigFields() {
       // Complex controls include their own focusable children. Wrapping them in a
       // label makes browsers forward empty-area clicks to the first child button.
       const fieldTag = complex ? 'div' : 'label';
-      return `<${fieldTag} class="config-field">${heading}${ruleControl}${help}</${fieldTag}>`;
+      const wideField = sourcePath === 'scanner.media_types' ? ' config-field-wide' : '';
+      return `<${fieldTag} class="config-field${wideField}">${heading}${ruleControl}${help}</${fieldTag}>`;
     }).join('') || '<p class="muted">此分类暂无可编辑项。</p>';
     if (tab.id === 'scanner') {
       container.insertAdjacentHTML('beforeend', `<label class="config-field web-config-field"><span class="config-field-name">多线程刮削 <small>(JavSP WEB)</small></span><input id="preset-task-concurrency" type="number" min="1" max="32" value="${Math.max(1, Math.min(32, Number(state.taskConcurrency) || 1))}"><small class="config-description">手动刮削目录内有多个影片时，同时运行的任务数量；超出的任务会保留在队列中等待。</small></label>`);

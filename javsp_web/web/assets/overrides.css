@@ -303,7 +303,10 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .media-type-rule-fields input, .media-type-rule-fields select { min-width: 0; min-height: 34px; padding: 7px 8px; font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .media-type-rule-fields .media-type-rule-pattern { grid-column: span 2; }
 .media-type-rule .muted { margin: 0; }
-textarea[data-config-path="scanner.media_types"] { min-height: 360px; resize: vertical; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; tab-size: 2; }
+textarea[data-config-path="scanner.media_types"] { min-height: 460px; resize: vertical; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; tab-size: 2; }
+.config-field-wide { grid-column: 1 / -1; }
+.preset-layout, .preset-layout > .panel, .preset-layout #preset-form, .preset-tab-panels, .preset-tab-panel, .config-fields, .config-field { min-width: 0; }
+.preset-tabs { max-width: 100%; }
 @media (max-width: 760px) { .media-type-control-heading { display: grid; } .media-type-control-heading .button { width: 100%; } .media-type-rule-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .media-type-rule-fields .media-type-rule-pattern { grid-column: span 2; } }
 .crawler-tag-list { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
 .crawler-tag { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 4px 5px 4px 7px; border: 1px solid #b2ccff; border-radius: 5px; background: #eff8ff; color: #175cd3; }
