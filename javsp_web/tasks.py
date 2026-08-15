@@ -76,7 +76,8 @@ if custom_dir and custom_dir.is_dir():
 results = []
 for name in names:
     try:
-        module_name = "javsp.web." + name if name in known else name
+        custom_path = custom_dir / f"{name}.py" if custom_dir else None
+        module_name = name if custom_path and custom_path.is_file() else "javsp.web." + name if name in known else name
         parse_data = getattr(importlib.import_module(module_name), "parse_data", None)
         if not callable(parse_data):
             continue

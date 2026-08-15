@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
@@ -1469,6 +1469,20 @@ function requestMetadataRefresh() {
   if (dialog && !dialog.open) dialog.showModal();
 }
 
+function overviewTaskIds(value) {
+  return String(value || '').split(',').map((id) => id.trim()).filter(Boolean);
+}
+
+function toggleOverviewSelection(ids) {
+  if (!ids.length) return;
+  const selected = ids.every((id) => state.selectedOverviewTasks.has(id));
+  ids.forEach((id) => selected ? state.selectedOverviewTasks.delete(id) : state.selectedOverviewTasks.add(id));
+}
+
+function overviewSelectionIcon(selected = false) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect>${selected ? '<path d="m8 12 2.7 2.7L16.5 9"></path>' : ''}</svg>`;
+}
+
 function renderOverview() {
   $('#metric-total').textContent = state.tasks.length;
   $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
@@ -1495,7 +1509,14 @@ function renderOverview() {
     const difference = value(left) - value(right);
     return state.overviewSort.direction === 'asc' ? difference : -difference;
   }).slice(0, 24);
-  const toolbar = `<div class="overview-cover-toolbar"><label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
+  const visibleIds = new Set(cards.flatMap((entry) => entry.taskIds));
+  state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => visibleIds.has(id)));
+  const selectedCount = state.selectedOverviewTasks.size;
+  const allSelected = visibleIds.size > 0 && [...visibleIds].every((id) => state.selectedOverviewTasks.has(id));
+  const selectionTools = state.overviewSelectionMode
+    ? `<div class="overview-selection-tools"><span class="muted">已选择 ${selectedCount} 条记录</span><button class="icon-button" type="button" data-overview-select-all title="${allSelected ? '取消全选' : '全选'}" aria-label="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}</button><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>`
+    : '';
+  const toolbar = `<div class="overview-cover-toolbar"><label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label><button id="overview-selection-toggle" class="icon-button overview-selection-toggle${state.overviewSelectionMode ? ' active' : ''}" type="button" aria-pressed="${state.overviewSelectionMode}" title="${state.overviewSelectionMode ? '退出多选' : '多选记录'}" aria-label="${state.overviewSelectionMode ? '退出多选' : '多选记录'}">${overviewSelectionIcon(state.overviewSelectionMode)}</button>${selectionTools}</div>`;
   $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
 }
 
@@ -1508,7 +1529,9 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const artwork = coverReady
     ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
     : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
-  return `<article class="overview-cover-card" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}"><button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span>${taskCount > 1 ? `<small>合并 ${taskCount} 条记录</small>` : ''}</button></article>`;
+  const selected = taskIds.every((id) => state.selectedOverviewTasks.has(id));
+  const selector = state.overviewSelectionMode ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
+  return `<article class="overview-cover-card${selected ? ' selected' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span>${taskCount > 1 ? `<small>合并 ${taskCount} 条记录</small>` : ''}</button></article>`;
 }
 
 function artworkPlaceholder(className, label) {
@@ -2270,8 +2293,37 @@ document.addEventListener('click', async (event) => {
     toggle.setAttribute('aria-expanded', String(!expanded));
     toggle.title = expanded ? '展开任务' : '收起任务';
   }
+  const overviewSelectionToggle = event.target.closest('#overview-selection-toggle');
+  if (overviewSelectionToggle) {
+    state.overviewSelectionMode = !state.overviewSelectionMode;
+    if (!state.overviewSelectionMode) state.selectedOverviewTasks.clear();
+    renderOverview();
+    return;
+  }
+  const overviewSelect = event.target.closest('[data-overview-select-ids]');
+  if (overviewSelect) {
+    toggleOverviewSelection(overviewTaskIds(overviewSelect.dataset.overviewSelectIds));
+    renderOverview();
+    return;
+  }
+  const overviewSelectAll = event.target.closest('[data-overview-select-all]');
+  if (overviewSelectAll) {
+    const ids = [...document.querySelectorAll('[data-overview-task-ids]')].flatMap((card) => overviewTaskIds(card.dataset.overviewTaskIds));
+    const allSelected = ids.length > 0 && ids.every((id) => state.selectedOverviewTasks.has(id));
+    ids.forEach((id) => allSelected ? state.selectedOverviewTasks.delete(id) : state.selectedOverviewTasks.add(id));
+    renderOverview();
+    return;
+  }
   const detail = event.target.closest('[data-task-detail]');
-  if (detail) openTaskDetail(detail.dataset.taskDetail);
+  if (detail) {
+    const overviewCard = detail.closest('[data-overview-task]');
+    if (state.overviewSelectionMode && overviewCard) {
+      toggleOverviewSelection(overviewTaskIds(overviewCard.dataset.overviewTaskIds));
+      renderOverview();
+      return;
+    }
+    openTaskDetail(detail.dataset.taskDetail);
+  }
   const retryImages = event.target.closest('[data-retry-task-images]');
   if (retryImages) {
     retryImages.disabled = true;

@@ -104,6 +104,8 @@ _CRAWLER_TEST_SCRIPT = r'''
 import importlib
 import json
 import logging
+import os
+from pathlib import Path
 import sys
 
 MARKER = "JAVSP_WEB_CRAWLER_TEST "
@@ -112,7 +114,9 @@ name, input_value = sys.argv[-2:]
 result = {"crawler": name, "input_value": input_value, "data": {}, "error": ""}
 try:
     from javsp.datatype import MovieInfo
-    module_name = "javsp.web." + name if name in {
+    custom_dir_value = os.environ.get("JAVSP_WEB_CUSTOM_CRAWLERS_DIR", "")
+    custom_path = Path(custom_dir_value) / f"{name}.py" if custom_dir_value else None
+    module_name = name if custom_path and custom_path.is_file() else "javsp.web." + name if name in {
         "airav", "avsox", "avwiki", "dl_getchu", "fanza", "fc2", "fc2fan", "fc2ppvdb", "gyutto",
         "jav321", "javbus", "javdb", "javlib", "javmenu", "mgstage", "njav", "prestige", "arzon", "arzon_iv",
     } else name
@@ -867,6 +871,7 @@ def test_crawler(body: CrawlerTestBody, _: dict = Depends(require_admin)) -> dic
             config_path = config_file.name
         env = os.environ.copy()
         env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+        env["JAVSP_WEB_CUSTOM_CRAWLERS_DIR"] = str(CUSTOM_CRAWLERS_DIR)
         settings = get_cookiecloud_settings(include_password=True)
         if settings.get("enabled"):
             try:

@@ -68,12 +68,18 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .task-google-cover { width: auto; }
 .overview-cover-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; padding: 9px 11px; border: 1px solid #eaecf0; border-radius: 6px; background: #f8fafc; }
 .overview-cover-toolbar .check-label { margin: 0; }
-.overview-cover-toolbar .button { margin-left: auto; }
+.overview-selection-toggle { margin-left: auto; }
+.overview-selection-tools { display: flex; align-items: center; gap: 8px; }
+.overview-selection-tools .button { margin-left: 0; }
+.overview-selection-toggle svg,
+.overview-selection-tools .icon-button svg,
+.overview-cover-select svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.overview-selection-toggle.active,
+.overview-cover-select.selected { color: #175cd3; background: #eff8ff; border-color: #175cd3; }
 .overview-cover-card { position: relative; }
-.overview-cover-card.selected .overview-cover img { box-shadow: 0 0 0 3px #175cd3; }
-.overview-cover-select { position: absolute; z-index: 2; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 5px; background: #fff; box-shadow: 0 2px 8px #10182833; cursor: pointer; }
-.overview-cover-select input { width: 16px; height: 16px; margin: 0; }
-@media(max-width:560px){.overview-cover-toolbar{align-items:stretch}.overview-cover-toolbar .button{width:100%;margin-left:0}}
+.overview-cover-card.selected .overview-cover { box-shadow: 0 0 0 3px #175cd3; }
+.overview-cover-select { position: absolute; z-index: 2; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid #d0d5dd; border-radius: 5px; background: #fff; box-shadow: 0 2px 8px #10182833; cursor: pointer; }
+@media(max-width:560px){.overview-cover-toolbar{align-items:stretch}.overview-selection-toggle{margin-left:0}.overview-selection-tools{width:100%;justify-content:space-between}.overview-selection-tools .button{width:auto}}
 
 .detail-fanart-empty {
   display: grid;
