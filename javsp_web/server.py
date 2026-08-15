@@ -239,6 +239,11 @@ class AutoScrapeRuleBody(BaseModel):
     preset_id: str = Field(default="default", max_length=128)
 
 
+class DownloadAutoScrapePathCheckBody(BaseModel):
+    tags: str = Field(default="", max_length=512)
+    category: str = Field(default="", max_length=256)
+
+
 class AutoScrapeScheduleBody(BaseModel):
     name: str = Field(default="", max_length=80)
     enabled: bool = True
@@ -1333,6 +1338,10 @@ def _auto_scrape_rules(management: dict) -> list[dict]:
 def _auto_scrape_match(item: dict, rule: dict) -> bool:
     if not rule.get("enabled") or float(item.get("progress", 0) or 0) < 100:
         return False
+    return _auto_scrape_download_matches(item, rule)
+
+
+def _auto_scrape_download_matches(item: dict, rule: dict) -> bool:
     tags = {value.strip() for value in str(rule.get("tags") or "").split(",") if value.strip()}
     item_tags = {value.strip() for value in str(item.get("tags") or "").split(",") if value.strip()}
     category = str(rule.get("category") or "").strip()
@@ -1355,6 +1364,40 @@ def _map_download_path(source_path: str, mappings: list[dict]) -> str:
             suffix = source[len(source_root):].lstrip("/")
             return os.path.normpath(os.path.join(target_root, *suffix.split("/"))) if suffix else os.path.normpath(target_root)
     return source_path
+
+
+def _check_download_auto_scrape_path(rule: dict) -> dict:
+    """Probe current qBittorrent paths before a download-auto-scrape rule is added."""
+    mappings = list_path_mappings()
+    candidates = 0
+    accessible = 0
+    issues: list[str] = []
+    for downloader in list_downloaders():
+        try:
+            downloads = list_downloads(downloader)
+        except QbittorrentError as exc:
+            issues.append(f"{downloader.get('name') or '下载器'} 无法读取：{exc}")
+            continue
+        for item in downloads:
+            if not _auto_scrape_download_matches(item, rule):
+                continue
+            source_path = str(item.get("content_path") or "").strip()
+            if not source_path:
+                continue
+            candidates += 1
+            mapped_path = _map_download_path(source_path, mappings)
+            if os.path.exists(mapped_path):
+                accessible += 1
+            else:
+                name = str(item.get("name") or item.get("hash") or "未命名任务")
+                issues.append(f"{name}：{source_path} 无法映射到当前环境可访问的文件")
+    return {
+        "ok": not any("无法映射" in issue for issue in issues),
+        "candidates": candidates,
+        "accessible": accessible,
+        "issues": issues,
+        "message": "未找到可验证的现有下载任务；规则已允许创建，首个匹配任务会再次校验路径。" if not candidates else "路径映射可识别当前匹配下载任务。",
+    }
 
 
 def _auto_scrape_downloads(downloader: dict, downloads: list[dict], management: dict) -> None:
@@ -1383,7 +1426,18 @@ def _auto_scrape_downloads(downloader: dict, downloads: list[dict], management: 
             created = create_tasks(mapped_path, preset_id, source="download")
         except ValueError:
             continue
-        history[key] = {"created_at": now_iso(), "path": mapped_path, "preset_id": preset_id, "task_ids": [task["id"] for task in created]}
+        history[key] = {
+            "id": key,
+            "created_at": now_iso(),
+            "downloader_id": str(downloader.get("id") or ""),
+            "downloader_name": str(downloader.get("name") or "下载器"),
+            "rule_id": str(rule.get("id") or ""),
+            "download_name": str(item.get("name") or ""),
+            "download_path": str(item.get("content_path") or ""),
+            "path": mapped_path,
+            "preset_id": preset_id,
+            "task_ids": [task["id"] for task in created],
+        }
         changed = True
     if changed:
         save_auto_scrape_history(history)
@@ -1407,6 +1461,21 @@ def _auto_remove_downloads(settings: dict, downloads: list[dict], management: di
 @app.get("/api/downloads/settings")
 def get_download_management(_: dict = Depends(require_admin)) -> dict:
     return _public_qbittorrent_management(get_qbittorrent_management())
+
+
+@app.post("/api/downloads/auto-scrape/path-check")
+def check_download_auto_scrape_path(body: DownloadAutoScrapePathCheckBody, _: dict = Depends(require_admin)) -> dict:
+    return _check_download_auto_scrape_path({"enabled": True, "tags": body.tags.strip(), "category": body.category.strip()})
+
+
+@app.get("/api/download-auto-scrape-runs")
+def download_auto_scrape_runs(_: dict = Depends(require_admin)) -> list[dict]:
+    runs = [
+        {**entry, "id": str(entry.get("id") or run_id)}
+        for run_id, entry in load_auto_scrape_history().items()
+        if isinstance(entry, dict)
+    ]
+    return sorted(runs, key=lambda item: str(item.get("created_at") or ""), reverse=True)
 
 
 @app.put("/api/downloads/settings")

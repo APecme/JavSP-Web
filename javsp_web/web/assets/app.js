@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
@@ -1840,8 +1840,30 @@ async function loadAutoScrapeSchedules() {
     state.autoScrapeSchedules = await api('/api/auto-scrape-schedules');
     renderAutoScrapeSchedules();
     renderAutoScrapeRunButtons();
+    await loadDownloadAutoScrapeRuns();
     if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeRun) await refreshAutoScrapeRun();
     if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
+  } catch (error) {
+    target.classList.add('empty');
+    target.textContent = error.message;
+  }
+}
+
+function renderDownloadAutoScrapeRuns() {
+  const target = $('#download-auto-scrape-run-list');
+  if (!target) return;
+  const runs = state.downloadAutoScrapeRuns || [];
+  target.classList.toggle('empty', !runs.length);
+  target.innerHTML = runs.length ? runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(run.download_name || run.path || '下载任务')}</strong><p class="muted">${escapeHtml(run.downloader_name || '下载器')} · ${escapeHtml(formatLocalDateTime(run.created_at) || '')}</p><p class="muted">${escapeHtml(run.path || run.download_path || '')}</p>${autoScrapeRunCountsMarkup(run)}</div><div class="auto-scrape-history-actions"><button class="icon-button" type="button" data-view-download-auto-scrape-run="${escapeHtml(run.id || '')}">查看任务日志 (${Array.isArray(run.task_ids) ? run.task_ids.length : 0})</button></div></article>`).join('') : '<div class="task-list empty">下载完成后创建的刮削任务会显示在这里。</div>';
+}
+
+async function loadDownloadAutoScrapeRuns() {
+  const target = $('#download-auto-scrape-run-list');
+  if (!target) return;
+  try {
+    state.downloadAutoScrapeRuns = await api('/api/download-auto-scrape-runs');
+    renderDownloadAutoScrapeRuns();
+    if ($('#auto-scrape-run-dialog')?.open && state.activeDownloadAutoScrapeRun) await refreshDownloadAutoScrapeRun();
   } catch (error) {
     target.classList.add('empty');
     target.textContent = error.message;
@@ -1902,11 +1924,38 @@ async function refreshAutoScrapeRun() {
 }
 
 async function openAutoScrapeRun(scheduleId, runId) {
+  state.activeDownloadAutoScrapeRun = null;
   state.activeAutoScrapeHistory = null;
   state.activeAutoScrapeRun = { scheduleId, runId };
   $('#auto-scrape-run-content').innerHTML = '';
   $('#auto-scrape-run-dialog').showModal();
   await refreshAutoScrapeRun();
+}
+
+async function refreshDownloadAutoScrapeRun() {
+  const runId = state.activeDownloadAutoScrapeRun;
+  const dialog = $('#auto-scrape-run-dialog');
+  const run = state.downloadAutoScrapeRuns.find((item) => item.id === runId);
+  if (!run || !dialog?.open) return;
+  const taskIds = Array.isArray(run.task_ids) ? run.task_ids.map(String) : [];
+  const known = new Map(state.tasks.map((task) => [String(task.id), task]));
+  const missing = taskIds.filter((taskId) => !known.has(taskId));
+  const fetched = await Promise.all(missing.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
+  if (!dialog.open || state.activeDownloadAutoScrapeRun !== runId) return;
+  const tasks = taskIds.map((taskId) => known.get(taskId) || fetched.find((task) => String(task?.id) === taskId)).filter(Boolean);
+  syncTaskExpansion(tasks);
+  $('#auto-scrape-run-title').textContent = `${run.download_name || '下载任务'} - 任务日志`;
+  $('#auto-scrape-run-subtitle').textContent = `${run.downloader_name || '下载器'} · ${formatLocalDateTime(run.created_at) || ''}`;
+  $('#auto-scrape-run-content').innerHTML = tasks.length ? tasks.map(scheduleRunTaskMarkup).join('') : '<p class="muted">关联任务已删除，无法查看日志。</p>';
+}
+
+async function openDownloadAutoScrapeRun(runId) {
+  state.activeAutoScrapeRun = null;
+  state.activeAutoScrapeHistory = null;
+  state.activeDownloadAutoScrapeRun = runId;
+  $('#auto-scrape-run-content').innerHTML = '';
+  $('#auto-scrape-run-dialog').showModal();
+  await refreshDownloadAutoScrapeRun();
 }
 
 function autoScrapeRunCounts(run) {
@@ -1939,6 +1988,7 @@ function renderAutoScrapeHistory(scheduleId) {
 }
 
 function openAutoScrapeHistory(scheduleId) {
+  state.activeDownloadAutoScrapeRun = null;
   const schedule = state.autoScrapeSchedules.find((item) => item.id === scheduleId);
   if (!schedule) return;
   state.activeAutoScrapeRun = null;
@@ -1947,7 +1997,7 @@ function openAutoScrapeHistory(scheduleId) {
   $('#auto-scrape-run-dialog').showModal();
 }
 
-$('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; state.activeAutoScrapeHistory = null; });
+$('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; state.activeAutoScrapeHistory = null; state.activeDownloadAutoScrapeRun = null; });
 
 function renderAutoScrapeSchedulePresets(selectedId = 'default') {
   const select = $('#auto-scrape-schedule-preset');
@@ -2230,6 +2280,14 @@ document.addEventListener('click', async (event) => {
       if (target) target.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
     });
   }
+  const viewDownloadAutoScrapeRunButton = event.target.closest('[data-view-download-auto-scrape-run]');
+  if (viewDownloadAutoScrapeRunButton) {
+    openDownloadAutoScrapeRun(viewDownloadAutoScrapeRunButton.dataset.viewDownloadAutoScrapeRun).catch((error) => {
+      const target = $('#auto-scrape-run-content');
+      if (target) target.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+    });
+    return;
+  }
   const deleteAutoScrapeRunButton = event.target.closest('[data-delete-auto-scrape-run]');
   if (deleteAutoScrapeRunButton) {
     const scheduleId = deleteAutoScrapeRunButton.dataset.deleteAutoScrapeRun;
@@ -2268,8 +2326,15 @@ document.addEventListener('click', async (event) => {
   }
   const addAutoScrapeRule = event.target.closest('#add-auto-scrape-rule');
   if (addAutoScrapeRule) {
-    state.autoScrapeRules = [...readAutoScrapeRules(), newAutoScrapeRule()];
-    renderAutoScrapeRules(state.autoScrapeRules);
+    const message = $('#download-management-message');
+    addAutoScrapeRule.disabled = true;
+    api('/api/downloads/auto-scrape/path-check', { method: 'POST', body: JSON.stringify({ tags: '', category: '' }) }).then((result) => {
+      if (!result.ok) { message.textContent = `路径映射检查失败：${(result.issues || []).join('；')}`; return; }
+      state.autoScrapeRules = [...readAutoScrapeRules(), newAutoScrapeRule()];
+      renderAutoScrapeRules(state.autoScrapeRules);
+      message.textContent = result.message || '路径映射检查通过';
+    }).catch((error) => { message.textContent = `路径映射检查失败：${error.message}`; }).finally(() => { addAutoScrapeRule.disabled = false; });
+    return;
   }
   const removeAutoScrapeRule = event.target.closest('[data-remove-auto-scrape-rule]');
   if (removeAutoScrapeRule) {

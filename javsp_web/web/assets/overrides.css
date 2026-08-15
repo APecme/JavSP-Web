@@ -347,6 +347,13 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .auto-scrape-history-row > div { min-width: 0; }
 .auto-scrape-history-row strong { display: block; color: #101828; font-size: 13px; }
 .auto-scrape-history-row .muted { overflow-wrap: anywhere; }
+.cookiecloud-panel { padding: 0; }
+.cookiecloud-panel > summary { cursor: pointer; list-style: none; padding: 16px 18px; }
+.cookiecloud-panel > summary::-webkit-details-marker { display: none; }
+.cookiecloud-panel > summary::after { content: '+'; color: #667085; font-size: 18px; font-weight: 500; }
+.cookiecloud-panel[open] > summary { border-bottom: 1px solid #eaecf0; }
+.cookiecloud-panel[open] > summary::after { content: '-'; }
+.cookiecloud-panel > form { padding: 16px 18px 18px; }
 .auto-scrape-run-counts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 11px; font-variant-numeric: tabular-nums; }
 .auto-scrape-run-counts span { padding: 3px 7px; border-radius: 4px; background: #f2f4f7; color: #475467; font-weight: 600; }
 .auto-scrape-run-counts .run-total { background: #eff8ff; color: #175cd3; }
