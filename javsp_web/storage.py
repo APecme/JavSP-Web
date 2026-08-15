@@ -32,6 +32,7 @@ AUTO_SCRAPE_SCHEDULES_FILE = DATA_DIR / "auto-scrape-schedules.json"
 MEDIA_SERVERS_FILE = DATA_DIR / "media-servers.json"
 COOKIECLOUD_FILE = DATA_DIR / "cookiecloud.json"
 CUSTOM_CRAWLERS_DIR = DATA_DIR / "crawlers"
+CRAWLER_SETTINGS_FILE = DATA_DIR / "crawler-settings.json"
 _lock = threading.RLock()
 
 
@@ -148,6 +149,18 @@ def delete_user(username: str) -> bool:
 def read_config() -> str:
     ensure_seed_data()
     return CONFIG_FILE.read_text(encoding="utf-8")
+
+
+def get_disabled_built_in_crawlers() -> set[str]:
+    with _lock:
+        settings = _read_json(CRAWLER_SETTINGS_FILE, {})
+        names = settings.get("disabled_built_ins", []) if isinstance(settings, dict) else []
+        return {str(name).strip() for name in names if str(name).strip()}
+
+
+def save_disabled_built_in_crawlers(names: set[str]) -> None:
+    with _lock:
+        _write_json(CRAWLER_SETTINGS_FILE, {"disabled_built_ins": sorted(names)})
 
 
 def write_config(content: str) -> None:

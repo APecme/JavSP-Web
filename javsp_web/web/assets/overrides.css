@@ -83,6 +83,9 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .crawler-code-list-delete { flex: 0 0 30px; width: 30px; min-height: 0; padding: 0; color: #b42318; }
 .crawler-code-list-delete:hover { border-color: #fecdca; background: #fef3f2; color: #b42318; }
 .crawler-code-list-delete svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.crawler-code-disabled { margin-top: 12px; padding-top: 10px; border-top: 1px solid #eaecf0; }
+.crawler-code-disabled .muted { margin: 0 0 6px; }
+.crawler-code-item.disabled { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; border: 1px solid #eaecf0; color: #667085; background: #f9fafb; }
 @media(max-width:560px){.overview-cover-toolbar{align-items:stretch}.overview-selection-tools{width:auto}}
 
 .detail-fanart-empty {

@@ -21,7 +21,7 @@ import yaml
 import requests
 from PIL import Image, ImageOps
 
-from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, get_cookiecloud_settings, get_preset, load_tasks, read_config, save_tasks
+from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, get_cookiecloud_settings, get_disabled_built_in_crawlers, get_preset, load_tasks, read_config, save_tasks
 from .config_validation import load_base_config, validate_config_data
 from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
 from .timeutils import now_iso
@@ -147,6 +147,12 @@ def _preset_config_data(preset_id: str) -> tuple[dict, dict]:
             data = _deep_merge(data, preset.get("form") or {})
     except yaml.YAMLError as exc:
         raise ValueError(f"预设 YAML 格式错误: {exc}") from exc
+    selection = ((data.get("crawler") or {}).get("selection") or {})
+    disabled = get_disabled_built_in_crawlers()
+    if isinstance(selection, dict) and disabled:
+        for group, names in selection.items():
+            if isinstance(names, list):
+                selection[group] = [name for name in names if str(name) not in disabled]
     try:
         validate_config_data(data)
     except ValueError as exc:
@@ -471,8 +477,8 @@ def list_tasks() -> list[dict]:
     with _lock:
         items = load_tasks()
         for item in items:
-            item["file_name"] = _task_name(item.get("input_directory", ""))
-            item["size_bytes"] = _file_size(item.get("input_directory", ""))
+            item["file_name"] = str(item.get("file_name") or _task_name(item.get("input_directory", "")))
+            item["size_bytes"] = int(item.get("size_bytes") or _file_size(item.get("input_directory", "")))
             cleaned_logs = _clean_log_lines((_logs.get(item["id"]) or item.get("log_tail") or [])[-_MAX_LOG_LINES:])
             item["progress"] = _task_progress(item, cleaned_logs)
             image_progress = item["progress"]
@@ -503,8 +509,9 @@ def list_tasks() -> list[dict]:
                         images["fanart_done"] = images["fanart_total"]
             output = image_progress.get("output") or {}
             fallback_cover = _TASK_COVERS_DIR / f"{item['id']}.jpg"
-            item["cover_count"] = len(_cover_paths(item.get("input_directory", ""), output)) + int(fallback_cover.is_file())
-            item["fanart_count"] = len(_fanart_paths(item.get("input_directory", ""), output))
+            poster_file = Path(str(output.get("poster_file") or ""))
+            item["cover_count"] = int(poster_file.is_file()) + int(fallback_cover.is_file() and fallback_cover != poster_file)
+            item["fanart_count"] = int(image_progress.get("images", {}).get("fanart_done") or 0)
             sources = image_progress.get("image_sources", {})
             has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
             expected_fanart = len(sources.get("preview_pics") or [])
@@ -517,7 +524,8 @@ def list_tasks() -> list[dict]:
                 and images_incomplete
                 and not item.get("image_retry_running")
             )
-            item["restore_available"] = _restore_plan(item) is not None
+            organizer = item.get("file_organizer") if isinstance(item.get("file_organizer"), dict) else {}
+            item["restore_available"] = bool(organizer.get("original_files") and organizer.get("organized_files"))
         active = [item for item in items if item.get("status") in {"queued", "running"}]
         completed = [item for item in items if item.get("status") not in {"queued", "running"}]
         # Keep the live queue in its recorded enqueue order even after _persist rewrites tasks.json.
@@ -757,6 +765,8 @@ def create_task(
     task = {
         "id": task_id,
         "name": _task_name(input_directory),
+        "file_name": _task_name(input_directory),
+        "size_bytes": _file_size(input_directory),
         "input_directory": input_directory,
         "status": "queued",
         "created_at": now_iso(),

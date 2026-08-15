@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const CRAWLER_GROUPS = { normal: '普通影片', fc2: 'FC2', cid: 'CID', getchu: 'Getchu', gyutto: 'Gyutto' };
@@ -334,14 +334,15 @@ function crawlerConfigMarkup(selection = {}) {
 }
 
 function crawlerConfigTagsMarkup(selection = {}) {
+  const disabled = new Set(state.disabledBuiltInCrawlers || []);
   const knownNames = [...new Set([
     ...CRAWLER_IDS,
     ...(state.crawlerSources || []).map((crawler) => String(crawler?.name || '')),
     ...Object.values(selection || {}).flatMap((names) => Array.isArray(names) ? names : []),
-  ].filter((name) => /^[a-z][a-z0-9_]*$/.test(name)))].sort();
+  ].filter((name) => /^[a-z][a-z0-9_]*$/.test(name) && !disabled.has(name)))].sort();
   const options = knownNames.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
   return Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
-    const selected = Array.isArray(selection[group]) ? selection[group].map((name) => String(name).trim()).filter(Boolean) : [];
+    const selected = Array.isArray(selection[group]) ? selection[group].map((name) => String(name).trim()).filter((name) => name && !disabled.has(name)) : [];
     const tags = selected.map((name) => `<span class="crawler-tag" data-crawler-value="${escapeHtml(name)}"><code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button></span>`).join('');
     return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}\u722c\u866b</h3><div class="crawler-config-list crawler-tag-list">${tags}</div><div class="crawler-add"><input class="crawler-add-input" list="crawler-name-options" maxlength="80" autocomplete="off" placeholder="\u8f93\u5165\u722c\u866b\u540d\u79f0"><button class="icon-button crawler-add-button" type="button" title="\u6dfb\u52a0\u722c\u866b" aria-label="\u6dfb\u52a0\u722c\u866b">+</button><datalist id="crawler-name-options">${options}</datalist></div></div>`;
   }).join('');
@@ -351,6 +352,7 @@ async function loadCrawlerNames() {
   try {
     const result = await api('/api/crawler-config/names');
     state.crawlerSources = result.crawlers || [];
+    state.disabledBuiltInCrawlers = result.disabled_built_ins || [];
     if (state.presetMode === 'form') renderConfigFields();
   } catch (_) { /* Manual input remains available when the name list cannot load. */ }
 }
@@ -362,19 +364,38 @@ async function loadCrawlerConfig() {
   try {
     const result = await api('/api/crawler-config');
     state.crawlerSources = result.crawlers || [];
+    state.disabledBuiltInCrawlers = result.disabled_built_ins || [];
     host.innerHTML = crawlerCodeMarkup(state.crawlerSources);
+    if (state.crawlerSources[0]) loadCrawlerSource(state.crawlerSources[0].name);
   } catch (error) { host.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`; }
 }
 
 function crawlerCodeMarkup(crawlers) {
   const items = Array.isArray(crawlers) ? crawlers : [];
   const selected = items[0] || null;
-  return `<section class="crawler-code-editor"><div class="crawler-code-heading"><div><h3>爬虫代码</h3><p class="muted">内置爬虫可查看；自定义爬虫保存到数据目录，选择进刮削预设后生效。</p></div><button class="button secondary" type="button" id="add-custom-crawler">添加爬虫</button></div><div class="crawler-code-layout"><div id="crawler-code-list" class="crawler-code-list">${items.map((item, index) => `<div class="crawler-code-list-row"><button type="button" class="crawler-code-item${index ? '' : ' active'}" data-crawler-code-name="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong><span>${item.kind === 'custom' ? '自定义' : '内置'}</span></button>${item.kind === 'custom' ? `<button class="icon-button crawler-code-list-delete" type="button" data-delete-custom-crawler="${escapeHtml(item.name)}" title="删除 ${escapeHtml(item.name)}" aria-label="删除 ${escapeHtml(item.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button>` : ''}</div>`).join('') || '<p class="muted">没有可用爬虫。</p>'}</div><div id="crawler-code-detail" class="crawler-code-detail">${selected ? crawlerCodeDetail(selected) : ''}</div></div></section>`;
+  const disabled = (state.disabledBuiltInCrawlers || []).map((name) => `<div class="crawler-code-list-row"><span class="crawler-code-item disabled"><strong>${escapeHtml(name)}</strong><span>已移除</span></span><button class="icon-button" type="button" data-restore-built-in-crawler="${escapeHtml(name)}" title="恢复 ${escapeHtml(name)}" aria-label="恢复 ${escapeHtml(name)}">恢复</button></div>`).join('');
+  return `<section class="crawler-code-editor"><div class="crawler-code-heading"><div><h3>爬虫代码</h3><p class="muted">选择爬虫后再读取代码；内置爬虫可移除并随时恢复。</p></div><button class="button secondary" type="button" id="add-custom-crawler">添加爬虫</button></div><div class="crawler-code-layout"><div id="crawler-code-list" class="crawler-code-list">${items.map((item, index) => `<div class="crawler-code-list-row"><button type="button" class="crawler-code-item${index ? '' : ' active'}" data-crawler-code-name="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong><span>${item.kind === 'custom' ? '自定义' : '内置'}</span></button>${item.kind === 'custom' ? `<button class="icon-button crawler-code-list-delete" type="button" data-delete-custom-crawler="${escapeHtml(item.name)}" title="删除 ${escapeHtml(item.name)}" aria-label="删除 ${escapeHtml(item.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button>` : ''}</div>`).join('') || '<p class="muted">没有可用爬虫。</p>'}${disabled ? `<div class="crawler-code-disabled"><p class="muted">已移除的内置爬虫</p>${disabled}</div>` : ''}</div><div id="crawler-code-detail" class="crawler-code-detail">${selected ? crawlerCodeDetail(selected) : ''}</div></div></section>`;
 }
 
-function crawlerCodeDetail(crawler) {
+function crawlerCodeDetail(crawler, source = null) {
   const editable = crawler.kind === 'custom';
-  return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${editable ? `<button class="button danger" type="button" data-delete-custom-crawler="${escapeHtml(crawler.name)}">删除</button>` : ''}</div><label class="config-field"><span class="config-field-name">爬虫名称</span><input id="crawler-code-name" value="${escapeHtml(crawler.name)}"${editable ? '' : ' disabled'}></label><label class="config-field"><span class="config-field-name">Python 代码</span><textarea id="crawler-code-source" class="code-editor" spellcheck="false"${editable ? '' : ' readonly'}>${escapeHtml(crawler.source || '')}</textarea></label>${editable ? '<div class="form-actions"><button class="button primary" type="button" id="save-custom-crawler">保存爬虫代码</button><span id="crawler-code-message" class="form-message"></span></div>' : ''}<section class="crawler-test-panel"><div><h4>爬虫测试</h4><p class="muted">使用当前网络与代理配置，单独抓取一次。</p></div><label class="config-field"><span class="config-field-name">测试输入</span><input id="crawler-test-input" maxlength="256" placeholder="例如 DANDYA-044"></label><div class="form-actions"><button class="button secondary" type="button" data-test-crawler="${escapeHtml(crawler.name)}">测试爬虫</button><span id="crawler-test-message" class="form-message"></span></div><div id="crawler-test-result" class="crawler-test-result hidden"><details open><summary>抓取结果</summary><pre id="crawler-test-data" class="crawler-test-output"></pre></details><details id="crawler-test-output-wrap"><summary>运行输出</summary><pre id="crawler-test-output" class="crawler-test-output"></pre></details></div></section>`;
+  const actions = editable ? `<button class="button danger" type="button" data-delete-custom-crawler="${escapeHtml(crawler.name)}">删除</button>` : `<button class="button danger" type="button" data-disable-built-in-crawler="${escapeHtml(crawler.name)}">删除</button>`;
+  if (source === null) return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${actions}</div><p class="muted">正在读取爬虫代码...</p>`;
+  return `<div class="crawler-code-detail-head"><strong>${escapeHtml(crawler.name)}</strong><span>${editable ? '自定义爬虫' : '内置爬虫（只读）'}</span>${actions}</div><label class="config-field"><span class="config-field-name">爬虫名称</span><input id="crawler-code-name" value="${escapeHtml(crawler.name)}"${editable ? '' : ' disabled'}></label><label class="config-field"><span class="config-field-name">Python 代码</span><textarea id="crawler-code-source" class="code-editor" spellcheck="false"${editable ? '' : ' readonly'}>${escapeHtml(source)}</textarea></label>${editable ? '<div class="form-actions"><button class="button primary" type="button" id="save-custom-crawler">保存爬虫代码</button><span id="crawler-code-message" class="form-message"></span></div>' : ''}<section class="crawler-test-panel"><div><h4>爬虫测试</h4><p class="muted">使用当前网络与代理配置，单独抓取一次。</p></div><label class="config-field"><span class="config-field-name">测试输入</span><input id="crawler-test-input" maxlength="256" placeholder="例如 DANDYA-044"></label><div class="form-actions"><button class="button secondary" type="button" data-test-crawler="${escapeHtml(crawler.name)}">测试爬虫</button><span id="crawler-test-message" class="form-message"></span></div><div id="crawler-test-result" class="crawler-test-result hidden"><details open><summary>抓取结果</summary><pre id="crawler-test-data" class="crawler-test-output"></pre></details><details id="crawler-test-output-wrap"><summary>运行输出</summary><pre id="crawler-test-output" class="crawler-test-output"></pre></details></div></section>`;
+}
+
+async function loadCrawlerSource(name) {
+  const crawler = (state.crawlerSources || []).find((item) => item.name === name);
+  const detail = $('#crawler-code-detail');
+  if (!crawler || !detail) return;
+  state.activeCrawlerCodeName = name;
+  detail.innerHTML = crawlerCodeDetail(crawler);
+  try {
+    const source = await api(`/api/crawler-config/${encodeURIComponent(name)}`);
+    if (state.activeCrawlerCodeName === name) detail.innerHTML = crawlerCodeDetail(source, source.source || '');
+  } catch (error) {
+    if (state.activeCrawlerCodeName === name) detail.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+  }
 }
 
 async function api(path, options = {}) {
@@ -2191,14 +2212,14 @@ document.addEventListener('click', async (event) => {
   const crawlerCodeItem = event.target.closest('[data-crawler-code-name]');
   if (crawlerCodeItem) {
     document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.toggle('active', item === crawlerCodeItem));
-    const crawler = (state.crawlerSources || []).find((item) => item.name === crawlerCodeItem.dataset.crawlerCodeName);
-    if (crawler) $('#crawler-code-detail').innerHTML = crawlerCodeDetail(crawler);
+    loadCrawlerSource(crawlerCodeItem.dataset.crawlerCodeName);
     return;
   }
   if (event.target.closest('#add-custom-crawler')) {
     const name = `custom_${Date.now()}`;
     const crawler = { name, kind: 'custom', source: 'from javsp.datatype import MovieInfo\n\n\ndef parse_data(movie: MovieInfo):\n    # Populate movie fields here, or raise MovieNotFoundError.\n    raise NotImplementedError("Implement this crawler")\n' };
-    $('#crawler-code-detail').innerHTML = crawlerCodeDetail(crawler);
+    state.activeCrawlerCodeName = '';
+    $('#crawler-code-detail').innerHTML = crawlerCodeDetail(crawler, crawler.source);
     document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.remove('active'));
     return;
   }
@@ -2249,6 +2270,20 @@ document.addEventListener('click', async (event) => {
   if (deleteCustomCrawler) {
     const name = deleteCustomCrawler.dataset.deleteCustomCrawler;
     confirmAction({ title: '删除自定义爬虫', text: `确定删除自定义爬虫“${name}”吗？已在预设中引用它的任务将无法加载该爬虫。`, confirmLabel: '删除爬虫', danger: true, run: async () => { await api(`/api/crawler-config/custom/${encodeURIComponent(name)}`, { method: 'DELETE' }); await loadCrawlerConfig(); } });
+    return;
+  }
+  const disableBuiltInCrawler = event.target.closest('[data-disable-built-in-crawler]');
+  if (disableBuiltInCrawler) {
+    const name = disableBuiltInCrawler.dataset.disableBuiltInCrawler;
+    confirmAction({ title: '删除内置爬虫', text: `确定从可用爬虫中移除“${name}”吗？不会删除镜像文件，可随时恢复；已有预设和新任务也不会再使用它。`, confirmLabel: '删除爬虫', danger: true, run: async () => { await api(`/api/crawler-config/built-in/${encodeURIComponent(name)}`, { method: 'DELETE' }); await loadCrawlerConfig(); await loadCrawlerNames(); } });
+    return;
+  }
+  const restoreBuiltInCrawler = event.target.closest('[data-restore-built-in-crawler]');
+  if (restoreBuiltInCrawler) {
+    const name = restoreBuiltInCrawler.dataset.restoreBuiltInCrawler;
+    await api(`/api/crawler-config/built-in/${encodeURIComponent(name)}/restore`, { method: 'POST' });
+    await loadCrawlerConfig();
+    await loadCrawlerNames();
     return;
   }
   const closeButton = event.target.closest('[data-dialog-close]');

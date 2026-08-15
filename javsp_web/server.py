@@ -36,6 +36,7 @@ from .storage import (
     ensure_seed_data,
     find_user,
     get_preset,
+    get_disabled_built_in_crawlers,
     get_qbittorrent_settings,
     get_cookiecloud_settings,
     get_qbittorrent_management,
@@ -55,6 +56,7 @@ from .storage import (
     save_preset,
     save_qbittorrent_settings,
     save_cookiecloud_settings,
+    save_disabled_built_in_crawlers,
     save_downloaders,
     save_path_mappings,
     save_auto_scrape_history,
@@ -560,21 +562,43 @@ _CRAWLER_IDS = {
 }
 
 
-def _crawler_sources() -> list[dict]:
-    sources: list[dict] = []
+def _built_in_crawler_paths() -> dict[str, Path]:
+    crawlers: dict[str, Path] = {}
     web_dir = VENDOR_DIR / "javsp" / "web"
     for path in sorted(web_dir.glob("*.py")):
         if path.stem.startswith("_") or path.stem in {"base", "exceptions", "proxyfree", "translate"}:
             continue
-        sources.append({"name": path.stem, "kind": "built_in", "source": path.read_text(encoding="utf-8")})
+        crawlers[path.stem] = path
+    return crawlers
+
+
+def _crawler_catalog() -> list[dict]:
+    disabled = get_disabled_built_in_crawlers()
+    sources = [
+        {"name": name, "kind": "built_in"}
+        for name in _built_in_crawler_paths()
+        if name not in disabled
+    ]
     for path in sorted(CUSTOM_CRAWLERS_DIR.glob("*.py")):
         if not path.stem.startswith("_"):
-            sources.append({"name": path.stem, "kind": "custom", "source": path.read_text(encoding="utf-8")})
+            sources.append({"name": path.stem, "kind": "custom"})
     return sources
 
 
 def _available_crawler_names() -> set[str]:
-    return _CRAWLER_IDS | {item["name"] for item in _crawler_sources() if item["kind"] == "custom"}
+    return {item["name"] for item in _crawler_catalog()}
+
+
+def _crawler_source(name: str) -> dict | None:
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+        return None
+    built_in = _built_in_crawler_paths()
+    if name in built_in and name not in get_disabled_built_in_crawlers():
+        return {"name": name, "kind": "built_in", "source": built_in[name].read_text(encoding="utf-8")}
+    path = (CUSTOM_CRAWLERS_DIR / f"{name}.py").resolve()
+    if path.parent == CUSTOM_CRAWLERS_DIR.resolve() and path.is_file():
+        return {"name": name, "kind": "custom", "source": path.read_text(encoding="utf-8")}
+    return None
 
 
 def _normalize_form(form: dict, base: dict | None = None) -> dict:
@@ -820,15 +844,25 @@ def test_cookiecloud(body: CookieCloudBody, _: dict = Depends(require_admin)) ->
 @app.get("/api/crawler-config")
 def get_crawler_config(_: dict = Depends(current_user)) -> dict:
     return {
-        "crawlers": _crawler_sources(),
+        "crawlers": _crawler_catalog(),
+        "disabled_built_ins": sorted(get_disabled_built_in_crawlers()),
     }
 
 
 @app.get("/api/crawler-config/names")
 def get_crawler_config_names(_: dict = Depends(current_user)) -> dict:
     return {
-        "crawlers": [{"name": item["name"], "kind": item["kind"]} for item in _crawler_sources()],
+        "crawlers": _crawler_catalog(),
+        "disabled_built_ins": sorted(get_disabled_built_in_crawlers()),
     }
+
+
+@app.get("/api/crawler-config/{name}")
+def get_crawler_source(name: str, _: dict = Depends(current_user)) -> dict:
+    crawler = _crawler_source(name)
+    if not crawler:
+        raise HTTPException(status_code=404, detail="爬虫不存在或已移除")
+    return crawler
 
 
 @app.put("/api/crawler-config/custom")
@@ -856,6 +890,26 @@ def delete_custom_crawler(name: str, _: dict = Depends(require_admin)) -> dict:
         raise HTTPException(status_code=404, detail="自定义爬虫不存在")
     path.unlink()
     return {"ok": True}
+
+
+@app.delete("/api/crawler-config/built-in/{name}")
+def disable_built_in_crawler(name: str, _: dict = Depends(require_admin)) -> dict:
+    if name not in _built_in_crawler_paths():
+        raise HTTPException(status_code=404, detail="内置爬虫不存在")
+    disabled = get_disabled_built_in_crawlers()
+    disabled.add(name)
+    save_disabled_built_in_crawlers(disabled)
+    return {"ok": True, "name": name}
+
+
+@app.post("/api/crawler-config/built-in/{name}/restore")
+def restore_built_in_crawler(name: str, _: dict = Depends(require_admin)) -> dict:
+    if name not in _built_in_crawler_paths():
+        raise HTTPException(status_code=404, detail="内置爬虫不存在")
+    disabled = get_disabled_built_in_crawlers()
+    disabled.discard(name)
+    save_disabled_built_in_crawlers(disabled)
+    return {"ok": True, "name": name}
 
 
 @app.post("/api/crawler-config/test")
