@@ -328,7 +328,12 @@ function renderPresetNavigation() {
   const intro = $('.preset-editor-heading .muted');
   if (intro) intro.textContent = '窗口表单按 config.yml 的配置分类组织；每项都有说明和备注。也可以直接使用完整 config.yml。';
   tabs.innerHTML = FORM_TABS.map((tab, index) => `<button class="preset-tab${index === 0 ? ' active' : ''}" type="button" data-preset-tab="${tab.id}">${tab.label}</button>`).join('');
-  panels.innerHTML = FORM_TABS.map((tab, index) => `<section class="preset-tab-panel${index === 0 ? ' active' : ''}" data-preset-panel="${tab.id}"><div class="tab-intro"><strong>${tab.label}</strong><span>对应 config.yml 的 ${tab.section}${tab.prefixes ? `.${tab.prefixes.join('、')}` : ''}，${tab.description}</span></div><div id="preset-fields-${tab.id}" class="config-fields"></div></section>`).join('');
+  panels.innerHTML = FORM_TABS.map((tab, index) => {
+    const description = tab.id === 'media-types'
+      ? tab.description
+      : `对应 config.yml 的 ${tab.section}${tab.prefixes ? `.${tab.prefixes.join('、')}` : ''}，${tab.description}`;
+    return `<section class="preset-tab-panel${index === 0 ? ' active' : ''}" data-preset-panel="${tab.id}"><div class="tab-intro"><strong>${tab.label}</strong><span>${description}</span></div><div id="preset-fields-${tab.id}" class="config-fields"></div></section>`;
+  }).join('');
 }
 
 function renderConfigFields() {
