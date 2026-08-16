@@ -48,10 +48,13 @@ jobs:
           python-version: "3.12"
       - name: Build single-file EXE
         shell: pwsh
-        run: .\build-windows.ps1
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+          python -m PyInstaller --noconfirm --clean JavSPWeb.spec
       - name: Publish release asset
         uses: softprops/action-gh-release@v2
         with:
           name: JavSP WEB ${{ github.ref_name }}
-          body_path: RELEASE_NOTES_v1.1.31.md
+          body_path: RELEASE_NOTES_v1.1.33.md
           files: dist/JavSP-Web.exe

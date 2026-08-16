@@ -213,7 +213,16 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
     # parser直接更新了all_info中的项目，而初始all_info是按照优先级生成的，已经符合配置的优先级顺序了
     # 按照优先级取出各个爬虫获取到的信息
     attrs = [i for i in dir(final_info) if not i.startswith('_')]
-    covers, big_covers = [], []
+    covers, big_covers, preview_pics = [], [], []
+
+    def append_unique_urls(target, incoming):
+        if isinstance(incoming, str):
+            incoming = [incoming]
+        if not isinstance(incoming, (list, tuple)):
+            return
+        for url in incoming:
+            if isinstance(url, str) and url and url not in target:
+                target.append(url)
     for name, data in all_info.items():
         absorbed = []
         # 遍历所有属性，如果某一属性当前值为空而爬取的数据中含有该属性，则采用爬虫的属性
@@ -227,6 +236,11 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
             elif attr == 'big_cover':
                 if incoming and (incoming not in big_covers):
                     big_covers.append(incoming)
+                    absorbed.append(attr)
+            elif attr == 'preview_pics':
+                before = len(preview_pics)
+                append_unique_urls(preview_pics, incoming)
+                if len(preview_pics) > before:
                     absorbed.append(attr)
             elif attr == 'uncensored':
                 if (current is None) and (incoming is not None):
@@ -267,6 +281,7 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
 
     setattr(final_info, 'covers', covers)
     setattr(final_info, 'big_covers', big_covers)
+    setattr(final_info, 'preview_pics', preview_pics)
     # 对cover和big_cover赋值，避免后续检查必须字段时出错
     if covers:
         final_info.cover = covers[0]
@@ -725,6 +740,9 @@ def download_cover(covers, fanart_path, big_covers=[], dvdid=None):
             except requests.exceptions.HTTPError:
                 # HTTPError通常说明猜测的高清封面地址实际不可用，因此不再重试
                 break
+            except Exception as exc:
+                # 单个来源异常不应中断其余高清封面候选。
+                logger.debug(f"高清封面候选下载失败: {url}: {exc}", exc_info=True)
     # 如果没有高清封面或高清封面下载失败
     for url in covers:
         pic_path = get_pic_path(fanart_path, url)
