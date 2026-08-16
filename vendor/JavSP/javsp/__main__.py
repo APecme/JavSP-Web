@@ -141,10 +141,12 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
         mark_crawler_complete()
 
     # 根据影片的数据源获取对应的抓取器
-    crawler_mods: List[str] = Cfg().crawler.selection[movie.data_src]
-    source_crawler_keys = {str(item).removeprefix('javsp.web.') for item in crawler_mods}
     fallback_source = fallback_media_type_id()
-    fallback_crawlers: List[str] = Cfg().crawler.selection[fallback_source]
+    fallback_crawlers: List[str] = Cfg().crawler.selection.get(fallback_source, [])
+    # New media types can be saved before a dedicated crawler group is chosen.
+    # Use the fallback group in that case so the task remains runnable.
+    crawler_mods: List[str] = Cfg().crawler.selection.get(movie.data_src, fallback_crawlers)
+    source_crawler_keys = {str(item).removeprefix('javsp.web.') for item in crawler_mods}
     cid_with_dvdid = is_cid_media_type(movie.data_src) and bool(movie.dvdid)
 
     all_info = {str(i).removeprefix('javsp.web.'): MovieInfo(movie) for i in crawler_mods}
@@ -487,11 +489,11 @@ def RunNormalMode(all_movies):
             inner_bar = tqdm(total=total_step, desc='步骤', ascii=True, leave=False, disable=progress_enabled())
             # 依次执行各个步骤
             inner_bar.set_description(f'启动并发任务')
-            crawler_total = len(Cfg().crawler.selection[movie.data_src])
+            crawler_total = len(Cfg().crawler.selection.get(movie.data_src, Cfg().crawler.selection.get(fallback_media_type_id(), [])))
             progress_event('concurrent', done=0, total=crawler_total)
             all_info = parallel_crawler(movie, inner_bar)
             progress_event('concurrent', done=crawler_total, total=crawler_total)
-            msg = f'为其配置的{len(Cfg().crawler.selection[movie.data_src])}个抓取器均未获取到影片信息'
+            msg = f'为其配置的{crawler_total}个抓取器均未获取到影片信息'
             check_step(all_info, msg)
 
             inner_bar.set_description('汇总数据')

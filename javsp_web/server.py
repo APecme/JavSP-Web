@@ -620,6 +620,19 @@ def _normalize_form(form: dict, base: dict | None = None) -> dict:
             raise HTTPException(status_code=400, detail=f"分类 {section} 的根节点必须是对象")
         value = _drop_empty_strings(value) or {}
         normalized[section] = _coerce_like(value, base.get(section, {}))
+    media_types = normalized.get("scanner", {}).get("media_types")
+    selection = normalized.get("crawler", {}).get("selection")
+    if isinstance(media_types, list) and isinstance(selection, dict):
+        category_ids = {
+            str(item.get("id") or "").strip().lower()
+            for item in media_types
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        }
+        normalized["crawler"]["selection"] = {
+            category_id: crawlers
+            for category_id, crawlers in selection.items()
+            if str(category_id).strip().lower() in category_ids
+        }
     return normalized
 
 

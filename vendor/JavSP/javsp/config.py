@@ -303,14 +303,28 @@ class Cfg(BaseConfig):
     other: Other
     CONFIG_SOURCES=get_config_source()
 
-    @model_validator(mode="after")
-    def validate_crawler_categories(self):
-        category_ids = {item.id for item in self.scanner.media_types}
-        selected_ids = set(self.crawler.selection)
-        missing = category_ids - selected_ids
-        unknown = selected_ids - category_ids
-        if missing:
-            raise ValueError("下列影片分类尚未配置爬虫: " + ", ".join(sorted(missing)))
-        if unknown:
-            raise ValueError("爬虫配置引用了不存在的影片分类: " + ", ".join(sorted(unknown)))
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_crawler_categories(cls, value):
+        if not isinstance(value, dict):
+            return value
+        scanner = value.get("scanner")
+        crawler = value.get("crawler")
+        media_types = scanner.get("media_types") if isinstance(scanner, dict) else None
+        selection = crawler.get("selection") if isinstance(crawler, dict) else None
+        if not isinstance(media_types, list) or not isinstance(selection, dict):
+            return value
+        category_ids = {
+            str(item.get("id") or "").strip().lower()
+            for item in media_types
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        }
+        normalized = dict(value)
+        normalized_crawler = dict(crawler)
+        normalized_crawler["selection"] = {
+            category_id: crawlers
+            for category_id, crawlers in selection.items()
+            if str(category_id).strip().lower() in category_ids
+        }
+        normalized["crawler"] = normalized_crawler
+        return normalized
