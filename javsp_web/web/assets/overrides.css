@@ -69,6 +69,10 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 .overview-cover-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; padding: 9px 11px; border: 1px solid #eaecf0; border-radius: 6px; background: #f8fafc; }
 .overview-cover-toolbar .check-label { margin: 0; }
 .overview-selection-tools { display: flex; align-items: center; gap: 8px; }
+.overview-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 14px; color: #667085; font-size: 12px; }
+.overview-pagination label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.overview-pagination select { min-width: 72px; min-height: 34px; padding: 6px 8px; }
+.overview-pagination .button { padding: 7px 10px; }
 .overview-selection-tools .icon-button svg,
 .overview-cover-select svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .overview-cover-select.selected { color: #175cd3; background: #eff8ff; border-color: #175cd3; }

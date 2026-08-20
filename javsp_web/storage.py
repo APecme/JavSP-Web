@@ -177,7 +177,7 @@ def load_tasks() -> list[dict[str, Any]]:
 
 def save_tasks(tasks: list[dict[str, Any]]) -> None:
     with _lock:
-        _write_json(TASKS_FILE, tasks[-100:])
+        _write_json(TASKS_FILE, tasks)
 
 
 def list_presets() -> list[dict[str, Any]]:

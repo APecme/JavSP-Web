@@ -1,4 +1,8 @@
 const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
+const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
+state.overviewPage = 1;
+state.overviewPageSize = OVERVIEW_PAGE_SIZES.includes(savedOverviewPageSize) ? savedOverviewPageSize : 24;
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const BUILT_IN_MEDIA_TYPE_IDS = new Set(['fc2', 'getchu', 'gyutto', 'cid', 'normal']);
@@ -252,6 +256,13 @@ function refreshCrawlerSelectionForMediaTypes(selection = crawlerSelectionFromDo
 }
 
 document.addEventListener('change', (event) => {
+  if (event.target.id === 'overview-page-size') {
+    state.overviewPageSize = Number(event.target.value) || 24;
+    state.overviewPage = 1;
+    localStorage.setItem('javsp-web.overview-page-size', String(state.overviewPageSize));
+    renderOverview();
+    return;
+  }
   const control = event.target.closest?.('[data-media-type-rule]');
   if (!control) return;
   const selection = crawlerSelectionFromDom();
@@ -1240,6 +1251,7 @@ document.addEventListener('click', (event) => { const button = event.target.clos
 document.addEventListener('change', (event) => {
   if (event.target.id === 'overview-sort-key' || event.target.id === 'overview-sort-direction') {
     state.overviewSort = { key: $('#overview-sort-key').value, direction: $('#overview-sort-direction').value };
+    state.overviewPage = 1;
     renderOverview();
   }
 });
@@ -1279,6 +1291,12 @@ document.addEventListener('contextmenu', (event) => {
   menu.hidden = false;
 });
 document.addEventListener('click', (event) => {
+  const pageButton = event.target.closest('[data-overview-page]');
+  if (pageButton) {
+    state.overviewPage = Math.max(1, Number(pageButton.dataset.overviewPage) || 1);
+    renderOverview();
+    return;
+  }
   const menu = $('#overview-context-menu');
   const select = event.target.closest('[data-overview-context-select]');
   if (select && menu) {
@@ -1330,8 +1348,8 @@ document.addEventListener('change', (event) => {
     return;
   }
   if (event.target.id === 'overview-select-all') {
-    const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || (task.progress?.image_sources?.cover_urls?.length || task.progress?.image_sources?.preview_pics?.length))).slice(0, 24);
-    if (event.target.checked) completed.forEach((task) => state.selectedOverviewTasks.add(task.id));
+    const visibleIds = [...document.querySelectorAll('[data-overview-task-ids]')].flatMap((card) => overviewTaskIds(card.dataset.overviewTaskIds));
+    if (event.target.checked) visibleIds.forEach((id) => state.selectedOverviewTasks.add(id));
     else state.selectedOverviewTasks.clear();
     renderOverview();
   }
@@ -1757,13 +1775,21 @@ function renderOverview() {
     const value = (entry) => key === 'publish_date' ? Date.parse(entry.task.progress?.metadata?.publish_date || '') || 0 : Date.parse(entry.task.created_at || '') || 0;
     const difference = value(left) - value(right);
     return state.overviewSort.direction === 'asc' ? difference : -difference;
-  }).slice(0, 24);
+  });
+  const totalPages = Math.max(1, Math.ceil(cards.length / state.overviewPageSize));
+  state.overviewPage = Math.min(Math.max(1, state.overviewPage), totalPages);
+  const pageStart = (state.overviewPage - 1) * state.overviewPageSize;
+  const pageCards = cards.slice(pageStart, pageStart + state.overviewPageSize);
   const visibleIds = new Set(cards.flatMap((entry) => entry.taskIds));
+  const pageIds = new Set(pageCards.flatMap((entry) => entry.taskIds));
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => visibleIds.has(id)));
-  const allSelected = visibleIds.size > 0 && [...visibleIds].every((id) => state.selectedOverviewTasks.has(id));
+  const allSelected = pageIds.size > 0 && [...pageIds].every((id) => state.selectedOverviewTasks.has(id));
   const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
-  $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}>下一页</button></div>` : '';
+  const overviewContainer = $('#overview-tasks');
+  if (overviewContainer && cards.length) overviewContainer.insertAdjacentHTML('beforeend', pagination);
   if (state.overviewSelectionFeedback.size) window.setTimeout(() => state.overviewSelectionFeedback.clear(), 260);
 }
 
