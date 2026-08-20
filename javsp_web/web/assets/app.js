@@ -48,6 +48,8 @@ const FIELD_LABELS = {
 FIELD_LABELS['summarizer.cover.google_search_fallback'] = 'Google 搜索封面兜底';
 FIELD_LABELS['scanner.media_types'] = '影片分类';
 
+FIELD_LABELS['scanner.strm_ignore_minimum_size'] = 'STRM 忽略最小文件大小';
+
 const FIELD_NOTES = {
   input_directory: '手动刮削时会由任务路径覆盖。',
   ignored_id_pattern: '输入后点击加号添加；每个标签是一条正则表达式。',
@@ -67,6 +69,7 @@ const FIELD_NOTES = {
 };
 FIELD_NOTES.media_types = '填写 YAML 或 JSON 数组；保存时会校验分类 ID、识别方式、兜底分类和对应的爬虫分组。保存后，爬虫标签页会按新分类生成分组。';
 const FIELD_DESCRIPTIONS = {
+  'scanner.strm_ignore_minimum_size': '开启后，小于最小文件大小的 .strm 文本文件仍会参与番号识别和刮削；其他视频文件不受影响。',
   'summarizer.cover.google_search_fallback': '启用后，封面下载失败时仅使用 Google 图片搜索查找候选封面，并使用预设中的代理。',
   'scanner.ignored_id_pattern': '推测番号前会忽略文件名中匹配的字符串；除非熟悉正则表达式，否则不要修改。',
   'scanner.input_directory': '要整理的影片目录。手动刮削任务会临时覆盖此值。',

@@ -175,6 +175,17 @@ def _minimum_size_bytes(config_data: dict) -> int:
     return int(float(match.group("value")) * units[unit])
 
 
+def _passes_minimum_size(path: Path, minimum_size: int, config_data: dict) -> bool:
+    """Apply the configured size threshold, with an optional STRM exemption."""
+    scanner = config_data.get("scanner") or {}
+    if path.suffix.lower() == ".strm" and scanner.get("strm_ignore_minimum_size", False):
+        return True
+    try:
+        return path.stat().st_size >= minimum_size
+    except OSError:
+        return False
+
+
 def _clean_log_lines(lines: list[str]) -> list[str]:
     cleaned: list[str] = []
     progress_indexes: dict[str, int] = {}
@@ -857,7 +868,7 @@ def create_task(
         raise ValueError("输入路径不是目录或文件")
     config_data, _ = _preset_config_data(preset_id)
     minimum_size = _minimum_size_bytes(config_data)
-    if os.path.isfile(input_directory) and os.path.getsize(input_directory) < minimum_size:
+    if os.path.isfile(input_directory) and not _passes_minimum_size(Path(input_directory), minimum_size, config_data):
         raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
     task_id = uuid.uuid4().hex[:12]
     task = {
@@ -903,7 +914,7 @@ def create_tasks(
     concurrency = _preset_task_concurrency(preset_id)
     batch_id = uuid.uuid4().hex[:12]
     if input_path.is_file():
-        if input_path.stat().st_size < minimum_size:
+        if not _passes_minimum_size(input_path, minimum_size, config_data):
             raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
         return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id)]
     if not input_path.is_dir():
@@ -912,7 +923,7 @@ def create_tasks(
         video_files = sorted(
             (
                 item for item in input_path.rglob("*")
-                if item.is_file() and item.suffix.lower() in _VIDEO_EXTENSIONS and item.stat().st_size >= minimum_size
+                if item.is_file() and item.suffix.lower() in _VIDEO_EXTENSIONS and _passes_minimum_size(item, minimum_size, config_data)
             ),
             key=lambda item: str(item).lower(),
         )

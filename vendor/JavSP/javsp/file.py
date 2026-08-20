@@ -52,7 +52,8 @@ def scan_movies(root: str) -> List[Movie]:
                 fullpath = os.path.join(dirpath, file)
                 # 忽略小于指定大小的文件
                 filesize = os.path.getsize(fullpath)
-                if filesize < Cfg().scanner.minimum_size:
+                if (filesize < Cfg().scanner.minimum_size
+                        and not (ext == '.strm' and Cfg().scanner.strm_ignore_minimum_size)):
                     small_videos.setdefault(file, []).append(fullpath)
                     continue
                 configured = configured_media_type(fullpath)
