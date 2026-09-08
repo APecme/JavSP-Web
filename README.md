@@ -4,6 +4,8 @@
 
 **JavSP 的 Web 控制台**
 
+官网与使用文档：[apecme.github.io/JavSP-Web](https://apecme.github.io/JavSP-Web/)
+
 JavSP WEB 基于 [JavSP](https://github.com/Yuukiy/JavSP)，用于从影片文件名识别番号、汇总多个站点的影片数据并生成媒体库可用的元数据。它提供浏览器界面，用于启动刮削、查看任务进度、管理配置预设，以及连接下载器和媒体服务器。
 
 [![Latest release](https://img.shields.io/github/v/release/APecme/JavSP-Web)](https://github.com/APecme/JavSP-Web/releases/latest)

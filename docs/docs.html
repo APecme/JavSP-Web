@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="JavSP WEB 使用文档：Windows、Docker、预设和自动化集成。">
+  <meta name="theme-color" content="#0b1020">
+  <title>使用文档 | JavSP WEB</title>
+  <link rel="icon" href="assets/javsp-logo.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="subpages.css">
+</head>
+<body class="docs-page">
+  <header class="site-header"><a class="brand" href="index.html" aria-label="JavSP WEB 首页"><img src="assets/javsp-logo.png" alt=""><span>JavSP <b>WEB</b></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button><nav id="site-nav" class="site-nav" aria-label="主导航"><a href="index.html">首页</a><a class="is-current" href="docs.html">文档</a><a href="demo.html">示例站点</a><a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav></header>
+  <main class="docs-shell page-width">
+    <aside class="doc-nav"><p>DOCUMENTATION</p><a class="is-current" href="#start">开始使用</a><a href="#windows">Windows</a><a href="#docker">Docker</a><a href="#preset">刮削预设</a><a href="#automation">自动化集成</a><a href="#trouble">问题排查</a><a class="doc-demo-link" href="demo.html">打开示例站点 <span>→</span></a></aside>
+    <article class="doc-content">
+      <section id="start"><p class="eyebrow">DOCUMENTATION / 01</p><h1>从安装到第一部影片。</h1><p class="doc-lede">JavSP WEB 将 JavSP 的刮削能力放进浏览器。选择适合你的运行方式，完成首次登录，然后创建并启动任务。</p><div class="doc-note"><b>首次登录</b><span>默认账号和密码都是 <code>admin</code>。进入后，请在系统设置中立即修改密码。</span></div><div class="doc-steps"><div><span>01</span><b>运行服务</b><p>使用 Windows EXE 或 Docker 启动。</p></div><div><span>02</span><b>检查预设</b><p>在刮削预设中按自己的媒体库规则调整。</p></div><div><span>03</span><b>创建任务</b><p>选择视频或目录并从队列查看处理结果。</p></div></div></section>
+      <section id="windows"><h2>Windows</h2><p>从 Releases 下载 <code>JavSP-Web.exe</code> 并双击运行。程序会进入 Windows 通知区域，并自动打开登录页。</p><div class="doc-command"><code>http://127.0.0.1:8090/login</code><button class="copy-button" data-copy="http://127.0.0.1:8090/login">复制地址</button></div><a class="text-link" href="https://github.com/APecme/JavSP-Web/releases/latest" target="_blank" rel="noreferrer">下载最新 Windows 版本 <span>↗</span></a></section>
+      <section id="docker"><h2>Docker</h2><p>将影片目录映射到容器，再在网页中填写容器内路径。以下命令会把当前目录的数据保存到 <code>./data</code>，并将影片暴露为 <code>/video</code>。</p><div class="doc-command doc-command-multiline"><code>docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:/app/data" -v "/your/videos:/video" apecme/javsp-web:bata</code><button class="copy-button" data-copy='docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:/app/data" -v "/your/videos:/video" apecme/javsp-web:bata'>复制命令</button></div><div class="doc-note"><b>路径提示</b><span>Docker 内填写的是挂载后的路径，例如 <code>/video/Movies</code>，不是主机上的 <code>D:\Videos</code>。</span></div></section>
+      <section id="preset"><h2>刮削预设</h2><p>预设保存网站选择、命名规则、扫描器和网络配置。你可以为不同媒体库或来源创建独立预设，在启动任务时直接选用。</p><ul><li>单个文件与整个目录都可以创建任务。</li><li>任务队列会显示识别、元数据与图片阶段的进度和日志。</li><li>图片失败时可从任务详情重新下载，无需重新刮削整个目录。</li></ul></section>
+      <section id="automation"><h2>自动化集成</h2><p>在系统设置中添加 qBittorrent、Emby 或 Jellyfin。下载完成可自动创建刮削任务，任务完成后可触发媒体库扫描。</p><div class="doc-callout"><span>自动刮削规则不会重叠执行</span><p>当同一规则的上一次任务仍在排队、运行或重试图片时，下一次触发会被跳过并写入记录。</p></div></section>
+      <section id="trouble"><h2>问题排查</h2><p>提交 Issue 前，请附上任务日志、部署方式和已脱敏的配置。网络或数据源问题可先在预设中检查代理与连接状态。</p><a class="button button-primary" href="https://github.com/APecme/JavSP-Web/issues" target="_blank" rel="noreferrer">前往 Issue <span>↗</span></a></section>
+    </article>
+  </main>
+  <footer class="site-footer"><div class="page-width footer-inner"><span>© 2026 APecme · JavSP WEB</span><span>GPL-3.0 / Anti 996 License</span><a href="index.html">返回首页 →</a></div></footer>
+  <script src="script.js"></script>
+</body>
+</html>
