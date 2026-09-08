@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="JavSP WEB：面向媒体库的影片信息刮削与整理控制台。">
+  <meta name="theme-color" content="#0b1020">
+  <title>JavSP WEB | 让媒体库整理更简单</title>
+  <link rel="icon" href="assets/javsp-logo.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="JavSP WEB 首页">
+      <img src="assets/javsp-logo.png" alt="">
+      <span>JavSP <b>WEB</b></span>
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button>
+    <nav id="site-nav" class="site-nav" aria-label="主导航">
+      <a href="#features">能力</a>
+      <a href="#workflow">工作流</a>
+      <a href="#install">安装</a>
+      <a href="#community">社区</a>
+      <a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero page-width">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="pulse"></span> OPEN SOURCE · v1.1.34</p>
+        <h1>把影片文件，<br><em>变成漂亮的媒体库。</em></h1>
+        <p class="hero-lede">JavSP WEB 是一个清晰、可控的 Web 控制台。识别番号、抓取元数据、生成 NFO 与图片，一次完成。</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install">开始使用 <span>↓</span></a>
+          <a class="button button-quiet" href="https://github.com/APecme/JavSP-Web/releases" target="_blank" rel="noreferrer">查看 Releases <span>↗</span></a>
+        </div>
+        <div class="hero-meta"><span>MIT-compatible</span><span class="meta-dot"></span><span>Docker / Windows</span><span class="meta-dot"></span><span>中文界面</span></div>
+      </div>
+      <div class="hero-visual" aria-label="JavSP WEB 任务控制台预览">
+        <div class="console-window">
+          <div class="console-top"><span class="window-dots"><i></i><i></i><i></i></span><span class="console-title">JavSP WEB / 任务队列</span><span class="console-status">● 在线</span></div>
+          <div class="console-body">
+            <div class="console-side"><span class="side-active">总览</span><span>手动刮削</span><span>预设</span><span>下载管理</span><span>系统设置</span></div>
+            <div class="console-main"><div class="console-heading"><div><small>今日处理</small><strong>128 <span>部影片</span></strong></div><span class="date-chip">09 / 08 / 2026</span></div><div class="progress-card"><div class="progress-label"><span>正在处理 · SSIS-247</span><b>72%</b></div><div class="progress-track"><i></i></div><small>识别信息　→　抓取图片　→　写入媒体库</small></div><div class="mini-grid"><div><small>已完成</small><b>96</b><span>+18.4%</span></div><div><small>等待中</small><b>24</b><span>队列稳定</span></div><div><small>失败重试</small><b>08</b><span>需关注</span></div></div><div class="log-line"><span class="log-dot"></span><span>正在为 <b>SSIS-247</b> 写入 NFO 与演员信息</span><time>刚刚</time></div></div>
+          </div>
+        </div>
+        <div class="visual-caption"><span class="caption-line"></span>一个界面，掌握每一次刮削</div>
+      </div>
+    </section>
+
+    <section class="trust-bar"><div class="page-width trust-inner"><span>基于成熟的 JavSP 核心构建</span><a href="https://github.com/Yuukiy/JavSP" target="_blank" rel="noreferrer">Yuukiy / JavSP <span>↗</span></a><span class="trust-rule"></span><span>适配你的媒体工作流</span></div></section>
+
+    <section id="features" class="section page-width">
+      <div class="section-intro"><p class="eyebrow">CAPABILITY / 01</p><h2>从文件名到媒体库，<br><span>每一步都清楚。</span></h2><p>把复杂的站点、规则与目录交给 JavSP WEB，留下一个可观察、可重试的流程。</p></div>
+      <div class="feature-grid">
+        <article class="feature-card feature-card-large"><div class="feature-icon">01</div><h3>识别与刮削</h3><p>自动识别番号，汇总多个数据源，生成 NFO、封面和剧照。支持单个视频，也支持整个文件夹。</p><div class="card-tag">FILE → METADATA</div></article>
+        <article class="feature-card"><div class="feature-icon">02</div><h3>任务可视化</h3><p>三阶段进度、完整日志、失败原因与图片重试，任务发生了什么，一眼就知道。</p><div class="card-tag">OBSERVABLE</div></article>
+        <article class="feature-card"><div class="feature-icon">03</div><h3>自动化连接</h3><p>接入 qBittorrent，下载完成自动刮削；同步 Emby 或 Jellyfin 媒体库。</p><div class="card-tag">CONNECTED</div></article>
+        <article class="feature-card"><div class="feature-icon">04</div><h3>按你的规则工作</h3><p>创建多个刮削预设，表单和完整 config.yml 都能编辑。定时任务不会互相重叠。</p><div class="card-tag">CONFIGURABLE</div></article>
+      </div>
+    </section>
+
+    <section id="workflow" class="section section-dark"><div class="page-width workflow-layout"><div class="section-intro"><p class="eyebrow eyebrow-light">WORKFLOW / 02</p><h2>从第一次运行开始，<br><span>保持掌控。</span></h2><p>不需要记住一堆命令。打开浏览器，按自己的节奏完成设置。</p></div><div class="steps"><div class="step"><span>01</span><div><h3>挂载你的影片目录</h3><p>Windows 直接运行，Docker 使用清晰的目录映射。</p></div></div><div class="step"><span>02</span><div><h3>选择预设并启动</h3><p>为不同来源或媒体库保存独立规则，随时切换。</p></div></div><div class="step"><span>03</span><div><h3>检查结果，交给媒体库</h3><p>完成后自动写入文件，也可触发 Emby / Jellyfin 扫描。</p></div></div></div></div></section>
+
+    <section id="install" class="section page-width install-section"><div class="section-intro"><p class="eyebrow">GET STARTED / 03</p><h2>选择你的运行方式。</h2><p>两种方式都包含完整的 Web 控制台。首次登录后请立即修改默认密码。</p></div><div class="install-panel"><div class="install-tabs" role="tablist" aria-label="安装方式"><button class="install-tab is-active" role="tab" aria-selected="true" data-target="windows">Windows</button><button class="install-tab" role="tab" aria-selected="false" data-target="docker">Docker</button></div><div class="install-content is-active" id="windows" role="tabpanel"><div class="install-copy"><span class="install-number">01</span><div><h3>下载并运行</h3><p>从 GitHub Releases 下载最新的 <code>JavSP-Web.exe</code>，双击启动，程序会自动打开登录页。</p><a href="https://github.com/APecme/JavSP-Web/releases/latest" target="_blank" rel="noreferrer" class="text-link">打开最新版本 <span>↗</span></a></div></div><div class="code-block"><span>下载 → 双击 → 访问 127.0.0.1:8090</span><button class="copy-button" data-copy="http://127.0.0.1:8090/login" aria-label="复制本地地址">复制地址</button></div></div><div class="install-content" id="docker" role="tabpanel"><div class="install-copy"><span class="install-number">02</span><div><h3>一条命令启动</h3><p>将 <code>/your/videos</code> 换成影片目录，数据会保存在当前目录的 <code>data</code> 文件夹。</p><a href="https://hub.docker.com/r/apecme/javsp-web" target="_blank" rel="noreferrer" class="text-link">查看 Docker 镜像 <span>↗</span></a></div></div><div class="code-block"><code>docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:/app/data" -v "/your/videos:/video" apecme/javsp-web:bata</code><button class="copy-button" data-copy='docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:/app/data" -v "/your/videos:/video" apecme/javsp-web:bata' aria-label="复制 Docker 命令">复制命令</button></div></div></div></section>
+
+    <section id="community" class="community-section"><div class="page-width community-inner"><div><p class="eyebrow">BUILD TOGETHER / 04</p><h2>这是一个社区项目。</h2><p>欢迎提交 Issue、改进文档、补充测试数据，或发起 Pull Request。</p></div><div class="community-actions"><a class="button button-primary" href="https://github.com/APecme/JavSP-Web/issues" target="_blank" rel="noreferrer">反馈问题 <span>↗</span></a><a class="button button-outline" href="https://github.com/APecme/JavSP-Web/pulls" target="_blank" rel="noreferrer">查看贡献 <span>↗</span></a></div></div></section>
+  </main>
+  <footer class="site-footer"><div class="page-width footer-inner"><span>© 2026 APecme · JavSP WEB</span><span>GPL-3.0 / Anti 996 License</span><a href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub ↗</a></div></footer>
+  <script src="script.js"></script>
+</body>
+</html>
