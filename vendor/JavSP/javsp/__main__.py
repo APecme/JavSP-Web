@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 from html import unescape
 from urllib.parse import quote_plus
 from PIL import Image
@@ -36,6 +37,13 @@ for handler in root_logger.handlers:
         handler.stream = TqdmOut
 
 logger = logging.getLogger('main')
+
+if progress_enabled() and os.environ.get('JAVSP_DIAGNOSTIC_LOG'):
+    diagnostic_handler = RotatingFileHandler(os.environ['JAVSP_DIAGNOSTIC_LOG'], maxBytes=2 * 1024 * 1024, backupCount=1, encoding='utf-8')
+    diagnostic_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s [%(threadName)s] %(message)s'))
+    diagnostic_handler.setLevel(logging.DEBUG)
+    root_logger.addHandler(diagnostic_handler)
+    root_logger.setLevel(logging.DEBUG)
 
 
 from javsp.lib import resource_path
@@ -121,23 +129,35 @@ def parallel_crawler(movie: Movie, tqdm_bar=None):
                 progress_event('crawler', name=crawler_name, status='not_found', reason=str(e))
                 break
             except MovieDuplicateError as e:
-                logger.exception(e)
+                logger.log(logging.DEBUG if progress_enabled() else logging.ERROR, str(e), exc_info=True)
                 progress_event('crawler', name=crawler_name, status='duplicate', reason=str(e))
                 break
-            except (SiteBlocked, SitePermissionError, CredentialError) as e:
-                logger.error(e)
+            except (SiteBlocked, SitePermissionError, CredentialError, WebsiteError) as e:
+                logger.log(logging.DEBUG if progress_enabled() else logging.ERROR, str(e), exc_info=True)
                 progress_event('crawler', name=crawler_name, status='failed', reason=str(e))
                 break
             except requests.exceptions.RequestException as e:
+                response = getattr(e, 'response', None)
+                status_code = response.status_code if response is not None else None
+                # Repeating an unchanged TLS failure or rejected request cannot repair it.
+                if isinstance(e, requests.exceptions.SSLError) or status_code in (400, 401, 403, 404, 410, 429):
+                    logger.debug(f'{crawler_name}: {e}', exc_info=True)
+                    reason = str(e)
+                    if status_code == 403:
+                        reason = '站点拒绝访问（403），请检查代理出口及该域名的 CookieCloud 登录状态'
+                    progress_event('crawler', name=crawler_name, status='not_found' if status_code in (404, 410) else 'failed', reason=reason)
+                    break
                 logger.debug(f'{crawler_name}: 网络错误，正在重试 ({cnt+1}/{retry}): \n{repr(e)}')
-                progress_event('crawler', name=crawler_name, status='retrying', attempt=cnt + 1, total=retry, reason=str(e))
                 if cnt + 1 >= retry:
                     progress_event('crawler', name=crawler_name, status='failed', reason=str(e))
+                else:
+                    progress_event('crawler', name=crawler_name, status='retrying', attempt=cnt + 1, total=retry - 1, reason=str(e))
                 if isinstance(tqdm_bar, tqdm):
                     tqdm_bar.set_description(f'{crawler_name}: 网络错误，正在重试')
             except Exception as e:
-                logger.exception(e)
+                logger.log(logging.DEBUG if progress_enabled() else logging.ERROR, str(e), exc_info=True)
                 progress_event('crawler', name=crawler_name, status='failed', reason=str(e))
+                break
         mark_crawler_complete()
 
     # 根据影片的数据源获取对应的抓取器

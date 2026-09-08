@@ -14,6 +14,15 @@
       cover_count: 0,
       fanart_count: 0,
       log_tail: ['正在识别番号：SSIS-247', '元数据汇总完成', '示例任务已完成'],
+      log_entries: [
+        { group: 'result', level: 'success', message: '任务完成' },
+        { group: 'process', level: 'success', message: '扫描完成 · 1 部影片' },
+        { group: 'process', level: 'success', message: 'SSIS-247 · JavSP WEB 示例影片' },
+        { group: 'sources', level: 'success', message: 'javdb · 已取得资料' },
+        { group: 'sources', level: 'success', message: 'javbus · 已取得资料' },
+        { group: 'sources', level: 'warning', message: 'airav · 失败', detail: '站点拒绝访问（403），请检查代理出口及该域名的 CookieCloud 登录状态' },
+        { group: 'notes', level: 'info', message: '静态示例使用演示数据，不会下载真实图片' },
+      ],
       progress: {
         stages: { concurrent: { percent: 100 }, summary: { percent: 100 }, images: { percent: 100 } },
         crawlers: { javdb: '完成', javbus: '完成' },
@@ -23,6 +32,7 @@
       },
     },
   ];
+  tasks[0].log_tail = tasks[0].log_entries.map(entry => entry.message + (entry.detail ? `：${entry.detail}` : ''));
 
   const json = (data, status = 200) => new Response(JSON.stringify(data), {
     status,
@@ -44,7 +54,7 @@
       const name = inputPath.split(/[\\/]/).pop().replace(/\.[^.]+$/, '') || 'NEW-001';
       tasks.unshift({
         ...tasks[0], id: `demo-${Date.now()}`, name, file_name: `${name}.mkv`, input_directory: inputPath,
-        status: 'queued', created_at: now(), log_tail: [`已创建演示任务：${name}`, '等待本机 JavSP 服务执行'],
+        status: 'queued', created_at: now(), log_entries: null, log_tail: [`已创建演示任务：${name}`, '等待本机 JavSP 服务执行'],
         progress: { ...tasks[0].progress, stages: { concurrent: { percent: 0 }, summary: { percent: 0 }, images: { percent: 0 } } },
       });
       return json(tasks.slice(0, 1));

@@ -10,6 +10,7 @@ from javsp.avid import guess_av_type
 from javsp.config import Cfg, CrawlerID
 from javsp.datatype import MovieInfo, GenreMap
 from javsp.chromium import get_browsers_cookies
+from javsp.web.mirrors import get_with_mirror_fallback
 
 
 # 初始化Request实例。使用scraper绕过CloudFlare后，需要指定网页语言，否则可能会返回其他语言网页，影响解析
@@ -28,7 +29,7 @@ else:
 def get_html_wrapper(url):
     """包装外发的request请求并负责转换为可xpath的html，同时处理Cookies无效等问题"""
     global request, cookies_pool
-    r = request.get(url, delay_raise=True)
+    r = get_with_mirror_fallback(request.get, url, base_url, permanent_url, delay_raise=True)
     if r.status_code == 200:
         # 发生重定向可能仅仅是域名重定向，因此还要检查url以判断是否被跳转到了登录页
         if r.history and '/login' in r.url:
@@ -108,7 +109,7 @@ def parse_data(movie: MovieInfo):
         movie (MovieInfo): 要解析的影片信息，解析后的信息直接更新到此变量内
     """
     # JavDB搜索番号时会有多个搜索结果，从中查找匹配番号的那个
-    html = get_html_wrapper(f'{base_url}/search?q={movie.dvdid}')
+    html = get_html_wrapper(f'{base_url.rstrip("/")}/search?q={movie.dvdid}')
     ids = list(map(str.lower, html.xpath("//div[@class='video-title']/strong/text()")))
     movie_urls = html.xpath("//a[@class='box']/@href")
     match_count = len([i for i in ids if i == movie.dvdid.lower()])

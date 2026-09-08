@@ -7,6 +7,7 @@ from javsp.web.exceptions import *
 from javsp.func import *
 from javsp.config import Cfg, CrawlerID
 from javsp.datatype import MovieInfo, GenreMap
+from javsp.web.mirrors import get_with_mirror_fallback
 
 
 logger = logging.getLogger(__name__)
@@ -23,8 +24,11 @@ def parse_data(movie: MovieInfo):
     Args:
         movie (MovieInfo): 要解析的影片信息，解析后的信息直接更新到此变量内
     """
-    url = f'{base_url}/{movie.dvdid}'
-    resp = request_get(url, delay_raise=True)
+    url = f'{base_url.rstrip("/")}/{movie.dvdid}'
+    resp = get_with_mirror_fallback(request_get, url, base_url, permanent_url, delay_raise=True)
+    if resp.status_code in (401, 403, 429) or resp.status_code >= 500:
+        resp.raise_for_status()
+    url = resp.url
     # 疑似JavBus检测到类似爬虫的行为时会要求登录，不过发现目前不需要登录也可以从重定向前的网页中提取信息
     if resp.history and resp.history[0].status_code == 302:
         html = resp2html(resp.history[0])

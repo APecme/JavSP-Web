@@ -7,9 +7,13 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 JAVSP_WEB_HOST=0.0.0.0 JAVSP_WE
 COPY requirements.txt ./
 COPY vendor/JavSP ./vendor/JavSP
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium chromium-driver novnc x11vnc xvfb \
+    && apt-get install -y --no-install-recommends ca-certificates chromium chromium-driver novnc x11vnc xvfb \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir -r requirements.txt
+
+# Use the same trust store for requests, cloudscraper and system HTTPS clients.
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 COPY javsp_web ./javsp_web
 COPY launcher.py README.md docker-entrypoint.sh ./

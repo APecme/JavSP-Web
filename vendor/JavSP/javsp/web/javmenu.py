@@ -1,9 +1,11 @@
 """从JavMenu抓取数据"""
 import logging
+from urllib.parse import urlparse
 
 from javsp.web.base import Request, resp2html
 from javsp.web.exceptions import *
 from javsp.datatype import MovieInfo
+from javsp.web.parsing import first, class_xpath, detail_container
 
 
 request = Request()
@@ -20,13 +22,15 @@ def parse_data(movie: MovieInfo):
     # JavMenu网页做得很不走心，将就了
     url = f'{base_url}/{movie.dvdid}'
     r = request.get(url)
-    if r.history:
+    if r.history and urlparse(r.url).path.rstrip('/') == '':
         # 被重定向到主页说明找不到影片资源
         raise MovieNotFoundError(__name__, movie.dvdid)
 
     html = resp2html(r)
-    container = html.xpath("//div[@class='col-md-9 px-0']")[0]
-    title = container.xpath("div[@class='col-12 mb-3']/h1/strong/text()")[0]
+    container = detail_container(html, f"//div[{class_xpath('col-md-9')} and {class_xpath('px-0')}]", 'javmenu', movie.dvdid)
+    title = ''.join(container.xpath(".//h1//text()")).strip()
+    if not title:
+        raise WebsiteError('javmenu: 页面缺少影片标题，无法确认有效资料')
     # 竟然还在标题里插广告，真的疯了。要不是我已经写了抓取器，才懒得维护这个破站
     title = title.replace('  | JAV目錄大全 | 每日更新', '')
     title = title.replace(' 免費在線看', '').replace(' 免費AV在線看', '')
@@ -34,23 +38,26 @@ def parse_data(movie: MovieInfo):
     if len(cover_tag) > 0:
         video_tag = cover_tag[0].find('video')
         # URL首尾竟然也有空格……
-        movie.cover = video_tag.get('data-poster').strip()
+        if video_tag is not None:
+            movie.cover = (video_tag.get('data-poster') or video_tag.get('poster') or '').strip() or None
         # 预览影片改为blob了，无法获取
         # movie.preview_video = video_tag.find('source').get('src').strip()
-    else:
+    if not movie.cover:
         cover_img_tag = container.xpath("//img[@class='lazy rounded']/@data-src")
         if cover_img_tag:
             movie.cover = cover_img_tag[0].strip()
-    info = container.xpath("//div[@class='card-body']")[0]
-    publish_date = info.xpath("div/span[contains(text(), '日期:')]")[0].getnext().text
-    duration = info.xpath("div/span[contains(text(), '時長:')]")[0].getnext().text.replace('分鐘', '')
+    info = first(container, f".//div[{class_xpath('card-body')}]", container)
+    publish_date = first(info, ".//span[contains(text(), '日期:')]/following-sibling::*[1]/text()")
+    duration = first(info, ".//span[contains(text(), '時長:')]/following-sibling::*[1]/text()", '').replace('分鐘', '').strip() or None
     producer = info.xpath("div/span[contains(text(), '製作:')]/following-sibling::a/span/text()")
     if producer:
         movie.producer = producer[0]
     genre_tags = info.xpath("//a[@class='genre']")
     genre, genre_id = [], []
     for tag in genre_tags:
-        items = tag.get('href').split('/')
+        items = (tag.get('href') or '').split('/')
+        if len(items) < 3 or not tag.text:
+            continue
         pre_id = items[-3] + '/' + items[-1]
         genre.append(tag.text.strip())
         genre_id.append(pre_id)

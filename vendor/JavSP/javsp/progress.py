@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import threading
 
 
 EVENT_PREFIX = "JAVSP_PROGRESS "
+_output_lock = threading.Lock()
 
 
 def enabled() -> bool:
@@ -18,4 +21,7 @@ def emit(stage: str, **payload: object) -> None:
     """Write one newline-delimited event without affecting normal CLI output."""
     if not enabled():
         return
-    print(EVENT_PREFIX + json.dumps({"stage": stage, **payload}, ensure_ascii=False, separators=(",", ":")), flush=True)
+    line = EVENT_PREFIX + json.dumps({"stage": stage, **payload}, ensure_ascii=False, separators=(",", ":")) + "\n"
+    with _output_lock:
+        sys.stdout.write(line)
+        sys.stdout.flush()

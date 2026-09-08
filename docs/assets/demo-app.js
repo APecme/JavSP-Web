@@ -658,6 +658,26 @@ function expandControlIcon(expanded) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${expanded ? 'm7 15 5-5 5 5' : 'm7 9 5 5 5-5'}"/></svg>`;
 }
 
+function taskLogMarkup(task, key = task.id, className = 'task-raw-log') {
+  const entries = task.log_entries || (task.log_tail || []).map(message => ({ group: 'notes', level: 'info', message }));
+  if (!entries.length) return '<p class="muted">任务尚未输出日志。</p>';
+  const groups = { result: '任务结果', process: '处理过程', sources: '数据源', images: '图片下载', notes: '其他记录' };
+  const sourceEntries = entries.filter(entry => entry.group === 'sources');
+  const success = sourceEntries.filter(entry => entry.level === 'success').length;
+  const sourceSummary = sourceEntries.length ? ` · ${success}/${sourceEntries.length} 个数据源取得资料` : '';
+  const text = (task.log_tail || entries.map(entry => entry.message)).join('\n');
+  const content = Object.entries(groups).map(([group, label]) => {
+    const rows = entries.filter(entry => entry.group === group);
+    if (!rows.length) return '';
+    return `<section class="log-section"><h4>${label}${group === 'sources' ? `<span>${success}/${sourceEntries.length} 成功</span>` : ''}</h4>${rows.map((entry, index) => {
+      const level = ['info', 'running', 'success', 'warning', 'error', 'muted'].includes(entry.level) ? entry.level : 'info';
+      const message = `<span class="log-dot" aria-hidden="true"></span><span>${escapeHtml(entry.message)}</span>`;
+      return entry.detail ? `<details class="log-row log-${level}" data-task-details="${escapeHtml(key)}-${group}-${index}"><summary>${message}<span class="log-expand">详情</span></summary><p>${escapeHtml(entry.detail)}</p></details>` : `<div class="log-row log-${level}">${message}</div>`;
+    }).join('')}</section>`;
+  }).join('');
+  return `<details class="${className}" data-task-details="${escapeHtml(key)}"><summary>任务日志${sourceSummary}</summary><div class="task-log-wrap task-log-readable"><div class="log-toolbar"><span>进度自动更新 · 相同事件合并显示</span><button class="copy-log" type="button" data-copy-task="${escapeHtml(key)}">复制摘要</button></div><div class="task-log log-sections" data-task-log="${escapeHtml(key)}" data-copy-text="${escapeHtml(text)}">${content}</div></div></details>`;
+}
+
 function taskCard(task) {
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
   const lines = (task.log_tail || []).join('\n');
@@ -708,7 +728,7 @@ function taskCard(task) {
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
   const lines = (task.log_tail || []).join('\n');
   const taskName = task.name || String(task.input_directory || '').split(/[\\/]/).pop();
-  const rawLog = lines ? `<details class="task-raw-log" data-task-details="${escapeHtml(task.id)}"><summary>查看日志 (${task.log_tail.length} 行)</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(task.id)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(task.id)}">复制日志</button></div></details>` : '';
+  const rawLog = taskLogMarkup(task);
   const active = task.status === 'running';
   const actions = `<div class="form-actions task-actions">${active ? `<button class="button secondary" onclick="cancelTask('${escapeHtml(task.id)}')">停止任务</button>` : ''}<button class="button secondary task-delete" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ''}>删除</button></div>`;
   return `<article class="task-card"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskName)}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div></div><span class="badge ${task.status}">${labels[task.status] || task.status}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div>${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${rawLog}${actions}</article>`;
@@ -1044,15 +1064,15 @@ async function copyTaskLog(button) {
   const log = button.closest('.task-log-wrap')?.querySelector('.task-log');
   if (!log) return;
   try {
-    await navigator.clipboard.writeText(log.textContent || '');
+    await navigator.clipboard.writeText(log.dataset.copyText || log.textContent || '');
   } catch {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(log);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    const text = document.createElement('textarea');
+    text.value = log.dataset.copyText || log.textContent || '';
+    text.style.cssText = 'position:fixed;opacity:0';
+    (button.closest('dialog') || document.body).appendChild(text);
+    text.select();
     document.execCommand('copy');
-    selection.removeAllRanges();
+    text.remove();
   }
   const original = button.textContent;
   button.textContent = '已复制';
@@ -1672,7 +1692,7 @@ async function openTaskDetail(taskId) {
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const taskLogLines = (task.log_tail || []).join('\n');
-  const taskLog = taskLogLines ? `<details class="task-detail-log" data-task-details="detail-${escapeHtml(task.id)}"><summary>查看任务日志（${task.log_tail.length} 行）</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="detail-${escapeHtml(task.id)}">${escapeHtml(taskLogLines)}</pre><button class="copy-log" type="button" data-copy-task="detail-${escapeHtml(task.id)}">复制日志</button></div></details>` : '<p class="muted">当前任务尚未输出日志。</p>';
+  const taskLog = taskLogMarkup(task, `detail-${task.id}`, 'task-detail-log');
   const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
@@ -2141,7 +2161,7 @@ function scheduleRunTaskMarkup(task) {
   const logKey = `schedule-${task.id}`;
   const expanded = state.taskOpen?.[logKey] ?? task.status === 'running';
   const lines = (task.log_tail || []).join('\n');
-  const log = lines ? `<details class="task-raw-log" data-task-details="${escapeHtml(logKey)}"><summary>查看日志 (${task.log_tail.length} 行)</summary><div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(logKey)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(logKey)}">复制日志</button></div></details>` : '<p class="muted">任务尚未输出日志。</p>';
+  const log = taskLogMarkup(task, logKey);
   const stopButton = task.status === 'running' ? `<button class="button secondary task-stop" type="button" onclick="cancelTask('${escapeHtml(task.id)}')">中止任务</button>` : '';
   return `<article class="task-card task-card-collapsible schedule-run-task" data-task-card="${escapeHtml(logKey)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${stopButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(logKey)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expandControlIcon(expanded)}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(logKey)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${log}</div></article>`;
 }

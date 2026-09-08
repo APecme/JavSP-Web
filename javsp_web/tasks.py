@@ -25,6 +25,7 @@ from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, get_c
 from .config_validation import load_base_config, validate_config_data
 from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
 from .timeutils import now_iso
+from .task_logs import build_log_entries, log_text, readable_error
 
 
 _lock = threading.RLock()
@@ -404,21 +405,7 @@ def _progress_event_message(event: dict) -> str | None:
 
 
 def _display_log_lines(lines: list[str]) -> list[str]:
-    display: list[str] = []
-    for line in lines:
-        event_marker = line.find("JAVSP_PROGRESS ")
-        if event_marker >= 0:
-            try:
-                event = json.loads(line[event_marker + len("JAVSP_PROGRESS "):])
-            except json.JSONDecodeError:
-                continue
-            message = _progress_event_message(event)
-            if message and (not display or display[-1] != message):
-                display.append(message)
-            continue
-        if not _PROGRESS_RE.match(line) and not _IMAGE_TRANSFER_RE.match(line) and not _TQDM_RE.search(line) and not _NATIVE_PROGRESS_LOG_RE.match(line):
-            display.append(line)
-    return display
+    return log_text(build_log_entries(lines))
 
 
 def _cover_paths(input_path: str, output: dict | None = None) -> list[Path]:
@@ -498,14 +485,17 @@ def list_tasks(task_ids: set[str] | None = None) -> list[dict]:
             image_progress = item["progress"]
             item["title"] = item["progress"]["metadata"].get("title") or ""
             item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
-            item["log_tail"] = _display_log_lines(cleaned_logs)[-_MAX_DISPLAY_LOG_LINES:]
+            item["log_entries"] = build_log_entries(cleaned_logs, item.get("status", ""), item.get("error") or "", bool(item.get("image_retry_running")))[-_MAX_DISPLAY_LOG_LINES:]
+            item["log_tail"] = log_text(item["log_entries"])
+            for detail in item["progress"].get("crawler_details", {}).values():
+                if detail.get("reason"):
+                    detail["reason"] = readable_error(detail["reason"])
             if item.get("status") == "failed":
                 error = str(item.get("error") or "").strip()
                 if "JavSP 退出码:" in error and any("个抓取器均未获取到影片信息" in line for line in cleaned_logs):
                     error = "抓取器均未获取到影片信息"
                     item["error"] = error
-                if error and error not in item["log_tail"]:
-                    item["log_tail"].append(f"任务失败原因：{error}")
+                item["error"] = readable_error(error) if error else ""
             if item.get("status") == "succeeded":
                 for key in ("concurrent", "summary"):
                     stage = item["progress"]["stages"][key]
@@ -995,6 +985,9 @@ def _run_task(task: dict) -> None:
     try:
         # Keep process creation and cancellation registration atomic so a queued
         # task cannot start after it has been cancelled.
+        diagnostic_dir = DATA_DIR / "task-logs"
+        diagnostic_dir.mkdir(parents=True, exist_ok=True)
+        env["JAVSP_DIAGNOSTIC_LOG"] = str(diagnostic_dir / f"{task['id']}.log")
         with _lock:
             if task["id"] in _cancelled_tasks:
                 return

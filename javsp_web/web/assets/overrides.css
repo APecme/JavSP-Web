@@ -481,6 +481,26 @@ details[open] > summary::after { transform: rotate(180deg); }
   .task-filter-bar > span { display: none; }
 }
 
+.task-log-wrap.task-log-readable { background: #f8fafc; border: 1px solid #e4e7ec; color: #344054; }
+.task-log-readable .log-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #e4e7ec; font-size: 11px; color: #667085; }
+.task-log-readable .copy-log { position: static; flex-shrink: 0; background: #fff; border-color: #d0d5dd; color: #344054; }
+.task-log-readable .task-log.log-sections { padding: 12px 14px; max-height: 420px; min-height: 0; white-space: normal; background: transparent; color: #344054; font-family: inherit; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.log-section + .log-section { margin-top: 16px; }
+.log-section h4 { display: flex; gap: 10px; margin: 0 0 7px; font-size: 12px; color: #101828; }
+.log-section h4 span { color: #667085; font-weight: 400; }
+.log-row { padding: 6px 0; }
+div.log-row, .log-row summary { display: flex; gap: 8px; align-items: baseline; }
+.log-row summary { cursor: pointer; list-style: none; font-weight: 400; }
+.log-row summary::-webkit-details-marker { display: none; }
+.log-row p { margin: 5px 0 0 16px; padding: 8px 10px; background: #fff; border: 1px solid #e4e7ec; border-radius: 6px; color: #667085; }
+.log-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; background: #98a2b3; }
+.log-success .log-dot { background: #12b76a; }
+.log-warning .log-dot { background: #f79009; }
+.log-error .log-dot { background: #f04438; }
+.log-running .log-dot { background: #2e90fa; }
+.log-expand { margin-left: auto; flex-shrink: 0; color: #667085; font-size: 11px; }
+.log-row[open] .log-expand { color: #175cd3; }
+
 @media (max-width: 360px) {
   .preset-tabs, .task-filter-bar { grid-template-columns: 1fr; }
   .task-filter-bar > #task-filter-query, .task-filter-bar > #task-filter-status, .task-filter-bar > #task-filter-reset { grid-column: auto; }

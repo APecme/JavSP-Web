@@ -33,7 +33,20 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=bata
-      - uses: docker/build-push-action@v6
+      - name: Build candidate image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: |
+            JAVSP_WEB_RELEASE_LABEL=${{ steps.release.outputs.label }}
+          load: true
+          tags: javsp-web:verify
+      - name: Verify scraping regressions in candidate image
+        run: docker run --rm -v "$PWD/tests:/app/tests:ro" javsp-web:verify python -m unittest discover -s tests -v
+      - name: Check CA trust and site HTTPS connectivity
+        run: docker run --rm -v "$PWD/tests:/app/tests:ro" javsp-web:verify python tests/check_https.py
+      - name: Publish verified beta image
+        uses: docker/build-push-action@v6
         with:
           context: .
           build-args: |

@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 
+# Include administrator-mounted proxy / enterprise CAs in the trusted bundle.
+if [ "$(id -u)" = "0" ]; then
+    update-ca-certificates
+fi
+
 export DISPLAY="${DISPLAY:-:99}"
 export JAVSP_GOOGLE_BROWSER_VNC=1
 
