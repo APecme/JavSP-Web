@@ -22,6 +22,7 @@ from fastapi import Cookie, Depends, FastAPI, File, UploadFile, HTTPException, Q
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.gzip import GZipMiddleware
 
 from . import __version__
 from .auth import SESSION_COOKIE, create_session, current_user, remove_session, require_admin
@@ -76,6 +77,7 @@ from .timeutils import local_now, timezone_name
 ensure_seed_data()
 recover_interrupted_tasks()
 app = FastAPI(title="JavSP WEB", version=__version__)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 WEB_DIR = Path(__file__).resolve().parent / "web"
 RELEASE_LABEL = os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").strip()
 NOVNC_DIR = Path(os.environ.get("JAVSP_NOVNC_DIR", "/usr/share/novnc"))
