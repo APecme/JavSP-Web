@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -853,17 +853,23 @@ function renderOverview() {
 }
 
 async function loadTasks() {
+  if (state.tasksLoading) return;
+  state.tasksLoading = true;
   const pageScroll = window.scrollY;
   try {
     rememberLogScroll();
     state.tasks = await api('/api/tasks');
     syncTaskExpansion(state.tasks);
-    renderOverview();
-    renderTasks();
+    // Rendering every task card is expensive when history is large. Only
+    // render the visible panel; the other panel is rendered when selected.
+    const activeView = document.querySelector('.view.active')?.dataset.panel;
+    if (activeView === 'overview') renderOverview();
+    if (activeView === 'scrape') renderTasks();
     const detailOpen = $('#task-detail-dialog')?.open && state.activeTaskDetail;
     if (detailOpen && !state.taskMetadataEditing && !state.taskDetailLogSelecting && !hasTaskDetailLogSelection()) openTaskDetail(state.activeTaskDetail);
     window.requestAnimationFrame(restoreLogScroll);
   } catch (error) { console.error(error); }
+  finally { state.tasksLoading = false; }
   if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
   window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
 }
@@ -2308,11 +2314,11 @@ function showView(view) {
   $('#section-title').textContent = title;
   $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' || view === 'crawler-config' ? '配置' : '工作区';
   if (view === 'overview') renderOverview();
-  if (view === 'scrape') { renderTasks(); loadPresets(); }
-  if (view === 'auto-scrape') { loadPresets(); loadAutoScrapeSchedules(); }
+  if (view === 'scrape') { renderTasks(); loadPresets(); loadCrawlerNames(); loadPathTools(); }
+  if (view === 'auto-scrape') { loadPresets(); loadCrawlerNames(); loadAutoScrapeSchedules(); }
   if (view === 'downloads') { loadDownloadManagement(); loadDownloads(); }
   if (view === 'crawler-config') loadCrawlerConfig();
-  if (view === 'presets') loadPresets();
+  if (view === 'presets') { loadPresets(); loadCrawlerNames(); }
   if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); loadCookieCloud(); }
   localStorage.setItem('javsp-web.active-view', view);
 }
@@ -3078,11 +3084,12 @@ if (downloadPolicyToggle && downloadPolicyContent) {
 (async () => {
   try {
     const savedView = localStorage.getItem('javsp-web.active-view');
-    if (savedView && document.querySelector(`[data-panel="${savedView}"]`)) showView(savedView);
     state.user = await api('/api/auth/me');
     $('#current-user').textContent = state.user.username;
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); }
-    await Promise.all([loadTasks(), loadPresets(), loadPathTools(), loadCrawlerNames()]);
+    // The overview is the default landing page. Load only what it needs so
+    // large preset forms and crawler catalogs do not delay first paint.
+    await loadTasks();
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || (savedView !== 'settings' && savedView !== 'auto-scrape'))) showView(savedView);
     scheduleGitHubStarInvite();
   } catch (error) { return; }
