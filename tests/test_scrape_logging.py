@@ -51,6 +51,24 @@ def success_log():
 
 
 class LogTests(unittest.TestCase):
+    def test_process_failure_reason_uses_structured_movie_error(self):
+        from javsp_web.tasks import _process_failure_reason
+
+        lines = [
+            event('images', kind='fanart', done=0, total=10),
+            event('movie', status='failed', error='[WinError 183] 文件已存在'),
+        ]
+        self.assertEqual(_process_failure_reason(lines), '[WinError 183] 文件已存在')
+
+    def test_process_failure_reason_falls_back_to_log_message(self):
+        from javsp_web.tasks import _process_failure_reason
+
+        self.assertEqual(_process_failure_reason(['影片刮削失败: extrafanart 已存在']), 'extrafanart 已存在')
+
+    def test_file_exists_failure_is_actionable(self):
+        rows = build_log_entries([], 'failed', '[WinError 183] 文件已存在')
+        self.assertIn('extrafanart', '\n'.join(log_text(rows)))
+
     def test_worker_keeps_traceback_in_rotating_diagnostic_file(self):
         with tempfile.TemporaryDirectory() as folder:
             logfile = Path(folder) / 'task.log'

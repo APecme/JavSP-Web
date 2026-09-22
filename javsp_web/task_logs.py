@@ -15,6 +15,8 @@ def readable_error(value: object) -> str:
         return "站点要求登录，请检查该域名的 CookieCloud 登录状态"
     if "429" in text:
         return "请求过于频繁，请稍后重试"
+    if "WinError 183" in text or "FileExistsError" in text or "File exists" in text:
+        return "整理目标中的文件或目录已存在，请检查 extrafanart 等已有输出后重试"
     if "list index out of range" in text or "IndexError" in text:
         return "页面缺少预期字段，可能是页面结构变化或返回了验证页"
     if "未找到影片" in text:

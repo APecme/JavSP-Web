@@ -102,6 +102,27 @@ def _decode_output(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _process_failure_reason(lines: list[str]) -> str:
+    """Extract the worker's concrete failure before falling back to its exit code."""
+    for raw in reversed(lines):
+        marker = raw.find("JAVSP_PROGRESS ")
+        if marker >= 0:
+            try:
+                event = json.loads(raw[marker + len("JAVSP_PROGRESS "):])
+            except (TypeError, ValueError):
+                event = None
+            if isinstance(event, dict) and event.get("stage") == "movie" and event.get("status") == "failed":
+                reason = str(event.get("error") or "").strip()
+                if reason:
+                    return reason
+        line = raw.strip()
+        if line.startswith("影片刮削失败:"):
+            reason = line.split(":", 1)[1].strip()
+            if reason:
+                return reason
+    return ""
+
+
 def _task_name(input_path: str) -> str:
     path = Path(input_path)
     if path.is_file():
@@ -1029,7 +1050,8 @@ def _run_task(task: dict) -> None:
             _logs.setdefault(task["id"], []).append("JavSP 执行完成")
         else:
             no_result = any("个抓取器均未获取到影片信息" in line for line in _logs.get(task["id"], []))
-            task["error"] = "抓取器均未获取到影片信息" if no_result else f"JavSP 执行失败（退出码: {code}）"
+            reason = _process_failure_reason(_logs.get(task["id"], []))
+            task["error"] = "抓取器均未获取到影片信息" if no_result else (reason or f"JavSP 执行失败（退出码: {code}）")
             _logs.setdefault(task["id"], []).append(task["error"])
     except Exception as exc:  # noqa: BLE001
         task["status"] = "failed"
