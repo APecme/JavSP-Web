@@ -10,8 +10,10 @@ services:
       JAVSP_WEB_PORT: 8090
       JAVSP_WEB_TIMEZONE: Asia/Shanghai
       TZ: Asia/Shanghai
+      JAVSP_WEB_SELF_UPDATE: "1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - ./video:/video
+      - /var/run/docker.sock:/var/run/docker.sock

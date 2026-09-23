@@ -34,6 +34,7 @@ MEDIA_SERVERS_FILE = DATA_DIR / "media-servers.json"
 COOKIECLOUD_FILE = DATA_DIR / "cookiecloud.json"
 CUSTOM_CRAWLERS_DIR = DATA_DIR / "crawlers"
 CRAWLER_SETTINGS_FILE = DATA_DIR / "crawler-settings.json"
+UPDATE_SETTINGS_FILE = DATA_DIR / "update-settings.json"
 _lock = threading.RLock()
 
 
@@ -101,6 +102,42 @@ def ensure_seed_data() -> None:
                     "updated_at": now_iso(),
                 }],
             )
+
+
+def get_update_settings() -> dict[str, Any]:
+    ensure_seed_data()
+    with _lock:
+        saved = _read_json(UPDATE_SETTINGS_FILE, {})
+        if not isinstance(saved, dict):
+            saved = {}
+        try:
+            interval = max(1, min(168, int(saved.get("check_interval_hours", 24))))
+        except (TypeError, ValueError):
+            interval = 24
+        return {
+            "check_enabled": bool(saved.get("check_enabled", True)),
+            "auto_update": bool(saved.get("auto_update", False)),
+            "experience_program": bool(saved.get("experience_program", False)),
+            "check_interval_hours": interval,
+            "last_check_at": str(saved.get("last_check_at") or ""),
+            "last_result": saved.get("last_result") if isinstance(saved.get("last_result"), dict) else {},
+        }
+
+
+def save_update_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    with _lock:
+        current = get_update_settings()
+        for key in ('check_enabled', 'auto_update', 'experience_program'):
+            current[key] = bool(settings.get(key, current[key]))
+        current['check_interval_hours'] = max(1, min(168, int(settings.get('check_interval_hours', current['check_interval_hours']))))
+        if current['auto_update']:
+            current['check_enabled'] = True
+        if 'last_check_at' in settings:
+            current['last_check_at'] = str(settings.get('last_check_at') or '')
+        if isinstance(settings.get('last_result'), dict):
+            current['last_result'] = settings['last_result']
+        _write_json(UPDATE_SETTINGS_FILE, current)
+        return current
 
 
 def list_users() -> list[dict[str, Any]]:

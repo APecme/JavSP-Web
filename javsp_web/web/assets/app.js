@@ -982,19 +982,18 @@ async function checkForAppUpdate(runtime) {
   tag.dataset.updateStatus = 'checking';
   tag.title = '正在检查 GitHub Releases 更新';
   try {
-    const response = await fetch('https://api.github.com/repos/APecme/JavSP-Web/releases/latest', { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/vnd.github+json' } });
-    if (!response.ok) throw new Error(`GitHub 返回 ${response.status}`);
-    const release = await response.json();
-    const latestVersion = release.tag_name || '';
-    const comparison = compareReleaseVersions(currentVersion, latestVersion);
+    const update = await api('/api/update');
+    const result = update.result || {};
+    const latestVersion = result.target || '';
+    const comparison = result.available ? -1 : (latestVersion ? compareReleaseVersions(currentVersion, latestVersion) : null);
     if (comparison !== null && comparison < 0) {
       tag.dataset.updateStatus = 'available';
       tag.textContent = `v${normalizeVersion(displayVersion)} 可更新`;
-      tag.title = `发现新版本 ${latestVersion}`;
+      tag.title = `发现${result.channel === 'bata' ? '体验版' : '正式版'}更新 ${latestVersion}`;
     } else if (comparison !== null) {
       tag.dataset.updateStatus = 'current';
       tag.textContent = `v${normalizeVersion(displayVersion)} 已是最新`;
-      tag.title = `已是最新版本 ${latestVersion}`;
+      tag.title = `已是最新版本 ${latestVersion || displayVersion}`;
     } else {
       tag.dataset.updateStatus = 'unknown';
       tag.title = '当前部署版本无法与 GitHub Release 标签比较';
@@ -1003,6 +1002,50 @@ async function checkForAppUpdate(runtime) {
     tag.dataset.updateStatus = 'unknown';
     tag.title = '暂时无法检查 GitHub Releases 更新';
   }
+}
+
+function renderUpdateStatus(payload) {
+  const settings = payload.settings || {};
+  const result = payload.result || {};
+  const capability = payload.capability || {};
+  const beta = Boolean(settings.experience_program || payload.channel === 'bata' || result.channel === 'bata');
+  $('#update-channel-badge').textContent = beta ? '体验版 bata' : '正式版 latest';
+  $('#update-check-enabled').checked = settings.check_enabled !== false;
+  $('#update-auto-update').checked = Boolean(settings.auto_update);
+  $('#update-experience').checked = Boolean(settings.experience_program);
+  $('#update-interval').value = settings.check_interval_hours || 24;
+  const job = payload.job || {};
+  const status = job.message || (result.error ? `检查失败：${result.error}` : result.available ? `发现更新：${result.target || '新版本'}` : result.checked_at ? `当前已是最新（${result.current || ''}）` : '尚未检查');
+  $('#update-status').textContent = status;
+  $('#update-capability').textContent = capability.reason || (payload.docker_available === false ? '当前部署不支持网页自动安装。' : '');
+  $('#update-apply-now').disabled = !capability.supported || !result.available || Boolean(job.status && ['scheduled', 'waiting', 'replacing', 'verifying'].includes(job.status));
+}
+
+async function loadUpdateSettings() {
+  try { renderUpdateStatus(await api('/api/update')); } catch (error) { $('#update-settings-message').textContent = error.message; }
+}
+
+async function checkUpdateNow() {
+  const message = $('#update-settings-message');
+  const button = $('#update-check-now');
+  button.disabled = true;
+  try {
+    const result = await api('/api/update/check', { method: 'POST' });
+    const state = await api('/api/update');
+    state.result = result;
+    renderUpdateStatus(state);
+    message.textContent = result.available ? '发现可用更新' : '当前已是最新版本';
+  } catch (error) { message.textContent = error.message; }
+  finally { button.disabled = false; }
+}
+
+async function applyUpdateNow() {
+  const message = $('#update-settings-message');
+  try {
+    const result = await api('/api/update/apply', { method: 'POST' });
+    message.textContent = result.status === 'scheduled' ? '更新已开始，服务会短暂重启' : (result.message || '当前已是最新版本');
+    renderUpdateStatus(await api('/api/update'));
+  } catch (error) { message.textContent = error.message; }
 }
 
 function scheduleGitHubStarInvite() {
@@ -2370,7 +2413,7 @@ function showView(view) {
   if (view === 'downloads') { loadDownloadManagement(); loadDownloads(); }
   if (view === 'crawler-config') loadCrawlerConfig();
   if (view === 'presets') { loadPresets(); loadCrawlerNames(); }
-  if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); loadCookieCloud(); }
+  if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); loadCookieCloud(); loadUpdateSettings(); }
   localStorage.setItem('javsp-web.active-view', view);
 }
 
@@ -3054,6 +3097,24 @@ $('#delete-downloader').addEventListener('click', () => {
 });
 
 ensureMediaSettingsUi();
+
+$('#update-settings-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const message = $('#update-settings-message');
+  try {
+    const settings = await api('/api/update/settings', { method: 'PUT', body: JSON.stringify({
+      check_enabled: $('#update-check-enabled').checked,
+      auto_update: $('#update-auto-update').checked,
+      experience_program: $('#update-experience').checked,
+      check_interval_hours: Number($('#update-interval').value || 24),
+    }) });
+    renderUpdateStatus(settings);
+    message.textContent = '更新设置已保存';
+    await checkUpdateNow();
+  } catch (error) { message.textContent = error.message; }
+});
+$('#update-check-now')?.addEventListener('click', checkUpdateNow);
+$('#update-apply-now')?.addEventListener('click', applyUpdateNow);
 
 document.addEventListener('submit', async (event) => {
   if (event.target.id === 'path-mappings-form') {

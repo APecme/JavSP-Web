@@ -41,6 +41,7 @@ from .storage import (
     get_disabled_built_in_crawlers,
     get_qbittorrent_settings,
     get_cookiecloud_settings,
+    get_update_settings,
     get_qbittorrent_management,
     IS_FROZEN,
     VENDOR_DIR,
@@ -58,6 +59,7 @@ from .storage import (
     save_preset,
     save_qbittorrent_settings,
     save_cookiecloud_settings,
+    save_update_settings,
     save_disabled_built_in_crawlers,
     save_downloaders,
     save_path_mappings,
@@ -75,10 +77,12 @@ from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_t
 from .timeutils import local_now, timezone_name
 from .artwork import image_response
 from .task_store import run_counts
+from . import updater
 
 
 ensure_seed_data()
 recover_interrupted_tasks()
+updater.start_scheduler()
 app = FastAPI(title="JavSP WEB", version=__version__)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -293,9 +297,48 @@ class PathMappingsBody(BaseModel):
     mappings: list[PathMappingBody] = Field(default_factory=list, max_length=100)
 
 
+class UpdateSettingsBody(BaseModel):
+    check_enabled: bool = True
+    auto_update: bool = False
+    experience_program: bool = False
+    check_interval_hours: int = Field(default=24, ge=1, le=168)
+
+
 @app.get("/api/runtime")
 def runtime(_: dict = Depends(current_user)) -> dict:
     return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name()}
+
+
+@app.get("/api/update")
+def update_status(_: dict = Depends(current_user)) -> dict:
+    settings = get_update_settings()
+    result = dict(settings.get("last_result") or {})
+    result.setdefault("channel", "bata" if settings.get("experience_program") else "stable")
+    result.setdefault("current", _display_version())
+    result["docker_available"] = updater._docker_available()
+    return {"settings": settings, "result": result, "capability": updater.capability()}
+
+
+@app.put("/api/update/settings")
+def update_settings(body: UpdateSettingsBody, _: dict = Depends(require_admin)) -> dict:
+    settings = save_update_settings(body.model_dump())
+    result = dict(settings.get("last_result") or {})
+    result.setdefault("channel", "bata" if settings.get("experience_program") else "stable")
+    result["docker_available"] = updater._docker_available()
+    return {"settings": settings, "result": result, "capability": updater.capability()}
+
+
+@app.post("/api/update/check")
+def check_update(_: dict = Depends(require_admin)) -> dict:
+    return updater.check(force=True)
+
+
+@app.post("/api/update/apply")
+def apply_update(_: dict = Depends(require_admin)) -> dict:
+    try:
+        return updater.apply()
+    except updater.UpdateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/path/select")

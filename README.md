@@ -40,6 +40,8 @@ JavSP WEB 基于 [JavSP](https://github.com/Yuukiy/JavSP)，用于从影片文�
 docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
   -v "${PWD}\data:/app/data" `
   -v "D:\Videos:/video" `
+  -e JAVSP_WEB_SELF_UPDATE=1 `
+  -v "/var/run/docker.sock:/var/run/docker.sock" `
   apecme/javsp-web:bata
 ```
 
@@ -57,9 +59,12 @@ services:
     restart: unless-stopped
     ports:
       - "8090:8090"
+    environment:
+      JAVSP_WEB_SELF_UPDATE: "1"
     volumes:
       - ./data:/app/data
       - ./video:/video
+      - /var/run/docker.sock:/var/run/docker.sock
 ```
 
 在该文件所在目录运行：
@@ -69,6 +74,12 @@ docker compose up -d
 ```
 
 影片放入 `./video`，或将 `./video` 改为本机的实际影片目录。网页中使用实际挂载的容器路径，例如 `/video/Movies` 或 `/mnt/movies`。默认时区为 `Asia/Shanghai`；可通过 `JAVSP_WEB_TIMEZONE` 和 `TZ` 覆盖。
+
+### 网页自更新
+
+“系统设置 → 版本与更新”可以检查正式版 `latest`，也可以勾选“加入体验计划”检查 `bata`。开启“发现新版本后自动更新”后，服务会在没有运行中的刮削任务时更新。自更新默认关闭；Docker 部署必须同时设置 `JAVSP_WEB_SELF_UPDATE=1` 并挂载 `/var/run/docker.sock`。更新助手会先拉取目标镜像、保留旧容器、启动新容器并确认仍在运行，失败时恢复旧容器。Docker socket 等同于授予容器管理 Docker 的权限，只建议在可信的本机环境启用。
+
+Windows EXE、普通 Python 和未挂载 Docker socket 的容器仍可检查版本，但网页不会尝试安装容器；此时按页面提示手动执行 `docker compose pull && docker compose up -d`。
 
 ## 使用
 
