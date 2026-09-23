@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import copy
 import io
 import ipaddress
 import json
+import logging
 import re
 import shutil
 import socket
@@ -14,6 +16,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from collections import deque
 from html import unescape
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
 
@@ -21,7 +24,7 @@ import yaml
 import requests
 from PIL import Image, ImageOps
 
-from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, get_cookiecloud_settings, get_disabled_built_in_crawlers, get_preset, load_tasks, read_config, save_tasks
+from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, delete_task_record, get_cookiecloud_settings, get_disabled_built_in_crawlers, get_preset, get_task_record, load_task_page, load_tasks, read_config, save_tasks, upsert_task
 from .config_validation import load_base_config, validate_config_data
 from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
 from .timeutils import now_iso
@@ -30,8 +33,58 @@ from .task_logs import build_log_entries, log_text, readable_error
 
 _lock = threading.RLock()
 _queue_condition = threading.Condition(_lock)
+_pending_tasks = deque()
+_worker_threads = []
+_worker_batches = {}
+_GLOBAL_TASK_LIMIT = max(1, min(32, int(os.environ.get('JAVSP_WEB_TASK_WORKERS', '4'))))
+
+
+def _take_pending_task():
+    for task in _pending_tasks:
+        batch = str(task.get('batch_id') or task['id'])
+        limit = max(1, min(32, int(task.get('task_concurrency') or 1)))
+        if _worker_batches.get(batch, 0) < limit:
+            _pending_tasks.remove(task)
+            _worker_batches[batch] = _worker_batches.get(batch, 0) + 1
+            return task, batch
+    return None
+
+
+def _task_worker():
+    while True:
+        with _queue_condition:
+            selected = _take_pending_task()
+            while selected is None:
+                _queue_condition.wait()
+                selected = _take_pending_task()
+        task, batch = selected
+        try:
+            _run_task(task)
+        except Exception as exc:
+            task.update(status='failed', error=str(exc), finished_at=now_iso())
+            try:
+                _persist(task)
+            except Exception:
+                logging.exception('Unable to persist failed task %s', task['id'])
+        finally:
+            _logs.pop(task['id'], None)
+            with _queue_condition:
+                _worker_batches[batch] -= 1
+                if not _worker_batches[batch]:
+                    del _worker_batches[batch]
+                _queue_condition.notify_all()
+
+
+def _enqueue_task(task):
+    with _queue_condition:
+        _pending_tasks.append(task)
+        if not _worker_threads:
+            for index in range(_GLOBAL_TASK_LIMIT):
+                thread = threading.Thread(target=_task_worker, name=f'scrape-worker-{index}', daemon=True)
+                _worker_threads.append(thread)
+                thread.start()
+        _queue_condition.notify_all()
 _processes: dict[str, subprocess.Popen] = {}
-_batch_running: dict[str, int] = {}
 _logs: dict[str, list[str]] = {}
 _deleted_tasks: set[str] = set()
 _cancelled_tasks: set[str] = set()
@@ -488,75 +541,78 @@ def _fanart_paths(input_path: str, output: dict | None = None) -> list[Path]:
 def _persist(task: dict) -> None:
     with _lock:
         task.pop("list_summary", None)
-        tasks = [item for item in load_tasks() if item.get("id") != task["id"]]
-        tasks.append(task)
-        save_tasks(tasks)
+        task["updated_at"] = now_iso()
+        upsert_task(task)
 
 
 def list_tasks(task_ids: set[str] | None = None) -> list[dict]:
     with _lock:
-        items = load_tasks()
+        items = load_tasks(task_ids)
         if task_ids is not None:
             items = [item for item in items if str(item.get("id") or "") in task_ids]
-        for item in items:
-            item["file_name"] = str(item.get("file_name") or _task_name(item.get("input_directory", "")))
-            item["size_bytes"] = int(item.get("size_bytes") or _file_size(item.get("input_directory", "")))
-            cleaned_logs = _clean_log_lines((_logs.get(item["id"]) or item.get("log_tail") or [])[-_MAX_LOG_LINES:])
-            item["progress"] = _task_progress(item, cleaned_logs)
-            image_progress = item["progress"]
-            item["title"] = item["progress"]["metadata"].get("title") or ""
-            item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
-            item["log_entries"] = build_log_entries(cleaned_logs, item.get("status", ""), item.get("error") or "", bool(item.get("image_retry_running")))[-_MAX_DISPLAY_LOG_LINES:]
-            item["log_tail"] = log_text(item["log_entries"])
-            for detail in item["progress"].get("crawler_details", {}).values():
-                if detail.get("reason"):
-                    detail["reason"] = readable_error(detail["reason"])
-            if item.get("status") == "failed":
-                error = str(item.get("error") or "").strip()
-                if "JavSP 退出码:" in error and any("个抓取器均未获取到影片信息" in line for line in cleaned_logs):
-                    error = "抓取器均未获取到影片信息"
-                    item["error"] = error
-                item["error"] = readable_error(error) if error else ""
-            if item.get("status") == "succeeded":
-                for key in ("concurrent", "summary"):
-                    stage = item["progress"]["stages"][key]
-                    stage["percent"] = 100
-                    if not stage["total"]:
-                        stage["done"], stage["total"] = 1, 1
-                images = item["progress"]["images"]
-                image_stage = item["progress"]["stages"]["images"]
-                if not images["failed"]:
-                    image_stage["percent"] = 100
-                    if not image_stage["total"]:
-                        image_stage["done"], image_stage["total"] = 1, 1
-                    images["cover_done"] = max(images["cover_done"], 1)
-                    if images["fanart_total"]:
-                        images["fanart_done"] = images["fanart_total"]
-            output = image_progress.get("output") or {}
-            fallback_cover = _TASK_COVERS_DIR / f"{item['id']}.jpg"
-            poster_file = Path(str(output.get("poster_file") or ""))
-            item["cover_count"] = int(poster_file.is_file()) + int(fallback_cover.is_file() and fallback_cover != poster_file)
-            item["fanart_count"] = int(image_progress.get("images", {}).get("fanart_done") or 0)
-            sources = image_progress.get("image_sources", {})
-            has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
-            expected_fanart = len(sources.get("preview_pics") or [])
-            images_incomplete = (
-                bool(sources.get("cover_urls")) and not item["cover_count"]
-            ) or (expected_fanart and item["fanart_count"] < expected_fanart)
-            item["image_retry_available"] = bool(
-                has_image_source
-                and output.get("fanart_file")
-                and images_incomplete
-                and not item.get("image_retry_running")
-            )
-            organizer = item.get("file_organizer") if isinstance(item.get("file_organizer"), dict) else {}
-            item["restore_available"] = bool(organizer.get("original_files") and organizer.get("organized_files"))
+        items = [_decorate_task(item) for item in items]
         active = [item for item in items if item.get("status") in {"queued", "running"}]
         completed = [item for item in items if item.get("status") not in {"queued", "running"}]
         # Keep the live queue in its recorded enqueue order even after _persist rewrites tasks.json.
         active.sort(key=lambda item: str(item.get("created_at") or ""))
         completed.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
         return active + completed
+
+
+def _decorate_task(item: dict) -> dict:
+    item["file_name"] = str(item.get("file_name") or _task_name(item.get("input_directory", "")))
+    item["size_bytes"] = int(item.get("size_bytes") or _file_size(item.get("input_directory", "")))
+    cleaned_logs = _clean_log_lines((_logs.get(item["id"]) or item.get("log_tail") or [])[-_MAX_LOG_LINES:])
+    item["progress"] = _task_progress(item, cleaned_logs)
+    image_progress = item["progress"]
+    item["title"] = item["progress"]["metadata"].get("title") or ""
+    item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
+    item["log_entries"] = build_log_entries(cleaned_logs, item.get("status", ""), item.get("error") or "", bool(item.get("image_retry_running")))[-_MAX_DISPLAY_LOG_LINES:]
+    item["log_tail"] = log_text(item["log_entries"])
+    for detail in item["progress"].get("crawler_details", {}).values():
+        if detail.get("reason"):
+            detail["reason"] = readable_error(detail["reason"])
+    if item.get("status") == "failed":
+        error = str(item.get("error") or "").strip()
+        if "JavSP 退出码:" in error and any("个抓取器均未获取到影片信息" in line for line in cleaned_logs):
+            error = "抓取器均未获取到影片信息"
+            item["error"] = error
+        item["error"] = readable_error(error) if error else ""
+    if item.get("status") == "succeeded":
+        for key in ("concurrent", "summary"):
+            stage = item["progress"]["stages"][key]
+            stage["percent"] = 100
+            if not stage["total"]:
+                stage["done"], stage["total"] = 1, 1
+        images = item["progress"]["images"]
+        image_stage = item["progress"]["stages"]["images"]
+        if not images["failed"]:
+            image_stage["percent"] = 100
+            if not image_stage["total"]:
+                image_stage["done"], image_stage["total"] = 1, 1
+            images["cover_done"] = max(images["cover_done"], 1)
+            if images["fanart_total"]:
+                images["fanart_done"] = images["fanart_total"]
+    output = image_progress.get("output") or {}
+    fallback_cover = _TASK_COVERS_DIR / f"{item['id']}.jpg"
+    poster_file = Path(str(output.get("poster_file") or ""))
+    item["cover_count"] = int(poster_file.is_file()) + int(fallback_cover.is_file() and fallback_cover != poster_file)
+    item["fanart_count"] = int(image_progress.get("images", {}).get("fanart_done") or 0)
+    sources = image_progress.get("image_sources", {})
+    has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
+    expected_fanart = len(sources.get("preview_pics") or [])
+    images_incomplete = (
+        bool(sources.get("cover_urls")) and not item["cover_count"]
+    ) or (expected_fanart and item["fanart_count"] < expected_fanart)
+    item["image_retry_available"] = bool(
+        has_image_source
+        and output.get("fanart_file")
+        and images_incomplete
+        and not item.get("image_retry_running")
+    )
+    organizer = item.get("file_organizer") if isinstance(item.get("file_organizer"), dict) else {}
+    item["restore_available"] = bool(organizer.get("original_files") and organizer.get("organized_files"))
+    return item
 
 
 def _task_list_summary(item: dict) -> dict:
@@ -570,7 +626,7 @@ def _task_list_summary(item: dict) -> dict:
             "id", "name", "input_directory", "status", "created_at", "started_at", "finished_at",
             "return_code", "error", "batch_id", "task_concurrency", "source", "schedule_id",
             "preset_id", "preset_name", "file_name", "size_bytes", "title", "cover_count",
-            "fanart_count", "image_retry_available", "image_retry_running", "restore_available",
+            "fanart_count", "image_retry_available", "image_retry_running", "restore_available", "image_retry_started_at", "updated_at",
         )
     } | {
         "has_artwork_sources": bool(image_sources.get("cover_urls") or image_sources.get("preview_pics")),
@@ -627,35 +683,21 @@ def _stored_task_summary(item: dict) -> dict:
     }
 
 
-def list_task_summaries() -> list[dict]:
-    """Return cached summaries for completed tasks and live data for active tasks."""
-    with _lock:
-        items = load_tasks()
-        active_ids = {str(item.get("id") or "") for item in items if item.get("status") in {"queued", "running"}}
-        summaries = []
-        changed = False
-        for item in items:
-            if str(item.get("id") or "") in active_ids:
-                continue
-            summary = item.get("list_summary")
-            if not isinstance(summary, dict):
-                summary = _stored_task_summary(item)
-                item["list_summary"] = summary
-                changed = True
-        if changed:
-            save_tasks(items)
+def summary_for_storage(item: dict) -> dict:
+    # Presentation must never replace persisted raw event lines.
+    import copy
+    return _task_list_summary(_decorate_task(copy.deepcopy(item)))
 
-    live = {_task["id"]: _task_list_summary(_task) for _task in list_tasks(active_ids)} if active_ids else {}
-    summaries = [live.get(str(item.get("id") or ""), item.get("list_summary")) for item in items]
-    active_items = [item for item in summaries if item and item.get("status") in {"queued", "running"}]
-    completed_items = [item for item in summaries if item and item.get("status") not in {"queued", "running"}]
-    active_items.sort(key=lambda item: str(item.get("created_at") or ""))
-    completed_items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
-    return active_items + completed_items
+
+def list_task_summaries(limit: int | None = None, offset: int = 0, **filters):
+    from . import task_store
+    if limit is not None:
+        return load_task_page(limit, offset, **filters)
+    return task_store.summaries()
 
 
 def get_task(task_id: str) -> dict | None:
-    return next((task for task in list_tasks({task_id}) if task["id"] == task_id), None)
+    return next(iter(list_tasks({task_id})), None)
 
 
 _EDITABLE_METADATA_KEYS = {"dvdid", "title", "actress", "director", "producer", "publisher", "publish_date"}
@@ -733,8 +775,7 @@ def _write_metadata_nfo(task: dict, metadata: dict[str, object]) -> Path:
 
 def update_task_metadata(task_id: str, values: dict[str, object], apply_to_folder: bool = False) -> dict | None:
     with _lock:
-        tasks = load_tasks()
-        task = next((item for item in tasks if item.get("id") == task_id), None)
+        task = get_task_record(task_id)
         if not task or task.get("status") in {"queued", "running"}:
             return None
         metadata: dict[str, object] = {}
@@ -749,7 +790,7 @@ def update_task_metadata(task_id: str, values: dict[str, object], apply_to_folde
         logs = _logs.setdefault(task_id, list(task.get("log_tail") or []))
         logs.append("已手动更新影片资料" + (f"并同步 NFO：{nfo_path}" if nfo_path else ""))
         task["log_tail"] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
-        save_tasks(tasks)
+        _persist(task)
         return {"metadata": metadata, "nfo_path": str(nfo_path) if nfo_path else ""}
 
 
@@ -771,7 +812,7 @@ def _restore_plan(task: dict) -> dict | None:
 
 def restore_task_files(task_id: str) -> bool:
     with _lock:
-        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        task = get_task_record(task_id)
         if not task or task.get("status") in {"queued", "running"} or task.get("image_retry_running"):
             return False
         plan = _restore_plan(task)
@@ -822,11 +863,14 @@ def active_schedule_task_ids(schedule_id: str) -> list[str]:
 
 
 def get_cover_path(task_id: str, index: int) -> Path | None:
-    task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+    task = get_task_record(task_id, logs=False)
     if not task or index < 0:
         return None
-    progress = _task_progress(task, _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:]))
-    paths = _cover_paths(task.get("input_directory", ""), progress.get("output") or {})
+    output = task.get("image_output") or {}
+    if not output:
+        legacy = get_task_record(task_id) or task
+        output = _task_progress(legacy, legacy.get("log_tail") or []).get("output") or {}
+    paths = _cover_paths(task.get("input_directory", ""), output)
     fallback_cover = _TASK_COVERS_DIR / f"{task_id}.jpg"
     if fallback_cover.is_file():
         paths.append(fallback_cover)
@@ -834,11 +878,14 @@ def get_cover_path(task_id: str, index: int) -> Path | None:
 
 
 def get_fanart_path(task_id: str, index: int) -> Path | None:
-    task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+    task = get_task_record(task_id, logs=False)
     if not task or index < 0:
         return None
-    progress = _task_progress(task, _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:]))
-    paths = _fanart_paths(task.get("input_directory", ""), progress.get("output") or {})
+    output = task.get("image_output") or {}
+    if not output:
+        legacy = get_task_record(task_id) or task
+        output = _task_progress(legacy, legacy.get("log_tail") or []).get("output") or {}
+    paths = _fanart_paths(task.get("input_directory", ""), output)
     return paths[index] if index < len(paths) else None
 
 
@@ -852,10 +899,11 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-def _build_task_config(task_id: str, input_directory: str, preset_id: str) -> tuple[Path, str]:
-    data, preset = _preset_config_data(preset_id)
+def _build_task_config(task_id: str, input_directory: str, preset_id: str, input_files: list[str] | None = None, snapshot: tuple[dict, dict] | None = None) -> tuple[Path, str]:
+    data, preset = copy.deepcopy(snapshot or _preset_config_data(preset_id))
     scanner = data.setdefault("scanner", {})
     scanner["input_directory"] = input_directory
+    scanner["input_files"] = input_files
     scanner["manual"] = False
     path = DATA_DIR / "task-config" / f"{task_id}.yml"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -871,23 +919,31 @@ def create_task(
     task_concurrency: int | None = None,
     source: str = "manual",
     schedule_id: str | None = None,
+    input_files: list[str] | None = None,
+    _snapshot: tuple[dict, dict] | None = None,
+    _defer: bool = False,
 ) -> dict:
     input_directory = os.path.abspath(os.path.expanduser(input_directory.strip()))
     if not input_directory or not os.path.exists(input_directory):
         raise ValueError("输入路径不存在")
     if not os.path.isdir(input_directory) and not os.path.isfile(input_directory):
         raise ValueError("输入路径不是目录或文件")
-    config_data, _ = _preset_config_data(preset_id)
+    snapshot = _snapshot or _preset_config_data(preset_id)
+    config_data, _ = snapshot
     minimum_size = _minimum_size_bytes(config_data)
-    if os.path.isfile(input_directory) and not _passes_minimum_size(Path(input_directory), minimum_size, config_data):
+    selected = [os.path.abspath(path) for path in input_files] if input_files else None
+    if selected and any(not Path(path).is_file() for path in selected):
+        raise ValueError("分 P 文件不存在，请重新扫描目录")
+    if os.path.isfile(input_directory) and not any(_passes_minimum_size(Path(path), minimum_size, config_data) for path in (selected or [input_directory])):
         raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
     task_id = uuid.uuid4().hex[:12]
     task = {
         "id": task_id,
         "name": _task_name(input_directory),
         "file_name": _task_name(input_directory),
-        "size_bytes": _file_size(input_directory),
+        "size_bytes": sum(_file_size(path) for path in selected) if selected else _file_size(input_directory),
         "input_directory": input_directory,
+        "input_files": selected,
         "status": "queued",
         "created_at": now_iso(),
         "started_at": None,
@@ -899,14 +955,15 @@ def create_task(
         "source": source,
         "schedule_id": schedule_id,
     }
-    config_path, preset_name = _build_task_config(task_id, input_directory, preset_id)
+    config_path, preset_name = _build_task_config(task_id, input_directory, preset_id, selected, snapshot)
     task["config_path"] = str(config_path)
     task["preset_id"] = preset_id
     task["preset_name"] = preset_name
     _logs[task_id] = [f"任务已排队: {input_directory}"]
-    _persist(task)
-    thread = threading.Thread(target=_run_task, args=(task,), daemon=True)
-    thread.start()
+    task["log_tail"] = list(_logs[task_id])
+    if not _defer:
+        _persist(task)
+        _enqueue_task(task)
     return task
 
 
@@ -920,21 +977,25 @@ def create_tasks(
     input_path = Path(os.path.abspath(os.path.expanduser(input_directory.strip())))
     if not input_path.exists():
         raise ValueError("输入路径不存在")
-    config_data, _ = _preset_config_data(preset_id)
+    snapshot = _preset_config_data(preset_id)
+    config_data, preset = snapshot
     minimum_size = _minimum_size_bytes(config_data)
-    concurrency = _preset_task_concurrency(preset_id)
+    try:
+        concurrency = max(1, min(32, int(preset.get("task_concurrency", 1))))
+    except (TypeError, ValueError):
+        concurrency = 1
     batch_id = uuid.uuid4().hex[:12]
     if input_path.is_file():
         if not _passes_minimum_size(input_path, minimum_size, config_data):
             raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
-        return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id)]
+        return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id, _snapshot=snapshot)]
     if not input_path.is_dir():
         raise ValueError("输入路径不是目录或文件")
     try:
         video_files = sorted(
             (
                 item for item in input_path.rglob("*")
-                if item.is_file() and item.suffix.lower() in _VIDEO_EXTENSIONS and _passes_minimum_size(item, minimum_size, config_data)
+                if item.is_file() and item.suffix.lower() in _VIDEO_EXTENSIONS
             ),
             key=lambda item: str(item).lower(),
         )
@@ -952,36 +1013,38 @@ def create_tasks(
             continue
         seen_paths.add(identity)
         unique_videos.append(video)
-    return [
-        create_task(str(video), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id)
-        for video in unique_videos
+    from javsp.config import Cfg
+    from javsp.multipart import group_files
+
+    scanner = Cfg.model_validate(config_data).scanner
+    groups = group_files(unique_videos, scanner)
+    # A short final part belongs to the movie when another part meets the limit.
+    groups = [paths for paths in groups if any(_passes_minimum_size(path, minimum_size, config_data) for path in paths)]
+    if not groups:
+        raise ValueError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
+    prepared = [
+        create_task(str(paths[0]), preset_id, batch_id=batch_id, task_concurrency=concurrency,
+                    source=source, schedule_id=schedule_id, input_files=[str(path) for path in paths], _snapshot=snapshot, _defer=True)
+        for paths in groups
     ]
+
+    from .task_store import upsert_many
+    upsert_many(prepared)
+    for task in prepared:
+        _enqueue_task(task)
+    return prepared
 
 
 def _run_task(task: dict) -> None:
-    batch_id = str(task.get("batch_id") or task["id"])
-    try:
-        concurrency = max(1, min(32, int(task.get("task_concurrency", 1))))
-    except (TypeError, ValueError):
-        concurrency = 1
-    acquired_slot = False
+    # The fixed worker pool owns both global and batch reservations, releasing
+    # them even when setup or persistence fails.
     with _queue_condition:
-        while _batch_running.get(batch_id, 0) >= concurrency:
-            if task["id"] in _deleted_tasks:
-                _deleted_tasks.discard(task["id"])
-                return
-            if task["id"] in _cancelled_tasks:
-                _cancelled_tasks.discard(task["id"])
-                return
-            _queue_condition.wait()
         if task["id"] in _deleted_tasks:
             _deleted_tasks.discard(task["id"])
             return
         if task["id"] in _cancelled_tasks:
             _cancelled_tasks.discard(task["id"])
             return
-        _batch_running[batch_id] = _batch_running.get(batch_id, 0) + 1
-        acquired_slot = True
     task["status"] = "running"
     task["started_at"] = now_iso()
     _persist(task)
@@ -1003,6 +1066,7 @@ def _run_task(task: dict) -> None:
             _logs.setdefault(task["id"], []).append(f"CookieCloud 已同步：{summary['domains']} 个站点，{summary['cookies']} 条 Cookie")
         except (CookieCloudError, OSError, ValueError) as exc:
             _logs.setdefault(task["id"], []).append(f"CookieCloud 同步失败，继续使用其他凭据：{exc}")
+    process = None
     try:
         # Keep process creation and cancellation registration atomic so a queued
         # task cannot start after it has been cancelled.
@@ -1023,6 +1087,7 @@ def _run_task(task: dict) -> None:
             )
             _processes[task["id"]] = process
         assert process.stdout is not None
+        last_persist = 0.0
         for raw_line in process.stdout:
             decoded = _decode_output(raw_line)
             segments = decoded.split("\r")
@@ -1033,12 +1098,14 @@ def _run_task(task: dict) -> None:
             if logs and logs[-1] == line:
                 continue
             logs.append(line)
-            _logs[task["id"]] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
-            task["log_tail"] = _logs[task["id"]]
+            if len(logs) > _MAX_LOG_LINES:
+                del logs[:-_MAX_LOG_LINES]
             artwork_changed = _capture_task_artwork_event(task, line)
-            task["progress"] = _task_progress(task, task["log_tail"])
-            if artwork_changed or len(logs) % 20 == 0:
+            if artwork_changed or time.monotonic() - last_persist >= 0.5:
+                task["log_tail"] = list(logs)
+                task["progress"] = _task_progress(task, task["log_tail"])
                 _persist(task)
+                last_persist = time.monotonic()
         code = process.wait()
         task["return_code"] = code
         cancelled = task["id"] in _cancelled_tasks or task.get("status") == "cancelled"
@@ -1054,6 +1121,13 @@ def _run_task(task: dict) -> None:
             task["error"] = "抓取器均未获取到影片信息" if no_result else (reason or f"JavSP 执行失败（退出码: {code}）")
             _logs.setdefault(task["id"], []).append(task["error"])
     except Exception as exc:  # noqa: BLE001
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
         task["status"] = "failed"
         task["error"] = str(exc)
         _logs.setdefault(task["id"], []).append(f"启动失败: {exc}")
@@ -1069,6 +1143,7 @@ def _run_task(task: dict) -> None:
         _processes.pop(task["id"], None)
         _cancelled_tasks.discard(task["id"])
         _persist(task)
+        _logs.pop(task["id"], None)
         if task.get("status") == "succeeded":
             try:
                 from .media import auto_sync_media_servers
@@ -1076,14 +1151,6 @@ def _run_task(task: dict) -> None:
                 threading.Thread(target=auto_sync_media_servers, name=f"media-sync-{task['id']}", daemon=True).start()
             except ImportError:
                 pass
-        if acquired_slot:
-            with _queue_condition:
-                remaining = _batch_running.get(batch_id, 1) - 1
-                if remaining > 0:
-                    _batch_running[batch_id] = remaining
-                else:
-                    _batch_running.pop(batch_id, None)
-                _queue_condition.notify_all()
 
 
 def _append_task_event(task: dict, stage: str, **payload: object) -> None:
@@ -1553,7 +1620,7 @@ def save_uploaded_cover(task_id: str, content: bytes) -> bool:
     if not content or len(content) > 16 * 1024 * 1024:
         return False
     with _lock:
-        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        task = get_task_record(task_id)
         if not task or task.get("google_cover_search_running") or get_cover_path(task_id, 0):
             return False
         try:
@@ -1642,7 +1709,7 @@ def _search_google_cover(task: dict) -> None:
 
 def search_google_cover(task_id: str) -> bool:
     with _lock:
-        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        task = get_task_record(task_id)
         if not task or task.get("google_cover_search_running") or get_cover_path(task_id, 0):
             return False
         task["google_cover_search_running"] = True
@@ -1657,7 +1724,7 @@ def search_google_cover(task_id: str) -> bool:
 
 def select_google_cover(task_id: str, candidate_id: str) -> bool:
     with _lock:
-        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        task = get_task_record(task_id)
         if not task or task.get("google_cover_search_running") or get_cover_path(task_id, 0):
             return False
         candidate = next((item for item in task.get("google_cover_candidates") or [] if item.get("id") == candidate_id), None)
@@ -1783,7 +1850,7 @@ def _retry_task_images(task: dict, progress: dict) -> None:
 
 def retry_task_images(task_id: str) -> bool:
     with _lock:
-        task = next((item for item in load_tasks() if item.get("id") == task_id), None)
+        task = get_task_record(task_id)
         if not task or task.get("status") == "running" or task.get("image_retry_running"):
             return False
         raw_logs = _clean_log_lines((_logs.get(task_id) or task.get("log_tail") or [])[-_MAX_LOG_LINES:])
@@ -1822,12 +1889,19 @@ def cancel_task(task_id: str) -> bool:
 
 def recover_interrupted_tasks() -> int:
     """Resume scrape tasks that lost their worker process during a service restart."""
+    from .task_store import recoverable, upsert_many
     to_resume: list[dict] = []
     with _queue_condition:
-        tasks = load_tasks()
+        tasks = recoverable()
         changed = 0
         for task in tasks:
+            if task.get("status") not in {"queued", "running"} and not task.get("google_cover_search_running") and not task.get("image_retry_running"):
+                continue
             logs = _logs.setdefault(str(task.get("id") or ""), list(task.get("log_tail") or []))
+            if task.get("image_retry_running"):
+                task["image_retry_running"] = False
+                logs.append("服务重启，图片下载已中止，可重新下载")
+                changed += 1
             if task.get("status") in {"running", "queued"}:
                 was_running = task.get("status") == "running"
                 try:
@@ -1852,10 +1926,10 @@ def recover_interrupted_tasks() -> int:
                 changed += 1
             task["log_tail"] = _clean_log_lines(logs)[-_MAX_LOG_LINES:]
         if changed:
-            save_tasks(tasks)
+            upsert_many(tasks)
             _queue_condition.notify_all()
     for task in to_resume:
-        threading.Thread(target=_run_task, args=(task,), name=f"task-recovery-{task['id']}", daemon=True).start()
+        _enqueue_task(task)
     return changed
 
 
@@ -1863,13 +1937,12 @@ def delete_task(task_id: str) -> bool:
     with _lock:
         if task_id in _processes:
             return False
-        tasks = load_tasks()
-        task = next((item for item in tasks if item.get("id") == task_id), None)
+        task = get_task_record(task_id)
         if not task or task.get("status") == "running":
             return False
         if task.get("status") == "queued":
             _deleted_tasks.add(task_id)
-        save_tasks([item for item in tasks if item.get("id") != task_id])
+        delete_task_record(task_id)
         _logs.pop(task_id, None)
         config_path = task.get("config_path")
         if config_path:

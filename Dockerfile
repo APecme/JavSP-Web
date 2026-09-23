@@ -16,6 +16,7 @@ RUN apt-get update \
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 COPY javsp_web ./javsp_web
+COPY scripts ./scripts
 COPY launcher.py README.md docker-entrypoint.sh ./
 RUN chmod 755 /app/docker-entrypoint.sh
 RUN mkdir -p /app/data

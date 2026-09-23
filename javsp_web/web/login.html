@@ -6,8 +6,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/javsp-logo.png?v=2">
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
   <title>登录 · JavSP WEB</title>
-  <link rel="stylesheet" href="/assets/app.css">
-  <link rel="stylesheet" href="/assets/overrides.css">
+  <link rel="stylesheet" href="/assets/app.css?v=__ASSET_VERSION__">
+  <link rel="stylesheet" href="/assets/overrides.css?v=__ASSET_VERSION__">
 </head>
 <body class="auth-shell">
   <main class="auth-card">
@@ -22,10 +22,11 @@
       <p id="login-error" class="form-error" role="alert"></p>
     </form>
     <p class="hint">首次登录：admin / admin，请在系统设置中修改。</p>
-    <p id="login-version" class="app-version auth-version">v1.1.31</p>
+    <p id="login-version" class="app-version auth-version">读取版本…</p>
   </main>
   <script>
-    fetch('/api/public-info').then((response) => response.ok ? response.json() : null).then((info) => { if (info && info.version) document.querySelector('#login-version').textContent = `v${info.version}`; }).catch(() => {});
+    const normalizeVersion = (value) => String(value || '').replace(/^[vV]+/, '');
+    fetch('/api/public-info').then((response) => response.ok ? response.json() : null).then((info) => { if (info && info.version) document.querySelector('#login-version').textContent = `v${normalizeVersion(info.version)}`; }).catch(() => {});
     const form = document.querySelector('#login-form');
     form.addEventListener('submit', async (event) => {
       event.preventDefault();

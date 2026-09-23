@@ -68,6 +68,7 @@ def default_media_types() -> list[MediaType]:
 class Scanner(BaseConfig):
     ignored_id_pattern: List[str]
     input_directory: Path | None = None
+    input_files: List[str] | None = None
     filename_extensions: List[str]
     ignored_folder_name_pattern: List[str]
     minimum_size: ByteSize

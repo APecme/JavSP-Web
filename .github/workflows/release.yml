@@ -18,6 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify browser request and version regressions
+        run: node tests/test_web_client.cjs
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -42,7 +47,7 @@ jobs:
           load: true
           tags: javsp-web:verify
       - name: Verify scraping regressions in candidate image
-        run: docker run --rm -v "$PWD/tests:/app/tests:ro" javsp-web:verify python -m unittest discover -s tests -v
+        run: docker run --rm -v "$PWD/tests:/app/tests:ro" javsp-web:verify sh -c "python -m pip install -r tests/requirements.txt && python -m unittest discover -s tests -v"
       - name: Check CA trust and site HTTPS connectivity
         run: docker run --rm -v "$PWD/tests:/app/tests:ro" javsp-web:verify python tests/check_https.py
       - name: Publish verified beta image

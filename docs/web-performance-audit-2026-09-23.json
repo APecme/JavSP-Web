@@ -1,0 +1,188 @@
+{
+  "environment": {
+    "python": "3.12.7",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "repeats": 3
+  },
+  "method": "Synthetic completed tasks, 40 progress events/task; warm summaries. In-process HTTP via TestClient; authentication dependency stubbed. No WAN, NAS or browser layout measurements.",
+  "assets": [
+    {
+      "name": "app.css",
+      "bytes": 40373,
+      "gzip_bytes_estimate": 8078,
+      "cache_control": "no-store"
+    },
+    {
+      "name": "app.js",
+      "bytes": 214288,
+      "gzip_bytes_estimate": 51821,
+      "cache_control": "no-store"
+    },
+    {
+      "name": "javsp-logo.ico",
+      "bytes": 25862,
+      "gzip_bytes_estimate": 24957,
+      "cache_control": "no-store"
+    },
+    {
+      "name": "javsp-logo.png",
+      "bytes": 12875,
+      "gzip_bytes_estimate": 12261,
+      "cache_control": "no-store"
+    },
+    {
+      "name": "overrides.css",
+      "bytes": 41107,
+      "gzip_bytes_estimate": 7651,
+      "cache_control": "no-store"
+    }
+  ],
+  "history": [
+    {
+      "tasks": 100,
+      "json_bytes": 765403,
+      "load_tasks": {
+        "median_ms": 3.2,
+        "max_ms": 4.29
+      },
+      "summary_warm": {
+        "median_ms": 3.37,
+        "max_ms": 3.67
+      },
+      "detail": {
+        "median_ms": 3.85,
+        "max_ms": 4.53
+      },
+      "api_decoded_bytes": 109201,
+      "api_gzip_bytes_estimate": 2236,
+      "api_identity": {
+        "median_ms": 7.25,
+        "max_ms": 7.38
+      },
+      "api_gzip": {
+        "median_ms": 8.32,
+        "max_ms": 8.55
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 85.49,
+        "max_ms": 85.49
+      },
+      "persist_one_task": {
+        "median_ms": 17.09,
+        "max_ms": 17.88
+      }
+    },
+    {
+      "tasks": 1000,
+      "json_bytes": 7654003,
+      "load_tasks": {
+        "median_ms": 34.66,
+        "max_ms": 34.69
+      },
+      "summary_warm": {
+        "median_ms": 36.03,
+        "max_ms": 36.17
+      },
+      "detail": {
+        "median_ms": 34.62,
+        "max_ms": 35.27
+      },
+      "api_decoded_bytes": 1092001,
+      "api_gzip_bytes_estimate": 14181,
+      "api_identity": {
+        "median_ms": 42.69,
+        "max_ms": 43.7
+      },
+      "api_gzip": {
+        "median_ms": 52.85,
+        "max_ms": 54.02
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 790.16,
+        "max_ms": 790.16
+      },
+      "persist_one_task": {
+        "median_ms": 118.28,
+        "max_ms": 122.7
+      }
+    },
+    {
+      "tasks": 5000,
+      "json_bytes": 38270003,
+      "load_tasks": {
+        "median_ms": 202.86,
+        "max_ms": 210.64
+      },
+      "summary_warm": {
+        "median_ms": 208.52,
+        "max_ms": 213.84
+      },
+      "detail": {
+        "median_ms": 206.98,
+        "max_ms": 216.65
+      },
+      "api_decoded_bytes": 5460001,
+      "api_gzip_bytes_estimate": 68753,
+      "api_identity": {
+        "median_ms": 231.26,
+        "max_ms": 242.45
+      },
+      "api_gzip": {
+        "median_ms": 266.91,
+        "max_ms": 275.19
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 4391.92,
+        "max_ms": 4391.92
+      },
+      "persist_one_task": {
+        "median_ms": 1756.85,
+        "max_ms": 1842.44
+      }
+    }
+  ],
+  "empty_api": {
+    "/api/tasks": {
+      "median_ms": 3.81,
+      "max_ms": 4.54,
+      "decoded_bytes": 2
+    },
+    "/api/runtime": {
+      "median_ms": 2.52,
+      "max_ms": 2.74,
+      "decoded_bytes": 107
+    },
+    "/api/presets": {
+      "median_ms": 19.92,
+      "max_ms": 21.16,
+      "decoded_bytes": 18822
+    },
+    "/api/crawler-config/names": {
+      "median_ms": 3.1,
+      "max_ms": 3.35,
+      "decoded_bytes": 797
+    },
+    "/api/downloads": {
+      "median_ms": 3.19,
+      "max_ms": 3.31,
+      "decoded_bytes": 43
+    }
+  },
+  "log_processing": [
+    {
+      "events": 100,
+      "median_ms": 26.23,
+      "max_ms": 26.38
+    },
+    {
+      "events": 500,
+      "median_ms": 643.74,
+      "max_ms": 647.11
+    },
+    {
+      "events": 1000,
+      "median_ms": 2614.27,
+      "max_ms": 2627.33
+    }
+  ]
+}

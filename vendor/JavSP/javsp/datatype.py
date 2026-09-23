@@ -130,6 +130,7 @@ class Movie:
         self.dvdid = dvdid              # DVD ID，即通常的番号
         self.cid = cid                  # DMM Content ID
         self.files = []                 # 关联到此番号的所有影片文件的列表（用于管理带有多个分片的影片）
+        self.part_numbers = []          # 保留原分 P 编号，包括单独重试的分片
         self.data_src = 'normal'        # 数据源：不同的数据源将使用不同的爬虫
         self.info: MovieInfo = None     # 抓取到的影片信息
         self.save_dir = None            # 存放影片、封面、NFO的文件夹路径
@@ -187,18 +188,17 @@ class Movie:
 
         new_paths = []
         dir = os.path.dirname(self.files[0])
-        if len(self.files) == 1:
-            fullpath = self.files[0]
+        numbers = self.part_numbers or (list(range(1, len(self.files) + 1)) if len(self.files) > 1 else [None])
+        for number, fullpath in zip(numbers, self.files):
             ext = os.path.splitext(fullpath)[1]
-            newpath = os.path.join(self.save_dir, self.basename + ext)
+            suffix = f'-CD{number}' if number is not None else ''
+            new_paths.append(os.path.join(self.save_dir, self.basename + suffix + ext))
+        # Check every destination before moving the first part.
+        for newpath in new_paths:
+            if os.path.exists(newpath):
+                raise FileExistsError(f'File exists: {os.path.abspath(newpath)}')
+        for fullpath, newpath in zip(self.files, new_paths):
             move_file(fullpath, newpath)
-            new_paths.append(newpath)
-        else:
-            for i, fullpath in enumerate(self.files, start=1):
-                ext = os.path.splitext(fullpath)[1]
-                newpath = os.path.join(self.save_dir, self.basename + f'-CD{i}' + ext)
-                move_file(fullpath, newpath)
-                new_paths.append(newpath)
         self.new_paths = new_paths
         if len(os.listdir(dir)) == 0:
             #如果移动文件后目录为空则删除该目录

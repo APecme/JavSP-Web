@@ -597,7 +597,7 @@ def RunNormalMode(all_movies):
                 if movie.info.preview_pics:
                     progress_event('images', done=0, total=len(movie.info.preview_pics), kind='fanart')
                     extrafanartdir = movie.save_dir + '/extrafanart'
-                    os.mkdir(extrafanartdir)
+                    os.makedirs(extrafanartdir, exist_ok=True)
                     for (id, pic_url) in enumerate(movie.info.preview_pics):
                         inner_bar.set_description(f"Downloading extrafanart {id} from url: {pic_url}")
                         progress_event('images', done=id, total=len(movie.info.preview_pics), kind='fanart', status='downloading', current=id + 1)

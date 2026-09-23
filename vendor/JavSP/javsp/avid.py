@@ -26,18 +26,18 @@ def is_cid_media_type(category_id: str) -> bool:
     return bool(category and category.identifier_kind == 'cid')
 
 
-def _normalized_filename(filepath_str: str) -> str:
+def _normalized_filename(filepath_str: str, scanner=None) -> str:
     filepath = Path(filepath_str)
-    patterns = Cfg().scanner.ignored_id_pattern
+    patterns = (scanner or Cfg().scanner).ignored_id_pattern
     ignore_pattern = re.compile('|'.join(patterns)) if patterns else None
     stem = filepath.stem
     return (ignore_pattern.sub('', stem) if ignore_pattern else stem).upper()
 
 
-def configured_media_type(filepath_str: str):
+def configured_media_type(filepath_str: str, scanner=None):
     """Return the configured category, identifier kind and normalized ID for a filename."""
-    norm = _normalized_filename(filepath_str)
-    categories = sorted(Cfg().scanner.media_types, key=lambda item: item.priority, reverse=True)
+    norm = _normalized_filename(filepath_str, scanner)
+    categories = sorted((scanner or Cfg().scanner).media_types, key=lambda item: item.priority, reverse=True)
     for category in categories:
         if category.detector == 'fallback':
             continue
@@ -56,14 +56,14 @@ def configured_media_type(filepath_str: str):
         return category.id, category.identifier_kind, value.lower() if category.identifier_kind == 'cid' else value.upper()
     return None
 
-def get_id(filepath_str: str) -> str:
+def get_id(filepath_str: str, scanner=None) -> str:
     """从给定的文件路径中提取番号（DVD ID）"""
     filepath = Path(filepath_str)
     # 通常是接收文件的路径，当然如果是普通字符串也可以
-    configured = configured_media_type(filepath_str)
+    configured = configured_media_type(filepath_str, scanner)
     if configured and configured[1] == 'dvdid':
         return configured[2]
-    norm = _normalized_filename(filepath_str)
+    norm = _normalized_filename(filepath_str, scanner)
     if 'FC2' in norm:
         # 根据FC2 Club的影片数据，FC2编号为5-7个数字
         match = re.search(r'FC2[^A-Z\d]{0,5}(PPV[^A-Z\d]{0,5})?(\d{5,7})', norm, re.I)
@@ -90,7 +90,7 @@ def get_id(filepath_str: str) -> str:
         # 先尝试移除可疑域名进行匹配，如果匹配不到再使用原始文件名进行匹配
         no_domain = re.sub(r'\w{3,10}\.(COM|NET|APP|XYZ)', '', norm, flags=re.I)
         if no_domain != norm:
-            avid = get_id(no_domain)
+            avid = get_id(no_domain, scanner)
             if avid:
                 return avid
         # 匹配缩写成hey的heydouga影片。由于番号分三部分，要先于后面分两部分的进行匹配
@@ -141,18 +141,18 @@ def get_id(filepath_str: str) -> str:
         return match.group(1)
     # 如果还是匹配不了，尝试将')('替换为'-'后再试，少部分影片的番号是由')('分隔的
     if ')(' in norm:
-        avid = get_id(norm.replace(')(', '-'))
+        avid = get_id(norm.replace(')(', '-'), scanner)
         if avid:
             return avid
     # 如果最后仍然匹配不了番号，则尝试使用文件所在文件夹的名字去匹配
     
     if filepath.parent.name != '': # haven't reach '.' or '/'
-        return get_id(filepath.parent.name)
+        return get_id(filepath.parent.name, scanner)
     else:
         return ''
 
 
-CD_POSTFIX = re.compile(r'([-_]\w|cd\d)$')
+CD_POSTFIX = re.compile(r'(?:[-_]?(?:cd|part|pt)\d+|[-_](?:\d+|[a-z]))$', re.I)
 def _get_legacy_cid(filepath: str) -> str:
     """Recognize a DMM Content ID without consulting the media type configuration."""
     basename = os.path.splitext(os.path.basename(filepath))[0]
@@ -179,9 +179,9 @@ def _get_legacy_cid(filepath: str) -> str:
     return ''
 
 
-def get_cid(filepath: str) -> str:
+def get_cid(filepath: str, scanner=None) -> str:
     """尝试将给定的文件名匹配为CID（Content ID）"""
-    configured = configured_media_type(filepath)
+    configured = configured_media_type(filepath, scanner)
     if configured and configured[1] == 'cid':
         return configured[2]
     return _get_legacy_cid(filepath)

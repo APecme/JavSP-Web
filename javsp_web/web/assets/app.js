@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -260,7 +260,7 @@ document.addEventListener('change', (event) => {
     state.overviewPageSize = Number(event.target.value) || 24;
     state.overviewPage = 1;
     localStorage.setItem('javsp-web.overview-page-size', String(state.overviewPageSize));
-    renderOverview();
+    loadTasks();
     return;
   }
   const control = event.target.closest?.('[data-media-type-rule]');
@@ -520,12 +520,59 @@ async function loadCrawlerSource(name) {
   }
 }
 
+const apiRequests = new Map();
+const taskResponses = new Map();
 async function api(path, options = {}) {
-  const response = await fetch(path, { credentials: 'include', ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
-  if (response.status === 401) { location.href = '/login'; throw new Error('登录已过期'); }
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(formatApiError(data.detail, response.status));
-  return data;
+  const method = String(options.method || 'GET').toUpperCase();
+  if (method === 'GET' && apiRequests.has(path)) return apiRequests.get(path);
+  const request = (async () => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), method === 'GET' ? 20000 : 90000);
+    try {
+      const cached = method === 'GET' && path.startsWith('/api/tasks?') ? taskResponses.get(path) : null;
+      const conditional = cached ? { 'If-None-Match': cached.etag } : {};
+      const response = await fetch(path, { credentials: 'include', ...options, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...conditional, ...(options.headers || {}) } });
+      if (response.status === 401) { location.href = '/login'; throw new Error('登录已过期'); }
+      if (response.status === 304 && cached) return cached.data;
+      const data = await response.json();
+      if (!response.ok) throw new Error(formatApiError(data.detail, response.status));
+      if (method === 'GET' && path.startsWith('/api/tasks?')) {
+        taskResponses.set(path, { etag: response.headers.get('ETag'), data });
+        if (taskResponses.size > 20) taskResponses.delete(taskResponses.keys().next().value);
+      }
+      return data;
+    } catch (error) {
+      state.pollFailed = true;
+      if (error.name === 'AbortError') throw new Error('请求超时，请稍后重试');
+      throw error;
+    } finally { window.clearTimeout(timer); }
+  })();
+  if (method === 'GET') apiRequests.set(path, request);
+  try { return await request; }
+  finally { if (apiRequests.get(path) === request) apiRequests.delete(path); }
+}
+
+// Keep unchanged cards, images and detail sections mounted during polling.
+const renderedMarkup = new WeakMap();
+function patchChildren(container, markup) {
+  if (!container || renderedMarkup.get(container) === markup) return;
+  const template = document.createElement('template');
+  template.innerHTML = markup;
+  // Empty-state text is not in .children and must not survive the first result.
+  [...container.childNodes].filter((node) => node.nodeType !== 1).forEach((node) => node.remove());
+  const key = (node, index) => node.id || node.dataset?.taskCard || `${node.tagName}:${node.className}:${index}`;
+  const oldNodes = new Map([...container.children].map((node, index) => [key(node, index), node]));
+  const images = new Map([...container.querySelectorAll('img')].map((node) => [node.getAttribute('src'), node]));
+  const nodes = [...template.content.children].map((node, index) => {
+    const old = oldNodes.get(key(node, index));
+    if (old && old.outerHTML === node.outerHTML) return old;
+    node.querySelectorAll('img').forEach((img) => { const existing = images.get(img.getAttribute('src')); if (existing) img.replaceWith(existing); });
+    if (old?.tagName === 'DETAILS') node.open = old.open;
+    return node;
+  });
+  nodes.forEach((node, index) => { if (container.children[index] !== node) container.insertBefore(node, container.children[index] || null); });
+  while (container.children.length > nodes.length) container.lastElementChild.remove();
+  renderedMarkup.set(container, markup);
 }
 
 async function uploadTaskCover(taskId, file) {
@@ -839,7 +886,7 @@ function renderOverview() {
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => availableIds.has(id)));
   const selectedCount = state.selectedOverviewTasks.size;
   const toolbar = completed.length ? `<div class="overview-cover-toolbar"><label class="check-label"><input id="overview-select-all" type="checkbox"${selectedCount && selectedCount === completed.length ? ' checked' : ''}>选择全部</label><span class="muted">已选择 ${selectedCount} 项</span><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>` : '';
-  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => { const image = task.cover_count ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(task.name || '')}">` : artworkPlaceholder('overview-cover-placeholder', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载'); return `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover-open" type="button" data-task-detail="${escapeHtml(task.id)}">${image}<figcaption>${escapeHtml(task.name || task.id)}</figcaption></button></figure>`; }).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => { const image = task.cover_count ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?thumbnail=true&amp;v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="${escapeHtml(task.name || '')}">` : artworkPlaceholder('overview-cover-placeholder', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载'); return `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover-open" type="button" data-task-detail="${escapeHtml(task.id)}">${image}<figcaption>${escapeHtml(task.name || task.id)}</figcaption></button></figure>`; }).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
   if (completed.length) {
     $('#overview-tasks').insertAdjacentHTML('afterbegin', toolbar);
     $('#overview-tasks').querySelectorAll('.overview-cover').forEach((card) => {
@@ -852,30 +899,70 @@ function renderOverview() {
   }
 }
 
-async function loadTasks() {
-  if (state.tasksLoading) return;
-  state.tasksLoading = true;
-  const pageScroll = window.scrollY;
-  try {
-    rememberLogScroll();
-    state.tasks = await api('/api/tasks');
-    syncTaskExpansion(state.tasks);
-    // Rendering every task card is expensive when history is large. Only
-    // render the visible panel; the other panel is rendered when selected.
-    const activeView = document.querySelector('.view.active')?.dataset.panel;
-    if (activeView === 'overview') renderOverview();
-    if (activeView === 'scrape') renderTasks();
-    const detailOpen = $('#task-detail-dialog')?.open && state.activeTaskDetail;
-    if (detailOpen && !state.taskMetadataEditing && !state.taskDetailLogSelecting && !hasTaskDetailLogSelection()) openTaskDetail(state.activeTaskDetail);
-    window.requestAnimationFrame(restoreLogScroll);
-  } catch (error) { console.error(error); }
-  finally { state.tasksLoading = false; }
-  if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
-  window.requestAnimationFrame(() => window.scrollTo({ top: pageScroll }));
+function taskPageRequest() {
+  const view = document.querySelector('.view.active')?.dataset.panel;
+  if (!['overview', 'scrape'].includes(view)) return null;
+  const params = new URLSearchParams();
+  params.set('view', view === 'overview' ? 'overview' : 'manual');
+  const size = view === 'overview' ? state.overviewPageSize : state.taskPageSize;
+  const page = view === 'overview' ? state.overviewPage - 1 : state.taskPage;
+  params.set('limit', size); params.set('offset', page * size);
+  if (view === 'overview') {
+    params.set('sort', state.overviewSort.key); params.set('direction', state.overviewSort.direction);
+  } else {
+    const controls = { query: 'query', field: 'field', status: 'status', size_min: 'size-min', size_max: 'size-max' };
+    Object.entries(controls).forEach(([key, id]) => { const value = $(`#task-filter-${id}`)?.value; if (value) params.set(key, value); });
+    const from = $('#task-filter-date-from')?.value;
+    const to = $('#task-filter-date-to')?.value;
+    if (from) params.set('date_from', new Date(`${from}T00:00:00`).toISOString());
+    if (to) params.set('date_to', new Date(`${to}T23:59:59.999`).toISOString());
+  }
+  return `/api/tasks?${params}`;
 }
 
+async function loadTasks() {
+  const path = taskPageRequest();
+  if (!path) return;
+  if (state.tasksLoading) {
+    state.reloadTasks = true;
+    return state.taskRequest;
+  }
+  state.tasksLoading = true;
+  state.taskRequest = (async () => {
+    try {
+      const result = await api(path);
+      if (path !== taskPageRequest()) return;
+      const signature = JSON.stringify(result);
+      state.tasks = result.items || [];
+      state.taskTotal = Number(result.total || 0);
+      state.taskMetrics = result.metrics || {};
+      const view = document.querySelector('.view.active')?.dataset.panel;
+      if (view === 'overview') state.overviewPage = Math.floor(result.offset / result.limit) + 1;
+      else state.taskPage = Math.floor(result.offset / result.limit);
+      if (state.tasksSignature !== signature || state.tasksView !== view) {
+        state.tasksSignature = signature; state.tasksView = view;
+        syncTaskExpansion(state.tasks);
+        if (view === 'overview') renderOverview();
+        if (view === 'scrape') renderTasks();
+      }
+      $('#task-load-error')?.remove();
+    } catch (error) {
+      if (!$('#task-load-error')) $('.view.active')?.insertAdjacentHTML('afterbegin', '<p id="task-load-error" class="form-error" role="status"></p>');
+      if ($('#task-load-error')) $('#task-load-error').textContent = `${error.message}，稍后自动重试。`;
+    } finally {
+      state.tasksLoading = false;
+      if (state.reloadTasks) { state.reloadTasks = false; queueMicrotask(loadTasks); }
+    }
+  })();
+  await state.taskRequest;
+  if ($('#task-detail-dialog')?.open && !state.taskMetadataEditing && !state.taskDetailLogSelecting && !hasTaskDetailLogSelection()) await openTaskDetail(state.activeTaskDetail, true);
+  if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
+}
+
+function normalizeVersion(value) { return String(value || '').replace(/^[vV]+/, ''); }
+
 function compareReleaseVersions(left, right) {
-  const parse = (value) => String(value || '').replace(/^v/i, '').match(/^(\d+)\.(\d+)\.(\d+)/);
+  const parse = (value) => normalizeVersion(value).match(/^(\d+)\.(\d+)\.(\d+)/);
   const leftParts = parse(left);
   const rightParts = parse(right);
   if (!leftParts || !rightParts) return null;
@@ -889,24 +976,24 @@ function compareReleaseVersions(left, right) {
 async function checkForAppUpdate(runtime) {
   const tag = $('#app-version');
   if (!tag) return;
-  const displayVersion = runtime.version || runtime.app_version || tag.textContent.replace(/^v/, '');
-  const currentVersion = runtime.app_version || displayVersion;
-  tag.textContent = `v${displayVersion}`;
+  const displayVersion = normalizeVersion(runtime.version || runtime.app_version || tag.textContent);
+  const currentVersion = normalizeVersion(runtime.app_version || displayVersion);
+  tag.textContent = `v${normalizeVersion(displayVersion)}`;
   tag.dataset.updateStatus = 'checking';
   tag.title = '正在检查 GitHub Releases 更新';
   try {
-    const response = await fetch('https://api.github.com/repos/APecme/JavSP-Web/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    const response = await fetch('https://api.github.com/repos/APecme/JavSP-Web/releases/latest', { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/vnd.github+json' } });
     if (!response.ok) throw new Error(`GitHub 返回 ${response.status}`);
     const release = await response.json();
     const latestVersion = release.tag_name || '';
     const comparison = compareReleaseVersions(currentVersion, latestVersion);
     if (comparison !== null && comparison < 0) {
       tag.dataset.updateStatus = 'available';
-      tag.textContent = `v${displayVersion} 可更新`;
+      tag.textContent = `v${normalizeVersion(displayVersion)} 可更新`;
       tag.title = `发现新版本 ${latestVersion}`;
     } else if (comparison !== null) {
       tag.dataset.updateStatus = 'current';
-      tag.textContent = `v${displayVersion} 已是最新`;
+      tag.textContent = `v${normalizeVersion(displayVersion)} 已是最新`;
       tag.title = `已是最新版本 ${latestVersion}`;
     } else {
       tag.dataset.updateStatus = 'unknown';
@@ -944,7 +1031,7 @@ async function loadPathTools() {
   try {
     const runtime = await api('/api/runtime');
     state.runtime = runtime;
-    checkForAppUpdate(runtime);
+
     const tools = $('#path-tools');
     tools.classList.remove('hidden');
     const nativeButtons = tools.querySelectorAll('.native-path-button');
@@ -1272,13 +1359,14 @@ $('#task-form').addEventListener('submit', async (event) => {
 });
 
 $('#refresh-tasks').addEventListener('click', loadTasks);
+document.addEventListener('click', (event) => { const button = event.target.closest('[data-task-page]'); if (button && !button.disabled) { state.taskPage = Math.max(0, Number(button.dataset.taskPage) || 0); loadTasks(); } });
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) { event.stopPropagation(); deleteTaskInDialog(button.dataset.deleteTask); } });
 document.addEventListener('change', (event) => {
   if (event.target.id === 'overview-sort-key' || event.target.id === 'overview-sort-direction') {
     state.overviewSort = { key: $('#overview-sort-key').value, direction: $('#overview-sort-direction').value };
     state.overviewPage = 1;
-    renderOverview();
+    loadTasks();
   }
 });
 document.addEventListener('change', async (event) => {
@@ -1320,7 +1408,7 @@ document.addEventListener('click', (event) => {
   const pageButton = event.target.closest('[data-overview-page]');
   if (pageButton) {
     state.overviewPage = Math.max(1, Number(pageButton.dataset.overviewPage) || 1);
-    renderOverview();
+    loadTasks();
     return;
   }
   const menu = $('#overview-context-menu');
@@ -1613,75 +1701,56 @@ function ensureTaskFilters() {
   if ($('#task-filter-bar')) return;
   const taskTable = $('#task-table');
   if (!taskTable) return;
-  taskTable.insertAdjacentHTML('beforebegin', `<div id="task-filter-bar" class="task-filter-bar" aria-label="任务筛选"><select id="task-filter-field"><option value="all">全部信息</option><option value="path">路径</option><option value="title">标题</option><option value="dvdid">番号</option><option value="actress">女优</option></select><input id="task-filter-query" type="search" placeholder="搜索路径、标题、番号或女优"><select id="task-filter-status"><option value="">全部状态</option><option value="queued">排队中</option><option value="running">运行中</option><option value="succeeded">已完成</option><option value="failed">失败</option><option value="cancelled">已取消</option></select><label>大小 MB<input id="task-filter-size-min" type="number" min="0" placeholder="最小"></label><span>至</span><label><input id="task-filter-size-max" type="number" min="0" placeholder="最大"></label><label>时间<input id="task-filter-date-from" type="date"></label><span>至</span><label><input id="task-filter-date-to" type="date"></label><button id="task-filter-reset" class="button secondary" type="button">重置</button></div><p id="task-filter-summary" class="muted"></p>`);
+  taskTable.insertAdjacentHTML('beforebegin', `<div id="task-filter-bar" class="task-filter-bar" aria-label="任务筛选"><select id="task-filter-field"><option value="all">全部信息</option><option value="path">路径</option><option value="title">标题</option><option value="dvdid">番号</option><option value="actress">女优</option></select><input id="task-filter-query" type="search" placeholder="搜索路径、标题、番号或女优"><select id="task-filter-status"><option value="">全部状态</option><option value="queued">排队中</option><option value="running">运行中</option><option value="succeeded">已完成</option><option value="failed">失败</option><option value="cancelled">已取消</option></select><label>大小 MB<input id="task-filter-size-min" type="number" min="0" placeholder="最小"></label><span>至</span><label><input id="task-filter-size-max" type="number" min="0" placeholder="最大"></label><label>时间<input id="task-filter-date-from" type="date"></label><span>至</span><label><input id="task-filter-date-to" type="date"></label><button id="task-filter-reset" class="button secondary" type="button">重置</button></div><p id="task-filter-summary" class="muted"></p><div id="task-pagination" class="overview-pagination"></div>`);
   $('#task-filter-field')?.remove();
-  document.querySelectorAll('#task-filter-bar input, #task-filter-bar select').forEach((control) => control.addEventListener('input', renderTasks));
+  let filterTimer;
+  document.querySelectorAll('#task-filter-bar input, #task-filter-bar select').forEach((control) => control.addEventListener('input', () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => { state.taskPage = 0; loadTasks(); }, 200); }));
   $('#task-filter-reset').addEventListener('click', () => {
     document.querySelectorAll('#task-filter-bar input').forEach((control) => { control.value = ''; });
     $('#task-filter-status').value = '';
-    renderTasks();
+    state.taskPage = 0; loadTasks();
   });
 }
 
-function filteredTasks() {
-  const query = ($('#task-filter-query')?.value || '').trim().toLocaleLowerCase();
-  const field = $('#task-filter-field')?.value || 'all';
-  const status = $('#task-filter-status')?.value || '';
-  const minSize = Number($('#task-filter-size-min')?.value);
-  const maxSize = Number($('#task-filter-size-max')?.value);
-  const from = $('#task-filter-date-from')?.value;
-  const to = $('#task-filter-date-to')?.value;
-  return state.tasks.filter((task) => {
-    if (task.source && task.source !== 'manual' && !task.image_retry_started_at) return false;
-    const metadata = task.progress?.metadata || {};
-    const values = {
-      path: task.input_directory || '', title: task.title || metadata.title || '', dvdid: metadata.dvdid || '',
-      actress: Array.isArray(metadata.actress) ? metadata.actress.join(' ') : (metadata.actress || '')
-    };
-    const searchable = field === 'all' ? Object.values(values).join(' ') : values[field];
-    if (query && !String(searchable || '').toLocaleLowerCase().includes(query)) return false;
-    if (status && task.status !== status) return false;
-    const sizeMb = (Number(task.size_bytes) || 0) / (1024 * 1024);
-    if (Number.isFinite(minSize) && $('#task-filter-size-min').value !== '' && sizeMb < minSize) return false;
-    if (Number.isFinite(maxSize) && $('#task-filter-size-max').value !== '' && sizeMb > maxSize) return false;
-    const created = new Date(task.created_at);
-    if (from && created < new Date(`${from}T00:00:00`)) return false;
-    if (to && created > new Date(`${to}T23:59:59.999`)) return false;
-    return true;
-  });
-}
+function filteredTasks() { return state.tasks; }
 
 function renderTasks() {
   ensureTaskFilters();
   rememberLogScroll();
   rememberTaskCards();
   const tasks = filteredTasks();
-  $('#task-table').innerHTML = tasks.length ? tasks.map(taskCard).join('') : '<div class="task-list empty">没有符合当前筛选条件的任务</div>';
+  patchChildren($('#task-table'), tasks.length ? tasks.map(taskCard).join('') : '<div class="task-list empty">没有符合当前筛选条件的任务</div>');
   const manualTaskCount = state.tasks.filter((task) => !task.source || task.source === 'manual' || task.image_retry_started_at).length;
-  $('#task-filter-summary').textContent = `显示 ${tasks.length} / ${manualTaskCount} 个手动任务`;
+  $('#task-filter-summary').textContent = `显示 ${tasks.length} / ${state.taskTotal || manualTaskCount} 个手动任务`;
+  const pagination = $('#task-pagination');
+  if (pagination) { const pages = Math.max(1, Math.ceil((state.taskTotal || tasks.length) / state.taskPageSize)); pagination.innerHTML = `<span>第 ${state.taskPage + 1} / ${pages} 页</span><button class="button secondary" type="button" data-task-page="${state.taskPage - 1}"${state.taskPage <= 0 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-task-page="${state.taskPage + 1}"${state.taskPage + 1 >= pages ? ' disabled' : ''}>下一页</button>`; }
   restoreLogScroll();
 }
 
-async function openTaskDetail(taskId) {
-  const summary = state.tasks.find((item) => item.id === taskId);
+async function openTaskDetail(taskId, background = false) {
+  if (!taskId || (background && state.detailLoading)) return;
+  const summary = state.tasks.find((item) => item.id === taskId) || state.detailTask;
   if (!summary) return;
   state.activeTaskDetail = taskId;
   const dialog = $('#task-detail-dialog');
   $('#task-detail-title').textContent = taskDisplayName(summary);
   $('#task-detail-subtitle').textContent = summary.file_name || summary.name || '';
-  $('#task-detail-content').innerHTML = '<p class="muted">正在读取任务详情与日志...</p>';
+  if (!background && state.detailTask?.id !== taskId) { renderedMarkup.delete($('#task-detail-content')); $('#task-detail-content').innerHTML = '<p class="muted">正在读取任务详情与日志...</p>'; }
+  const detailRequestId = state.detailRequestId = (state.detailRequestId || 0) + 1;
+  state.detailLoading = true;
   if (!dialog.open) dialog.showModal();
   let task;
   try {
     task = await api(`/api/tasks/${encodeURIComponent(taskId)}`);
   } catch (error) {
-    if (state.activeTaskDetail === taskId) $('#task-detail-content').innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+    if (!background && state.activeTaskDetail === taskId) $('#task-detail-content').innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
     return;
-  }
-  if (state.activeTaskDetail !== taskId || !dialog.open) return;
+  } finally { if (detailRequestId === state.detailRequestId) state.detailLoading = false; }
+  if (state.activeTaskDetail !== taskId || !dialog.open || detailRequestId !== state.detailRequestId || (background && (state.taskMetadataEditing || state.taskDetailLogSelecting || hasTaskDetailLogSelection()))) return;
+  state.detailTask = task;
   const metadata = task.progress?.metadata || {};
   const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name], ['文件路径', task.input_directory || '-'], ['整理路径', task.progress?.output?.save_dir || '-']].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
-  const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
+  const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
   const actressInput = Array.isArray(metadata.actress) ? metadata.actress.join('\n') : (metadata.actress || '');
   const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="task-metadata-summary"><div class="task-metadata-summary-heading"><h3>影片资料</h3><button class="button secondary" type="button" data-edit-task-metadata>修改</button></div><div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div></section>`;
@@ -1690,7 +1759,7 @@ async function openTaskDetail(taskId) {
   const fanartFailures = imageInfo.fanart_failures || [];
   const fanarts = expectedFanart
     ? Array.from({ length: Math.min(expectedFanart, 24) }, (_, index) => {
-      if (index < Number(task.fanart_count || 0)) return `<img src="/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}" loading="lazy" alt="剧照 ${index + 1}">`;
+      if (index < Number(task.fanart_count || 0)) return `<img src="/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="剧照 ${index + 1}">`;
       const failed = fanartFailures.includes(index + 1);
       return artworkPlaceholder('detail-fanart-empty', failed ? `剧照 ${index + 1} 下载失败` : `剧照 ${index + 1} 未下载`);
     }).join('')
@@ -1703,7 +1772,7 @@ async function openTaskDetail(taskId) {
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = taskDisplayName(task);
   $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
-  $('#task-detail-content').innerHTML = `${metadataEditor}<section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`;
+  patchChildren($('#task-detail-content'), `${metadataEditor}<section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`);
 }
 
 function cookiecloudPayload() {
@@ -1777,45 +1846,20 @@ function overviewSelectionIcon(selected = false) {
 }
 
 function renderOverview() {
-  $('#metric-total').textContent = state.tasks.length;
-  $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
-  const latest = state.tasks[0];
-  $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || task.has_artwork_sources));
-  const groups = new Map();
-  completed.forEach((task) => {
-    const outputPath = String(task.progress?.output?.save_dir || '').trim();
-    const identity = outputPath ? `output:${outputPath.toLowerCase()}` : `input:${String(task.input_directory || task.id).toLowerCase()}`;
-    const group = groups.get(identity) || [];
-    group.push(task);
-    groups.set(identity, group);
-  });
-  const cards = [...groups.values()].map((items) => {
-    const ordered = items.slice().sort((left, right) => {
-      const status = Number(right.status === 'succeeded') - Number(left.status === 'succeeded');
-      return status || Date.parse(right.created_at || '') - Date.parse(left.created_at || '');
-    });
-    return { task: ordered[0], taskCount: items.length, taskIds: items.map((item) => item.id) };
-  }).sort((left, right) => {
-    const key = state.overviewSort.key;
-    const value = (entry) => key === 'publish_date' ? Date.parse(entry.task.progress?.metadata?.publish_date || '') || 0 : Date.parse(entry.task.created_at || '') || 0;
-    const difference = value(left) - value(right);
-    return state.overviewSort.direction === 'asc' ? difference : -difference;
-  });
-  const totalPages = Math.max(1, Math.ceil(cards.length / state.overviewPageSize));
-  state.overviewPage = Math.min(Math.max(1, state.overviewPage), totalPages);
-  const pageStart = (state.overviewPage - 1) * state.overviewPageSize;
-  const pageCards = cards.slice(pageStart, pageStart + state.overviewPageSize);
-  const visibleIds = new Set(cards.flatMap((entry) => entry.taskIds));
-  const pageIds = new Set(pageCards.flatMap((entry) => entry.taskIds));
-  state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => visibleIds.has(id)));
+  $('#metric-total').textContent = state.taskMetrics?.total || 0;
+  $('#metric-running').textContent = state.taskMetrics?.running || 0;
+  $('#metric-result').textContent = ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中', cancelled: '已取消' }[state.taskMetrics?.latest_status] || '-');
+  const cards = state.tasks.map((task) => ({ task, taskCount: task.task_ids?.length || 1, taskIds: task.task_ids || [task.id] }));
+  const totalPages = Math.max(1, Math.ceil(state.taskTotal / state.overviewPageSize));
+  const pageCards = cards;
+  const pageIds = new Set(cards.flatMap((entry) => entry.taskIds));
   const allSelected = pageIds.size > 0 && [...pageIds].every((id) => state.selectedOverviewTasks.has(id));
   const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
-  $('#overview-tasks').innerHTML = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  const overviewMarkup = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
   const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}>下一页</button></div>` : '';
   const overviewContainer = $('#overview-tasks');
-  if (overviewContainer && cards.length) overviewContainer.insertAdjacentHTML('beforeend', pagination);
+  patchChildren(overviewContainer, overviewMarkup + pagination);
   if (state.overviewSelectionFeedback.size) window.setTimeout(() => state.overviewSelectionFeedback.clear(), 260);
 }
 
@@ -1826,7 +1870,7 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const fanart = Math.min(Number(task.fanart_count) || 0, total || Number(task.fanart_count) || 0);
   const coverState = coverReady ? '封面已下载' : (images.failed ? '封面下载失败' : '封面未生成');
   const artwork = coverReady
-    ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
+    ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?thumbnail=true&amp;v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
     : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const selected = taskIds.every((id) => state.selectedOverviewTasks.has(id));
   const selector = state.overviewSelectionMode ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
@@ -1956,6 +2000,12 @@ async function loadDownloads() {
       clearDownloadPresentation();
       target.classList.add('empty');
       target.textContent = `${active.name}：${active.error}`;
+      return;
+    }
+    if (active.refreshing && !active.updated_at) {
+      clearDownloadPresentation();
+      target.classList.add('empty');
+      target.textContent = `${active.name}：正在读取下载任务…`;
       return;
     }
     if (!result.takeover_enabled) {
@@ -2235,6 +2285,7 @@ async function openDownloadAutoScrapeRun(runId) {
 }
 
 function autoScrapeRunCounts(run) {
+  if (run.counts) return run.counts;
   const taskIds = Array.isArray(run.task_ids) ? run.task_ids.map(String) : [];
   const taskById = new Map(state.tasks.map((task) => [String(task.id), task]));
   const counts = { total: taskIds.length, succeeded: 0, failed: 0, running: 0, queued: 0 };
@@ -2313,8 +2364,8 @@ function showView(view) {
   const title = { overview: '概览', scrape: '手动刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', 'crawler-config': '爬虫配置', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
   $('#section-title').textContent = title;
   $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' || view === 'crawler-config' ? '配置' : '工作区';
-  if (view === 'overview') renderOverview();
-  if (view === 'scrape') { renderTasks(); loadPresets(); loadCrawlerNames(); loadPathTools(); }
+  if (view === 'overview' || view === 'scrape') { state.tasks = []; state.tasksSignature = ''; if (view === 'scrape') ensureTaskFilters(); loadTasks(); }
+  if (view === 'scrape') { loadPresets(); loadCrawlerNames(); loadPathTools(); }
   if (view === 'auto-scrape') { loadPresets(); loadCrawlerNames(); loadAutoScrapeSchedules(); }
   if (view === 'downloads') { loadDownloadManagement(); loadDownloads(); }
   if (view === 'crawler-config') loadCrawlerConfig();
@@ -3087,17 +3138,34 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     state.user = await api('/api/auth/me');
     $('#current-user').textContent = state.user.username;
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); }
-    // The overview is the default landing page. Load only what it needs so
-    // large preset forms and crawler catalogs do not delay first paint.
-    await loadTasks();
-    if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || (savedView !== 'settings' && savedView !== 'auto-scrape'))) showView(savedView);
+    if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config'].includes(savedView))) showView(savedView);
+    else showView('overview');
+    api('/api/runtime').then(checkForAppUpdate).catch(console.error);
     scheduleGitHubStarInvite();
   } catch (error) { return; }
-  setInterval(() => {
-    loadTasks();
-    if (document.querySelector('[data-panel="downloads"]')?.classList.contains('active')) loadDownloads();
-    if (document.querySelector('[data-panel="auto-scrape"]')?.classList.contains('active')) loadAutoScrapeSchedules();
-  }, 5000);
+  let refreshTimer = null;
+  let polling = false;
+  let failures = 0;
+  const poll = async () => {
+    if (document.hidden || polling) return;
+    polling = true; state.pollFailed = false;
+    try {
+      const view = document.querySelector('.view.active')?.dataset.panel;
+      const work = [];
+      if (['overview', 'scrape'].includes(view)) work.push(loadTasks());
+      else if ($('#task-detail-dialog')?.open && !state.taskMetadataEditing) work.push(openTaskDetail(state.activeTaskDetail, true));
+      if (view === 'downloads') work.push(loadDownloads());
+      if (view === 'auto-scrape') work.push(loadAutoScrapeSchedules());
+      await Promise.allSettled(work);
+      failures = state.pollFailed ? Math.min(failures + 1, 4) : 0;
+    } finally {
+      polling = false;
+      if (!document.hidden) refreshTimer = setTimeout(poll, Math.min(60000, 5000 * 2 ** failures));
+    }
+  };
+  document.addEventListener('visibilitychange', () => { clearTimeout(refreshTimer); if (!document.hidden) poll(); });
+  if (!document.hidden) refreshTimer = setTimeout(poll, 5000);
+
 })();
 
 function formatLocalDateTime(value) {

@@ -1,0 +1,133 @@
+{
+  "environment": {
+    "python": "3.12.7",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "repeats": 3
+  },
+  "method": "Synthetic completed tasks, 40 progress events/task; warm summaries. In-process HTTP via TestClient; authentication dependency stubbed. No WAN, NAS or browser layout measurements.",
+  "assets": [
+    {
+      "name": "app.css",
+      "bytes": 40373,
+      "gzip_bytes_estimate": 8078,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "app.js",
+      "bytes": 220309,
+      "gzip_bytes_estimate": 52728,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "javsp-logo.ico",
+      "bytes": 25862,
+      "gzip_bytes_estimate": 24957,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "javsp-logo.png",
+      "bytes": 12875,
+      "gzip_bytes_estimate": 12261,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "overrides.css",
+      "bytes": 41107,
+      "gzip_bytes_estimate": 7651,
+      "cache_control": "public, no-cache"
+    }
+  ],
+  "history": [
+    {
+      "tasks": 10000,
+      "sqlite_bytes": 71323648,
+      "load_tasks": {
+        "median_ms": 413.48,
+        "max_ms": 556.3
+      },
+      "summary_warm": {
+        "median_ms": 270.32,
+        "max_ms": 340.58
+      },
+      "detail": {
+        "median_ms": 2.06,
+        "max_ms": 2.84
+      },
+      "api_decoded_bytes": 11258891,
+      "api_gzip_bytes_estimate": 196820,
+      "api_identity": {
+        "median_ms": 334.34,
+        "max_ms": 357.1
+      },
+      "api_gzip": {
+        "median_ms": 449.59,
+        "max_ms": 530.9
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 36.27,
+        "max_ms": 36.27
+      },
+      "page_50": {
+        "median_ms": 76.45,
+        "max_ms": 78.22
+      },
+      "overview_24": {
+        "median_ms": 216.99,
+        "max_ms": 217.27
+      },
+      "page_decoded_bytes": 56396,
+      "page_unchanged": {
+        "median_ms": 73.78,
+        "max_ms": 75.84
+      },
+      "persist_one_task": {
+        "median_ms": 5.07,
+        "max_ms": 7.17
+      }
+    }
+  ],
+  "empty_api": {
+    "/api/tasks": {
+      "median_ms": 6.12,
+      "max_ms": 7.57,
+      "decoded_bytes": 2
+    },
+    "/api/runtime": {
+      "median_ms": 3.49,
+      "max_ms": 3.66,
+      "decoded_bytes": 107
+    },
+    "/api/presets": {
+      "median_ms": 21.91,
+      "max_ms": 22.31,
+      "decoded_bytes": 18822
+    },
+    "/api/crawler-config/names": {
+      "median_ms": 3.83,
+      "max_ms": 5.17,
+      "decoded_bytes": 797
+    },
+    "/api/downloads": {
+      "median_ms": 3.74,
+      "max_ms": 4.44,
+      "decoded_bytes": 43
+    }
+  },
+  "log_processing": [
+    {
+      "events": 100,
+      "median_ms": 34.16,
+      "max_ms": 36.9
+    },
+    {
+      "events": 500,
+      "median_ms": 862.27,
+      "max_ms": 883.35
+    },
+    {
+      "events": 1000,
+      "median_ms": 3346.66,
+      "max_ms": 3662.07
+    }
+  ]
+}

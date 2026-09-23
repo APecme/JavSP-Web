@@ -17,6 +17,7 @@ from javsp.avid import *
 from javsp.lib import re_escape
 from javsp.config import Cfg
 from javsp.datatype import Movie
+from javsp.multipart import part_number
 
 logger = logging.getLogger(__name__)
 failed_items = []
@@ -24,15 +25,23 @@ failed_items = []
 
 def scan_movies(root: str) -> List[Movie]:
     """获取文件夹内的所有影片的列表（自动探测同一文件夹内的分片）"""
-    # 由于实现的限制: 
-    # 1. 以数字编号最多支持10个分片，字母编号最多支持26个分片
-    # 2. 允许分片间的编号有公共的前导符（如编号01, 02, 03），因为求prefix时前导符也会算进去
+    # Explicit numeric suffixes preserve their part numbers, even with gaps.
+    # Other legacy naming styles use the common-prefix fallback below.
 
     # 扫描所有影片文件并获取它们的番号
     dic = {}    # avid: [abspath1, abspath2...]
     small_videos = {}
     ignore_folder_name_pattern = re.compile('|'.join(Cfg().scanner.ignored_folder_name_pattern))
-    if os.path.isfile(root):
+    if Cfg().scanner.input_files is not None:
+        # A Web task is an explicit file set, never a scan of sibling movies.
+        selected = {}
+        for value in Cfg().scanner.input_files:
+            path = os.path.abspath(value)
+            if not os.path.isfile(path):
+                raise FileNotFoundError(f'分 P 文件不存在: {path}')
+            selected.setdefault(os.path.dirname(path), []).append(os.path.basename(path))
+        scan_entries = [(directory, [], names) for directory, names in selected.items()]
+    elif os.path.isfile(root):
         scan_entries = [(os.path.dirname(root), [], [os.path.basename(root)])]
     else:
         scan_entries = os.walk(root)
@@ -104,6 +113,10 @@ def scan_movies(root: str) -> List[Movie]:
             non_slice_dup[avid] = files
             del dic[avid]
             continue
+        numbers = [part_number(path) for path in files]
+        if all(number is not None for number in numbers) and len(set(numbers)) == len(numbers):
+            dic[avid] = [path for _, path in sorted(zip(numbers, files))]
+            continue
         # 提取分片信息（如果正则替换成功，只会剩下单个小写字符）。相关变量都要使用同样的列表生成顺序
         basenames = [os.path.basename(i) for i in files]
         prefix = os.path.commonprefix(basenames)
@@ -156,6 +169,9 @@ def scan_movies(root: str) -> List[Movie]:
             # 即使初步识别为cid，也存储dvdid以供误识别时退回到dvdid模式进行抓取
             mov.dvdid = get_id(files[0])
         mov.files = files
+        numbers = [part_number(path) for path in files]
+        if all(number is not None for number in numbers):
+            mov.part_numbers = numbers
         mov.data_src = src
         logger.debug(f'影片数据源类型: {avid}: {src}')
         movies.append(mov)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
 import json
@@ -18,7 +19,7 @@ from urllib.parse import urlsplit
 import requests
 import yaml
 from croniter import croniter
-from fastapi import Cookie, Depends, FastAPI, File, UploadFile, HTTPException, Query, Response, WebSocket, status
+from fastapi import Cookie, Depends, FastAPI, File, UploadFile, HTTPException, Query, Request, Response, WebSocket, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -72,6 +73,8 @@ from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_s
 from .media import list_media_libraries, sync_media_server
 from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_task_summaries, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
+from .artwork import image_response
+from .task_store import run_counts
 
 
 ensure_seed_data()
@@ -79,6 +82,7 @@ recover_interrupted_tasks()
 app = FastAPI(title="JavSP WEB", version=__version__)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 WEB_DIR = Path(__file__).resolve().parent / "web"
+ASSET_VERSION = hashlib.sha256(b''.join(path.read_bytes() for path in sorted((WEB_DIR / 'assets').iterdir()) if path.is_file())).hexdigest()[:16]
 RELEASE_LABEL = os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").strip()
 NOVNC_DIR = Path(os.environ.get("JAVSP_NOVNC_DIR", "/usr/share/novnc"))
 GOOGLE_VNC_HOST = os.environ.get("JAVSP_GOOGLE_VNC_HOST", "127.0.0.1")
@@ -86,14 +90,20 @@ GOOGLE_VNC_PORT = int(os.environ.get("JAVSP_GOOGLE_VNC_PORT", "5900"))
 
 
 def _display_version() -> str:
-    return RELEASE_LABEL or __version__
+    value = RELEASE_LABEL or __version__
+    return re.sub(r"^[vV]+", "", str(value))
+
+
+def _app_version() -> str:
+    display = _display_version()
+    return display if re.fullmatch(r'\d+\.\d+\.\d+(?:[-+].*)?', display) else re.sub(r'^[vV]+', '', __version__)
 
 
 @app.middleware("http")
 async def disable_asset_cache(request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/assets/"):
-        response.headers["Cache-Control"] = "no-store"
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if request.query_params.get("v") == ASSET_VERSION else "public, no-cache"
     return response
 
 
@@ -285,7 +295,7 @@ class PathMappingsBody(BaseModel):
 
 @app.get("/api/runtime")
 def runtime(_: dict = Depends(current_user)) -> dict:
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": __version__, "timezone": timezone_name()}
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name()}
 
 
 @app.post("/api/path/select")
@@ -384,13 +394,14 @@ def public_info() -> dict:
 
 
 @app.get("/login")
-def login_page() -> FileResponse:
-    return FileResponse(WEB_DIR / "login.html")
+def login_page() -> HTMLResponse:
+    document = (WEB_DIR / 'login.html').read_text(encoding='utf-8').replace('__ASSET_VERSION__', ASSET_VERSION)
+    return HTMLResponse(document, headers={'Cache-Control': 'no-cache'})
 
 
 @app.get("/")
 def index_page() -> HTMLResponse:
-    asset_version = _display_version()
+    asset_version = ASSET_VERSION
     document = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", asset_version)
     return HTMLResponse(document, headers={"Cache-Control": "no-store"})
 
@@ -1023,27 +1034,21 @@ def update_config(body: ConfigBody, _: dict = Depends(require_admin)) -> dict:
 
 
 @app.get("/api/tasks")
-def tasks(_: dict = Depends(current_user)) -> list[dict]:
-    # Older task records predate the source marker. Recover their origin from
-    # retained schedule and download-auto-scrape records so queues stay split.
-    scheduled_ids = {
-        str(task_id)
-        for schedule in list_auto_scrape_schedules()
-        for run in schedule.get("runs") or []
-        for task_id in run.get("task_ids") or []
-    }
-    download_ids = {
-        str(task_id)
-        for entry in load_auto_scrape_history().values()
-        if isinstance(entry, dict)
-        for task_id in entry.get("task_ids") or []
-    }
-    items = list_task_summaries()
-    for item in items:
-        if item.get("source"):
-            continue
-        item["source"] = "schedule" if item.get("id") in scheduled_ids else ("download" if item.get("id") in download_ids else "manual")
-    return items
+def tasks(request: Request, limit: int | None = Query(default=None, ge=1, le=500), offset: int = Query(default=0, ge=0),
+          view: Literal['all', 'manual', 'overview'] = 'all', query: str = '',
+          field: Literal['all', 'path', 'title', 'dvdid', 'actress'] = 'all', status: str = '',
+          size_min: float | None = Query(default=None, ge=0), size_max: float | None = Query(default=None, ge=0),
+          date_from: str = '', date_to: str = '', sort: Literal['created_at', 'publish_date'] = 'created_at',
+          direction: Literal['asc', 'desc'] = 'desc', _: dict = Depends(current_user)) -> Response:
+    result = list_task_summaries(limit, offset, view=view, query=query, field=field, status=status,
+                               size_min=size_min, size_max=size_max, date_from=date_from,
+                               date_to=date_to, sort=sort, direction=direction)
+    payload = json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    etag = 'W/"' + hashlib.sha256(payload).hexdigest() + '"'
+    headers = {'ETag': etag, 'Cache-Control': 'private, no-cache'}
+    if request.headers.get('if-none-match') == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(payload, media_type='application/json', headers=headers)
 
 
 @app.post("/api/tasks", status_code=202)
@@ -1072,19 +1077,19 @@ def update_task_details(task_id: str, body: TaskMetadataBody, _: dict = Depends(
 
 
 @app.get("/api/tasks/{task_id}/cover/{index:int}")
-def task_cover(task_id: str, index: int, _: dict = Depends(current_user)) -> FileResponse:
+def task_cover(task_id: str, index: int, request: Request, thumbnail: bool = False, _: dict = Depends(current_user)) -> Response:
     path = get_cover_path(task_id, index)
     if not path or not path.is_file():
         raise HTTPException(status_code=404, detail="封面不存在")
-    return FileResponse(path)
+    return image_response(path, request, thumbnail)
 
 
 @app.get("/api/tasks/{task_id}/fanart/{index:int}")
-def task_fanart(task_id: str, index: int, _: dict = Depends(current_user)) -> FileResponse:
+def task_fanart(task_id: str, index: int, request: Request, _: dict = Depends(current_user)) -> Response:
     path = get_fanart_path(task_id, index)
     if not path or not path.is_file():
         raise HTTPException(status_code=404, detail="剧照不存在")
-    return FileResponse(path)
+    return image_response(path, request)
 
 
 def _public_media_server(server: dict) -> dict:
@@ -1560,7 +1565,7 @@ def download_auto_scrape_runs(_: dict = Depends(require_admin)) -> list[dict]:
         for run_id, entry in load_auto_scrape_history().items()
         if isinstance(entry, dict)
     ]
-    return sorted(runs, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    return run_counts(sorted(runs, key=lambda item: str(item.get("created_at") or ""), reverse=True))
 
 
 @app.put("/api/downloads/settings")
@@ -1599,20 +1604,13 @@ def update_download_management(body: QbittorrentManagementBody, _: dict = Depend
 
 @app.get("/api/downloads")
 def downloads(_: dict = Depends(current_user)) -> dict:
+    from .download_cache import snapshots
     management = get_qbittorrent_management()
-    result: list[dict] = []
-    for settings in list_downloaders():
-        try:
-            items = list_downloads(settings)
-            for item in items:
-                item["managed"] = _managed_download(item, management)
-            managed_items = [item for item in items if item["managed"]]
-            if management.get("takeover_enabled"):
-                _auto_remove_downloads(settings, managed_items, management)
-            result.append({"id": settings["id"], "name": settings["name"], "items": items, "error": None})
-        except QbittorrentError as exc:
-            # One unavailable endpoint must not hide tasks from the other downloaders.
-            result.append({"id": settings["id"], "name": settings["name"], "items": [], "error": str(exc)})
+    result = snapshots(list_downloaders())
+    for snapshot in result:
+        snapshot.pop('checked', None)
+        for item in snapshot['items']:
+            item['managed'] = _managed_download(item, management)
     return {"takeover_enabled": bool(management.get("takeover_enabled")), "downloaders": result}
 
 
@@ -1652,7 +1650,7 @@ def _schedule_next_run(cron: str) -> str | None:
 
 
 def _public_auto_scrape_schedule(schedule: dict) -> dict:
-    return {**schedule, "next_run_at": _schedule_next_run(str(schedule.get("cron") or ""))}
+    return {**schedule, "runs": run_counts(schedule.get('runs') or []), "next_run_at": _schedule_next_run(str(schedule.get("cron") or ""))}
 
 
 def _validate_auto_scrape_schedule(body: AutoScrapeScheduleBody) -> tuple[str, str, str]:

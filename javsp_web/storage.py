@@ -23,6 +23,7 @@ VENDOR_DIR = Path(os.environ.get("JAVSP_VENDOR_DIR", BUNDLE_DIR / "vendor" / "Ja
 CONFIG_FILE = DATA_DIR / "config.yml"
 USERS_FILE = DATA_DIR / "users.json"
 TASKS_FILE = DATA_DIR / "tasks.json"
+TASKS_DB_FILE = DATA_DIR / "tasks.db"
 PRESETS_FILE = DATA_DIR / "presets.json"
 QBITTORRENT_FILE = DATA_DIR / "qbittorrent.json"
 QBITTORRENT_MANAGEMENT_FILE = DATA_DIR / "qbittorrent-management.json"
@@ -170,14 +171,34 @@ def write_config(content: str) -> None:
     temp.replace(CONFIG_FILE)
 
 
-def load_tasks() -> list[dict[str, Any]]:
-    ensure_seed_data()
-    return _read_json(TASKS_FILE, [])
+def load_tasks(task_ids=None) -> list[dict[str, Any]]:
+    from . import task_store
+    return task_store.load(task_ids)
 
 
 def save_tasks(tasks: list[dict[str, Any]]) -> None:
-    with _lock:
-        _write_json(TASKS_FILE, tasks)
+    from . import task_store
+    task_store.replace(tasks)
+
+
+def upsert_task(task: dict[str, Any]) -> None:
+    from . import task_store
+    task_store.upsert(task)
+
+
+def get_task_record(task_id: str, logs: bool = True) -> dict[str, Any] | None:
+    from . import task_store
+    return task_store.record(task_id, logs)
+
+
+def delete_task_record(task_id: str) -> bool:
+    from . import task_store
+    return task_store.delete(task_id)
+
+
+def load_task_page(limit: int = 50, offset: int = 0, **filters) -> dict:
+    from . import task_store
+    return task_store.page(limit, offset, **filters)
 
 
 def list_presets() -> list[dict[str, Any]]:
