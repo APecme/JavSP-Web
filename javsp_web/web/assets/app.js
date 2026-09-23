@@ -1004,6 +1004,82 @@ async function checkForAppUpdate(runtime) {
   }
 }
 
+const UPDATE_OVERLAY_KEY = 'javsp-web.update-job';
+let updateOverlayTimer = null;
+let updateOverlayJobId = '';
+let updateOverlayStartedAt = 0;
+
+function showUpdateOverlay(message, phase = 'running') {
+  const overlay = $('#update-overlay');
+  const opening = overlay.hidden;
+  overlay.hidden = false;
+  overlay.dataset.phase = phase;
+  $('#update-overlay-title').textContent = phase === 'failed' ? '更新未完成' : phase === 'updated' ? '更新完成' : '正在更新应用';
+  $('#update-overlay-status').textContent = message;
+  $('#update-overlay-close').hidden = phase !== 'failed';
+  document.body.classList.add('update-in-progress');
+  if (phase === 'failed') $('#update-overlay-close').focus();
+  else if (opening) overlay.focus();
+}
+
+function closeUpdateOverlay() {
+  window.clearTimeout(updateOverlayTimer);
+  updateOverlayTimer = null;
+  updateOverlayJobId = '';
+  $('#update-overlay').hidden = true;
+  document.body.classList.remove('update-in-progress');
+  try { sessionStorage.removeItem(UPDATE_OVERLAY_KEY); } catch (_) { }
+  $('#update-apply-now')?.focus();
+}
+
+async function pollUpdateOverlay() {
+  if (!updateOverlayJobId) return;
+  try {
+    const payload = await api('/api/update');
+    const job = payload.job || {};
+    if (job.id === updateOverlayJobId && job.status === 'updated') {
+      updateOverlayJobId = '';
+      try { sessionStorage.removeItem(UPDATE_OVERLAY_KEY); } catch (_) { }
+      showUpdateOverlay('应用更新成功，正在刷新页面…', 'updated');
+      window.setTimeout(() => location.reload(), 1500);
+      return;
+    }
+    if (job.id === updateOverlayJobId && ['failed', 'rolled_back', 'interrupted'].includes(job.status)) {
+      updateOverlayJobId = '';
+      try { sessionStorage.removeItem(UPDATE_OVERLAY_KEY); } catch (_) { }
+      showUpdateOverlay(job.message || '应用更新失败，请检查更新状态后重试。', 'failed');
+      return;
+    }
+    showUpdateOverlay(job.id === updateOverlayJobId && job.message ? job.message : '正在确认更新状态…');
+  } catch (_) {
+    showUpdateOverlay('服务暂时不可用，正在等待更新后重新连接…');
+  }
+  if (Date.now() - updateOverlayStartedAt >= 15 * 60 * 1000) {
+    updateOverlayJobId = '';
+    try { sessionStorage.removeItem(UPDATE_OVERLAY_KEY); } catch (_) { }
+    showUpdateOverlay('长时间未能确认更新结果，请刷新页面查看状态或检查容器日志。', 'failed');
+    return;
+  }
+  updateOverlayTimer = window.setTimeout(pollUpdateOverlay, 2500);
+}
+
+function watchUpdateJob(record) {
+  updateOverlayJobId = record.id;
+  updateOverlayStartedAt = record.startedAt || Date.now();
+  try { sessionStorage.setItem(UPDATE_OVERLAY_KEY, JSON.stringify({ id: record.id, startedAt: updateOverlayStartedAt })); } catch (_) { }
+  showUpdateOverlay('正在下载并校验应用包…');
+  window.clearTimeout(updateOverlayTimer);
+  updateOverlayTimer = window.setTimeout(pollUpdateOverlay, 500);
+}
+
+function restoreUpdateOverlay() {
+  try {
+    const record = JSON.parse(sessionStorage.getItem(UPDATE_OVERLAY_KEY) || 'null');
+    if (record?.id && Date.now() - record.startedAt < 15 * 60 * 1000) watchUpdateJob(record);
+    else sessionStorage.removeItem(UPDATE_OVERLAY_KEY);
+  } catch (_) { }
+}
+
 function renderUpdateStatus(payload, syncSettings = true) {
   const settings = payload.settings || {};
   const result = payload.result || {};
@@ -1046,11 +1122,17 @@ async function checkUpdateNow() {
 
 async function applyUpdateNow() {
   const message = $('#update-settings-message');
+  showUpdateOverlay('正在提交更新请求…');
   try {
     const result = await api('/api/update/apply', { method: 'POST' });
     message.textContent = result.status === 'scheduled' ? '更新已开始，服务会短暂重启' : (result.message || '当前已是最新版本');
+    if (result.status === 'scheduled') watchUpdateJob(result);
+    else closeUpdateOverlay();
     renderUpdateStatus(await api('/api/update'));
-  } catch (error) { message.textContent = error.message; }
+  } catch (error) {
+    if (!updateOverlayJobId) closeUpdateOverlay();
+    message.textContent = error.message;
+  }
 }
 
 function scheduleGitHubStarInvite() {
@@ -3118,6 +3200,7 @@ $('#update-settings-form')?.addEventListener('submit', async (event) => {
       message.textContent = `已加入体验计划，但自动安装失败：${settings.activation_error}`;
     } else if (settings.activation) {
       message.textContent = settings.activation.status === 'scheduled' ? '已加入体验计划，正在下载并安装 bata 应用包' : '已加入体验计划，当前已是最新版本';
+      if (settings.activation.status === 'scheduled') watchUpdateJob(settings.activation);
     } else {
       message.textContent = '更新设置已保存';
       await checkUpdateNow();
@@ -3127,6 +3210,7 @@ $('#update-settings-form')?.addEventListener('submit', async (event) => {
 $('#update-experience')?.addEventListener('change', () => $('#update-settings-form').requestSubmit());
 $('#update-check-now')?.addEventListener('click', checkUpdateNow);
 $('#update-apply-now')?.addEventListener('click', applyUpdateNow);
+$('#update-overlay-close')?.addEventListener('click', closeUpdateOverlay);
 
 document.addEventListener('submit', async (event) => {
   if (event.target.id === 'path-mappings-form') {
@@ -3209,6 +3293,7 @@ if (downloadPolicyToggle && downloadPolicyContent) {
   try {
     const savedView = localStorage.getItem('javsp-web.active-view');
     state.user = await api('/api/auth/me');
+    restoreUpdateOverlay();
     $('#current-user').textContent = state.user.username;
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); }
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config'].includes(savedView))) showView(savedView);

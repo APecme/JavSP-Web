@@ -188,10 +188,10 @@ class TaskStoreTests(unittest.TestCase):
         fresh = client.get('/api/tasks/one/cover/0?thumbnail=true', headers={'If-None-Match': cover.headers['etag']})
         self.assertEqual(fresh.status_code, 200)
         self.assertNotEqual(fresh.headers['etag'], cover.headers['etag'])
-        with patch.object(self.server, 'RELEASE_LABEL', 'vv1.1.36'):
+        with patch.object(self.server, 'RELEASE_LABEL', 'vv1.1.37'):
             runtime = client.get('/api/runtime').json()
-            self.assertEqual(runtime['version'], '1.1.36')
-            self.assertEqual(runtime['app_version'], '1.1.36')
+            self.assertEqual(runtime['version'], '1.1.37')
+            self.assertEqual(runtime['app_version'], '1.1.37')
         asset = client.get('/assets/app.js?v=' + self.server.ASSET_VERSION)
         self.assertIn('immutable', asset.headers['cache-control'])
         self.assertNotIn('immutable', client.get('/assets/app.js?v=wrong').headers['cache-control'])

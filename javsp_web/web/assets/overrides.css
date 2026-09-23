@@ -505,3 +505,16 @@ div.log-row, .log-row summary { display: flex; gap: 8px; align-items: baseline; 
   .preset-tabs, .task-filter-bar { grid-template-columns: 1fr; }
   .task-filter-bar > #task-filter-query, .task-filter-bar > #task-filter-status, .task-filter-bar > #task-filter-reset { grid-column: auto; }
 }
+
+body.update-in-progress .app-shell { filter: blur(5px); pointer-events: none; user-select: none; }
+.update-overlay { position: fixed; inset: 0; z-index: 2147483646; display: grid; place-items: center; padding: 20px; background: rgba(16, 24, 40, .46); }
+.update-overlay[hidden], .update-overlay [hidden] { display: none; }
+.update-overlay-card { display: grid; justify-items: center; gap: 12px; width: min(440px, 100%); padding: 34px 28px; border-radius: 14px; background: #fff; box-shadow: 0 24px 64px #10182848; text-align: center; }
+.update-overlay-card h2 { margin: 0; color: #101828; font-size: 21px; }
+.update-overlay-card p { margin: 0; color: #175cd3; font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.update-overlay-card small { color: #667085; line-height: 1.5; }
+.update-overlay-spinner { width: 44px; height: 44px; border: 4px solid #d1e9ff; border-top-color: #175cd3; border-radius: 50%; animation: update-spin .9s linear infinite; }
+.update-overlay[data-phase="failed"] .update-overlay-spinner, .update-overlay[data-phase="updated"] .update-overlay-spinner { display: none; }
+.update-overlay[data-phase="failed"] .update-overlay-card p { color: #b42318; }
+@keyframes update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .update-overlay-spinner { animation: none; } }

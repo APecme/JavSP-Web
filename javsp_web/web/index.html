@@ -79,6 +79,15 @@
   <dialog id="auto-scrape-run-dialog" class="task-detail-dialog"><form method="dialog"><div class="panel-heading"><div><h2 id="auto-scrape-run-title">定时任务日志</h2><p id="auto-scrape-run-subtitle" class="muted"></p></div><button class="icon-button" type="button" data-dialog-close>关闭</button></div><div id="auto-scrape-run-content" class="auto-scrape-run-content"></div></form></dialog>
   <dialog id="google-cover-dialog" class="app-dialog google-cover-dialog"><form method="dialog"><div class="dialog-heading"><h2>选择爬虫封面</h2><button class="dialog-close" type="button" data-dialog-close>关闭</button></div><div id="google-cover-candidates" class="google-cover-candidates"></div><p id="google-cover-message" class="form-error dialog-message"></p><div class="dialog-actions"><button class="button secondary" type="button" data-dialog-close>取消</button></div></form></dialog>
   <div id="overview-context-menu" class="overview-context-menu" hidden><button type="button" data-overview-context-select>选择</button><button type="button" class="danger" data-overview-context-delete>删除任务记录</button></div>
+  <div id="update-overlay" class="update-overlay" role="alertdialog" aria-modal="true" aria-labelledby="update-overlay-title" aria-describedby="update-overlay-status" data-phase="running" tabindex="-1" hidden>
+    <div class="update-overlay-card">
+      <span class="update-overlay-spinner" aria-hidden="true"></span>
+      <h2 id="update-overlay-title">正在更新应用</h2>
+      <p id="update-overlay-status" aria-live="polite">正在准备更新…</p>
+      <small>更新期间服务可能暂时断开，请保持此页面打开。</small>
+      <button id="update-overlay-close" class="button secondary" type="button" hidden>关闭提示</button>
+    </div>
+  </div>
   <link rel="stylesheet" href="/assets/overrides.css?v=__ASSET_VERSION__">
   <script src="/assets/app.js?v=__ASSET_VERSION__"></script>
 </body>
