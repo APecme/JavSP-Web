@@ -77,7 +77,7 @@ docker compose up -d
 
 ### 网页自更新
 
-“系统设置 → 版本与更新”可以检查正式版 `latest`，也可以勾选“加入体验计划”检查 `bata`。开启“发现新版本后自动更新”后，服务会在没有运行中的刮削任务时更新。自更新默认关闭；Docker 部署必须同时设置 `JAVSP_WEB_SELF_UPDATE=1` 并挂载 `/var/run/docker.sock`。更新助手会先拉取目标镜像、保留旧容器、启动新容器并确认仍在运行，失败时恢复旧容器。Docker socket 等同于授予容器管理 Docker 的权限，只建议在可信的本机环境启用。
+“系统设置 → 版本与更新”可以检查正式版 `latest`，也可以勾选“加入体验计划”检查 `bata`。开启“发现新版本后自动更新”后，服务会在没有运行中的刮削任务时更新。自更新默认关闭；Docker 部署必须同时设置 `JAVSP_WEB_SELF_UPDATE=1`、将 `/app/data` 挂载到持久化目录并挂载 `/var/run/docker.sock`，旧部署需按上面的配置重新创建容器一次。之后更新助手会在停止旧容器前拉取目标镜像，保留旧容器、启动新容器并确认仍在运行，失败时恢复旧容器。Docker socket 等同于授予容器管理 Docker 的权限，只建议在可信的本机环境启用。
 
 Windows EXE、普通 Python 和未挂载 Docker socket 的容器仍可检查版本，但网页不会尝试安装容器；此时按页面提示手动执行 `docker compose pull && docker compose up -d`。
 

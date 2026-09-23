@@ -132,6 +132,16 @@ class TaskStoreTests(unittest.TestCase):
         with patch.object(tasks, 'load_tasks', side_effect=AssertionError('full read')), patch.object(tasks, '_task_progress', side_effect=AssertionError('log parse')):
             self.assertEqual(tasks.get_cover_path('one', 0), path)
 
+    def test_update_api_exposes_cached_check_and_worker_status(self):
+        client = self.client()
+        from javsp_web import updater
+        updater.write_state('check', {'channel': 'stable', 'available': True, 'target': '1.1.37'})
+        with patch.object(updater, 'capability', return_value={'supported': True}), patch.object(updater, 'job', return_value={'status': 'pulling', 'message': '正在拉取目标镜像'}):
+            response = client.get('/api/update')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['result']['target'], '1.1.37')
+        self.assertEqual(response.json()['job']['status'], 'pulling')
+
     def test_api_page_etag_thumbnail_and_version(self):
         client = self.client()
         from PIL import Image

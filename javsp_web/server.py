@@ -41,7 +41,6 @@ from .storage import (
     get_disabled_built_in_crawlers,
     get_qbittorrent_settings,
     get_cookiecloud_settings,
-    get_update_settings,
     get_qbittorrent_management,
     IS_FROZEN,
     VENDOR_DIR,
@@ -311,21 +310,13 @@ def runtime(_: dict = Depends(current_user)) -> dict:
 
 @app.get("/api/update")
 def update_status(_: dict = Depends(current_user)) -> dict:
-    settings = get_update_settings()
-    result = dict(settings.get("last_result") or {})
-    result.setdefault("channel", "bata" if settings.get("experience_program") else "stable")
-    result.setdefault("current", _display_version())
-    result["docker_available"] = updater._docker_available()
-    return {"settings": settings, "result": result, "capability": updater.capability()}
+    return updater.status()
 
 
 @app.put("/api/update/settings")
 def update_settings(body: UpdateSettingsBody, _: dict = Depends(require_admin)) -> dict:
-    settings = save_update_settings(body.model_dump())
-    result = dict(settings.get("last_result") or {})
-    result.setdefault("channel", "bata" if settings.get("experience_program") else "stable")
-    result["docker_available"] = updater._docker_available()
-    return {"settings": settings, "result": result, "capability": updater.capability()}
+    save_update_settings(body.model_dump())
+    return updater.status()
 
 
 @app.post("/api/update/check")

@@ -1004,25 +1004,27 @@ async function checkForAppUpdate(runtime) {
   }
 }
 
-function renderUpdateStatus(payload) {
+function renderUpdateStatus(payload, syncSettings = true) {
   const settings = payload.settings || {};
   const result = payload.result || {};
   const capability = payload.capability || {};
   const beta = Boolean(settings.experience_program || payload.channel === 'bata' || result.channel === 'bata');
-  $('#update-channel-badge').textContent = beta ? '体验版 bata' : '正式版 latest';
-  $('#update-check-enabled').checked = settings.check_enabled !== false;
-  $('#update-auto-update').checked = Boolean(settings.auto_update);
-  $('#update-experience').checked = Boolean(settings.experience_program);
-  $('#update-interval').value = settings.check_interval_hours || 24;
+  if (syncSettings) {
+    $('#update-channel-badge').textContent = beta ? '体验版 bata' : '正式版 latest';
+    $('#update-check-enabled').checked = settings.check_enabled !== false;
+    $('#update-auto-update').checked = Boolean(settings.auto_update);
+    $('#update-experience').checked = Boolean(settings.experience_program);
+    $('#update-interval').value = settings.check_interval_hours || 24;
+  }
   const job = payload.job || {};
   const status = job.message || (result.error ? `检查失败：${result.error}` : result.available ? `发现更新：${result.target || '新版本'}` : result.checked_at ? `当前已是最新（${result.current || ''}）` : '尚未检查');
   $('#update-status').textContent = status;
   $('#update-capability').textContent = capability.reason || (payload.docker_available === false ? '当前部署不支持网页自动安装。' : '');
-  $('#update-apply-now').disabled = !capability.supported || !result.available || Boolean(job.status && ['scheduled', 'waiting', 'replacing', 'verifying'].includes(job.status));
+  $('#update-apply-now').disabled = !capability.supported || !result.available || Boolean(job.status && ['scheduled', 'pulling', 'waiting', 'backing_up', 'replacing', 'verifying', 'rolling_back'].includes(job.status));
 }
 
-async function loadUpdateSettings() {
-  try { renderUpdateStatus(await api('/api/update')); } catch (error) { $('#update-settings-message').textContent = error.message; }
+async function loadUpdateSettings(syncSettings = true) {
+  try { renderUpdateStatus(await api('/api/update'), syncSettings); } catch (error) { $('#update-settings-message').textContent = error.message; }
 }
 
 async function checkUpdateNow() {
@@ -1034,7 +1036,7 @@ async function checkUpdateNow() {
     const state = await api('/api/update');
     state.result = result;
     renderUpdateStatus(state);
-    message.textContent = result.available ? '发现可用更新' : '当前已是最新版本';
+    message.textContent = result.error ? `检查失败：${result.error}` : result.available ? '发现可用更新' : '当前已是最新版本';
   } catch (error) { message.textContent = error.message; }
   finally { button.disabled = false; }
 }
@@ -3217,6 +3219,7 @@ if (downloadPolicyToggle && downloadPolicyContent) {
       else if ($('#task-detail-dialog')?.open && !state.taskMetadataEditing) work.push(openTaskDetail(state.activeTaskDetail, true));
       if (view === 'downloads') work.push(loadDownloads());
       if (view === 'auto-scrape') work.push(loadAutoScrapeSchedules());
+      if (view === 'settings') work.push(loadUpdateSettings(false));
       await Promise.allSettled(work);
       failures = state.pollFailed ? Math.min(failures + 1, 4) : 0;
     } finally {
