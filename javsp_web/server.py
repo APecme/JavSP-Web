@@ -315,8 +315,16 @@ def update_status(_: dict = Depends(current_user)) -> dict:
 
 @app.put("/api/update/settings")
 def update_settings(body: UpdateSettingsBody, _: dict = Depends(require_admin)) -> dict:
+    joining = body.experience_program and updater.channel() != 'bata'
     save_update_settings(body.model_dump())
-    return updater.status()
+    response = updater.status()
+    if joining:
+        try:
+            response['activation'] = updater.apply()
+        except updater.UpdateError as exc:
+            response['activation_error'] = str(exc)
+        response.update(updater.status())
+    return response
 
 
 @app.post("/api/update/check")

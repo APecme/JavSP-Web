@@ -115,12 +115,11 @@ class AppUpdateTests(unittest.TestCase):
 
     def test_app_mode_does_not_require_docker_socket(self):
         self.assertTrue(app_update.enabled())
-        with patch.object(updater, 'enabled', return_value=False):
-            self.assertEqual(updater.capability()['mode'], 'app')
+        self.assertEqual(updater.capability()['mode'], 'app')
 
     def test_web_apply_schedules_app_update_without_docker_client(self):
         target = dict(self.info, image='example@sha256:' + 'b' * 64, available=True, channel='bata', error='')
-        with patch.object(updater, 'capability', return_value={'supported': True, 'mode': 'app'}), patch.object(updater, 'check', return_value=target), patch.object(updater, 'job', return_value={}), patch.object(updater, 'active_tasks', return_value=False), patch.object(updater, 'docker_client', side_effect=AssertionError('Docker socket not needed')), patch.object(app_update, 'schedule') as schedule:
+        with patch.object(updater, 'capability', return_value={'supported': True, 'mode': 'app'}), patch.object(updater, 'check', return_value=target), patch.object(updater, 'job', return_value={}), patch.object(updater, 'active_tasks', return_value=False), patch.object(app_update, 'schedule') as schedule:
             result = updater.apply()
         self.assertEqual(result['mode'], 'app')
         schedule.assert_called_once()

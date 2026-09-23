@@ -8,7 +8,6 @@ cloudscraper>=1.2.71,<2
 colorama>=0.4.6,<1
 pretty-errors>=1.2.25,<2
 requests[socks]>=2.31,<3
-docker>=7.1,<8
 selenium>=4.20,<5
 tqdm>=4.59,<5
 cryptography>=42,<47

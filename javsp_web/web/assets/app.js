@@ -1014,10 +1014,11 @@ function renderUpdateStatus(payload, syncSettings = true) {
     $('#update-check-enabled').checked = settings.check_enabled !== false;
     $('#update-auto-update').checked = Boolean(settings.auto_update);
     $('#update-experience').checked = Boolean(settings.experience_program);
+    $('#update-experience').disabled = String(payload.current || '').startsWith('bata.');
     $('#update-interval').value = settings.check_interval_hours || 24;
   }
   const job = payload.job || {};
-  const jobActive = ['scheduled', 'downloading', 'restarting', 'pulling', 'waiting', 'backing_up', 'replacing', 'verifying', 'rolling_back'].includes(job.status);
+  const jobActive = ['scheduled', 'downloading', 'restarting'].includes(job.status);
   const checkedStatus = result.error ? `检查失败：${result.error}` : result.available ? `发现更新：${result.target || '新版本'}` : result.checked_at && result.switching_channel && result.channel === 'stable' ? `正式版 ${result.target} 尚未比当前体验版更新` : result.checked_at ? `当前已是最新（${result.current || ''}）` : '尚未检查';
   const status = job.message && (jobActive || ['failed', 'rolled_back'].includes(job.status) || !result.checked_at) ? job.message : checkedStatus;
   $('#update-status').textContent = status;
@@ -3113,10 +3114,17 @@ $('#update-settings-form')?.addEventListener('submit', async (event) => {
       check_interval_hours: Number($('#update-interval').value || 24),
     }) });
     renderUpdateStatus(settings);
-    message.textContent = '更新设置已保存';
-    await checkUpdateNow();
+    if (settings.activation_error) {
+      message.textContent = `已加入体验计划，但自动安装失败：${settings.activation_error}`;
+    } else if (settings.activation) {
+      message.textContent = settings.activation.status === 'scheduled' ? '已加入体验计划，正在下载并安装 bata 应用包' : '已加入体验计划，当前已是最新版本';
+    } else {
+      message.textContent = '更新设置已保存';
+      await checkUpdateNow();
+    }
   } catch (error) { message.textContent = error.message; }
 });
+$('#update-experience')?.addEventListener('change', () => $('#update-settings-form').requestSubmit());
 $('#update-check-now')?.addEventListener('click', checkUpdateNow);
 $('#update-apply-now')?.addEventListener('click', applyUpdateNow);
 

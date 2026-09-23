@@ -133,14 +133,39 @@ class TaskStoreTests(unittest.TestCase):
             self.assertEqual(tasks.get_cover_path('one', 0), path)
 
     def test_update_api_exposes_cached_check_and_worker_status(self):
+        self.enterContext(patch.dict(os.environ, {'JAVSP_WEB_RELEASE_LABEL': 'v1.1.36'}))
         client = self.client()
         from javsp_web import updater
+        storage.save_update_settings({'experience_program': False})
         updater.write_state('check', {'channel': 'stable', 'current': updater.current_version(), 'available': True, 'target': '1.1.37'})
         with patch.object(updater, 'capability', return_value={'supported': True}), patch.object(updater, 'job', return_value={'status': 'pulling', 'message': '正在拉取目标镜像'}):
             response = client.get('/api/update')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['result']['target'], '1.1.37')
         self.assertEqual(response.json()['job']['status'], 'pulling')
+
+    def test_joining_experience_program_applies_immediately_without_auto_update(self):
+        self.enterContext(patch.dict(os.environ, {'JAVSP_WEB_RELEASE_LABEL': 'v1.1.36'}))
+        client = self.client()
+        from javsp_web import updater
+        storage.save_update_settings({'experience_program': False, 'auto_update': False})
+        with patch.object(updater, 'apply', return_value={'status': 'scheduled', 'target': 'bata.20260924044117'}) as apply:
+            response = client.put('/api/update/settings', json={'experience_program': True, 'auto_update': False})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['settings']['experience_program'])
+        self.assertEqual(response.json()['activation']['status'], 'scheduled')
+        apply.assert_called_once_with()
+
+    def test_joining_experience_program_reports_install_error_and_keeps_setting(self):
+        self.enterContext(patch.dict(os.environ, {'JAVSP_WEB_RELEASE_LABEL': 'v1.1.36'}))
+        client = self.client()
+        from javsp_web import updater
+        storage.save_update_settings({'experience_program': False})
+        with patch.object(updater, 'apply', side_effect=updater.UpdateError('需要手动更新镜像')):
+            response = client.put('/api/update/settings', json={'experience_program': True})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['activation_error'], '需要手动更新镜像')
+        self.assertTrue(storage.get_update_settings()['experience_program'])
 
     def test_api_page_etag_thumbnail_and_version(self):
         client = self.client()

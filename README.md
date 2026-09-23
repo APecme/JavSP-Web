@@ -40,7 +40,7 @@ JavSP WEB 基于 [JavSP](https://github.com/Yuukiy/JavSP)，用于从影片文�
 docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
   -v "${PWD}\data:/app/data" `
   -v "D:\Videos:/video" `
-  apecme/javsp-web:bata
+  apecme/javsp-web:latest
 ```
 
 将 `D:\Videos` 替换为实际影片目录，然后访问 `http://127.0.0.1:8090/login`。Docker 版中填写路径时使用实际挂载的容器路径，例如 `/video/Movies` 或 `/mnt/movies`。
@@ -52,7 +52,7 @@ docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
 ```yaml
 services:
   javsp-web:
-    image: apecme/javsp-web:bata
+    image: apecme/javsp-web:latest
     container_name: javsp-web
     restart: unless-stopped
     ports:
@@ -73,11 +73,11 @@ docker compose up -d
 
 ### 网页自更新
 
-“系统设置 → 版本与更新”可以检查正式版 `latest`，也可以勾选“加入体验计划”检查 `bata`。自动检查默认开启，自动安装默认关闭；开启后会在没有运行中的刮削任务时下载更新。Docker 版默认只更新**应用程序代码**：按目标镜像中记录的 Git 提交下载源码，逐文件校验后写入 `/app/data`，由容器内监护进程重启服务；失败时自动恢复上一版本，**无需 Docker socket**。请务必将 `/app/data` 挂载到持久化目录。已有旧镜像需手动执行一次 `docker compose pull && docker compose up -d` 安装新版监护进程，此后同一 Dockerfile 和依赖版本的应用更新可直接在网页完成。
+“系统设置 → 版本与更新”默认检查正式版 `latest`。勾选“加入体验计划”会立即保存设置并尝试下载、校验和安装 `bata` 应用包，不依赖“自动更新”开关；安装失败会显示原因并保留已选频道。运行体验版期间始终保持勾选。自动检查默认开启，后续自动安装默认关闭。Docker 版只更新**应用程序代码**：按目标镜像中记录的 Git 提交下载源码，逐文件校验后写入持久化的 `/app/data`，由容器内监护进程重启服务；失败时自动恢复上一版本，**无需 Docker socket**。请务必将 `/app/data` 挂载到持久化目录。
 
-如果更新修改了 `Dockerfile` 或 `requirements.txt`，容器内更新会拒绝安装并提示手动拉取新镜像；它不会更新基础镜像、系统软件包或 Python 依赖。确需从网页替换整个镜像时，可在可信环境中额外设置 `JAVSP_WEB_UPDATE_MODE=image`、`JAVSP_WEB_SELF_UPDATE=1` 并挂载 `/var/run/docker.sock`。该 socket 赋予容器宿主机级 Docker 管理权限，请谨慎启用。
+旧镜像尚无监护进程时，需要先手动拉取并重建容器；`latest` 也必须先发布包含监护进程的正式版，才能从正式版直接切换体验版。如果目标版本修改了 `Dockerfile` 或 `requirements.txt`，容器内更新会拒绝安装并提示手动拉取新镜像；它不会更新基础镜像、系统软件包或 Python 依赖。镜像更新后可继续使用网页更新应用代码。
 
-Windows EXE、普通 Python 和未挂载 Docker socket 的容器仍可检查版本，但网页不会尝试安装容器；此时按页面提示手动执行 `docker compose pull && docker compose up -d`。
+Windows EXE 和普通 Python 部署仅能检查版本，不支持网页安装。镜像更新时执行 `docker compose pull && docker compose up -d`。
 
 ## 使用
 

@@ -24,7 +24,7 @@ REQUIRED = {'Dockerfile', 'requirements.txt', 'javsp_web/server.py', 'javsp_web/
 
 
 def enabled():
-    return os.environ.get('JAVSP_WEB_APP_SUPERVISOR') == '1' and os.environ.get('JAVSP_WEB_UPDATE_MODE') != 'image' and app_supervisor.BASE_ROOT.joinpath('Dockerfile').is_file()
+    return os.environ.get('JAVSP_WEB_APP_SUPERVISOR') == '1' and app_supervisor.BASE_ROOT.joinpath('Dockerfile').is_file()
 
 
 def git_blob_sha(content):

@@ -117,7 +117,7 @@ def get_update_settings() -> dict[str, Any]:
         return {
             "check_enabled": bool(saved.get("check_enabled", True)),
             "auto_update": bool(saved.get("auto_update", False)),
-            "experience_program": bool(saved.get("experience_program", os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").lstrip("vV").startswith("bata."))),
+            "experience_program": os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").lstrip("vV").startswith("bata.") or bool(saved.get("experience_program", False)),
             "check_interval_hours": interval,
             "last_check_at": str(saved.get("last_check_at") or ""),
             "last_result": saved.get("last_result") if isinstance(saved.get("last_result"), dict) else {},
@@ -129,6 +129,8 @@ def save_update_settings(settings: dict[str, Any]) -> dict[str, Any]:
         current = get_update_settings()
         for key in ('check_enabled', 'auto_update', 'experience_program'):
             current[key] = bool(settings.get(key, current[key]))
+        if os.environ.get('JAVSP_WEB_RELEASE_LABEL', '').lstrip('vV').startswith('bata.'):
+            current['experience_program'] = True
         current['check_interval_hours'] = max(1, min(168, int(settings.get('check_interval_hours', current['check_interval_hours']))))
         if current['auto_update']:
             current['check_enabled'] = True
