@@ -116,6 +116,7 @@ class AppUpdateTests(unittest.TestCase):
     def test_app_mode_does_not_require_docker_socket(self):
         self.assertTrue(app_update.enabled())
         self.assertEqual(updater.capability()['mode'], 'app')
+        self.assertNotIn('reason', updater.capability())
 
     def test_web_apply_schedules_app_update_without_docker_client(self):
         target = dict(self.info, image='example@sha256:' + 'b' * 64, available=True, channel='bata', error='')

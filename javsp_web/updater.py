@@ -55,7 +55,7 @@ def current_version():
 
 def capability():
     if app_update.enabled():
-        return {'supported': True, 'mode': 'app', 'reason': '可在容器内更新应用程序，无需 Docker socket；镜像或依赖发生变化时仍需手动更新镜像。'}
+        return {'supported': True, 'mode': 'app'}
     if Path('/.dockerenv').exists():
         return {'supported': False, 'reason': '当前镜像没有应用监护进程；请先手动更新一次 Docker 镜像。'}
     return {'supported': False, 'reason': '源码和 EXE 部署仅支持检测更新。'}
