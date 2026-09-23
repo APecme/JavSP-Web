@@ -25,6 +25,12 @@ class UpdaterTests(unittest.TestCase):
         self.assertTrue(settings['check_enabled'])
         self.assertEqual(updater.channel(), 'bata')
 
+    def test_beta_image_defaults_to_beta_channel_without_overriding_saved_choice(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'bata.20260924044117'
+        self.assertTrue(storage.get_update_settings()['experience_program'])
+        storage.save_update_settings({'experience_program': False})
+        self.assertFalse(storage.get_update_settings()['experience_program'])
+
     def test_stable_check_compares_image_embedded_version(self):
         with patch.object(updater, 'enabled', return_value=False), patch.object(updater, 'registry_target', return_value={'target': '1.1.37', 'image': 'example@sha256:' + 'a' * 64, 'image_id': 'sha256:' + 'b' * 64, 'tag': 'latest'}):
             result = updater.check(force=True)
@@ -36,6 +42,23 @@ class UpdaterTests(unittest.TestCase):
             result = updater.check(force=True)
         self.assertTrue(result['available'])
         self.assertTrue(result['switching_channel'])
+
+    def test_beta_image_does_not_claim_older_stable_image_as_update(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'bata.20260924044117'
+        storage.save_update_settings({'experience_program': False})
+        target = {'target': '1.1.36', 'image': 'example@sha256:' + 'a' * 64, 'image_id': 'sha256:' + 'b' * 64, 'tag': 'latest'}
+        with patch.object(updater, 'enabled', return_value=False), patch.object(updater, 'registry_target', return_value=target):
+            result = updater.check(force=True)
+        self.assertFalse(result['available'])
+        self.assertTrue(result['switching_channel'])
+
+    def test_beta_image_detects_newer_stable_release(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'bata.20260924044117'
+        storage.save_update_settings({'experience_program': False})
+        target = {'target': '1.1.37', 'image': 'example@sha256:' + 'a' * 64, 'image_id': 'sha256:' + 'b' * 64, 'tag': 'latest'}
+        with patch.object(updater, 'enabled', return_value=False), patch.object(updater, 'registry_target', return_value=target):
+            result = updater.check(force=True)
+        self.assertTrue(result['available'])
 
     def test_apply_refuses_without_docker_capability(self):
         with patch.object(updater, 'capability', return_value={'supported': False, 'reason': '未挂载 Docker'}):

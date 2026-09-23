@@ -117,7 +117,7 @@ def get_update_settings() -> dict[str, Any]:
         return {
             "check_enabled": bool(saved.get("check_enabled", True)),
             "auto_update": bool(saved.get("auto_update", False)),
-            "experience_program": bool(saved.get("experience_program", False)),
+            "experience_program": bool(saved.get("experience_program", os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").lstrip("vV").startswith("bata."))),
             "check_interval_hours": interval,
             "last_check_at": str(saved.get("last_check_at") or ""),
             "last_result": saved.get("last_result") if isinstance(saved.get("last_result"), dict) else {},

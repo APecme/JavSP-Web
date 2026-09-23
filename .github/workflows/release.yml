@@ -44,10 +44,22 @@ jobs:
           context: .
           build-args: |
             JAVSP_WEB_RELEASE_LABEL=${{ steps.release.outputs.label }}
+            JAVSP_WEB_RELEASE_COMMIT=${{ github.sha }}
           load: true
           tags: javsp-web:verify
       - name: Verify scraping regressions in candidate image
         run: docker run --rm -v "$PWD/tests:/app/tests:ro" javsp-web:verify sh -c "python -m pip install -r tests/requirements.txt && python -m unittest discover -s tests -v"
+      - name: Verify supervised web startup
+        shell: bash
+        run: |
+          docker run -d --name javsp-web-smoke -p 127.0.0.1:18090:8090 javsp-web:verify
+          trap 'docker rm -fv javsp-web-smoke' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:18090/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs javsp-web-smoke
+          exit 1
       - name: Check CA trust and site HTTPS connectivity
         run: docker run --rm -v "$PWD/tests:/app/tests:ro" javsp-web:verify python tests/check_https.py
       - name: Publish verified beta image
@@ -56,6 +68,7 @@ jobs:
           context: .
           build-args: |
             JAVSP_WEB_RELEASE_LABEL=${{ steps.release.outputs.label }}
+            JAVSP_WEB_RELEASE_COMMIT=${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

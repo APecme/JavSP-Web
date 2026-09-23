@@ -34,6 +34,7 @@ jobs:
           context: .
           build-args: |
             JAVSP_WEB_RELEASE_LABEL=${{ github.ref_name }}
+            JAVSP_WEB_RELEASE_COMMIT=${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

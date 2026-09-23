@@ -135,7 +135,7 @@ class TaskStoreTests(unittest.TestCase):
     def test_update_api_exposes_cached_check_and_worker_status(self):
         client = self.client()
         from javsp_web import updater
-        updater.write_state('check', {'channel': 'stable', 'available': True, 'target': '1.1.37'})
+        updater.write_state('check', {'channel': 'stable', 'current': updater.current_version(), 'available': True, 'target': '1.1.37'})
         with patch.object(updater, 'capability', return_value={'supported': True}), patch.object(updater, 'job', return_value={'status': 'pulling', 'message': '正在拉取目标镜像'}):
             response = client.get('/api/update')
         self.assertEqual(response.status_code, 200)

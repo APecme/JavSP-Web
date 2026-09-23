@@ -40,8 +40,6 @@ JavSP WEB 基于 [JavSP](https://github.com/Yuukiy/JavSP)，用于从影片文�
 docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
   -v "${PWD}\data:/app/data" `
   -v "D:\Videos:/video" `
-  -e JAVSP_WEB_SELF_UPDATE=1 `
-  -v "/var/run/docker.sock:/var/run/docker.sock" `
   apecme/javsp-web:bata
 ```
 
@@ -60,11 +58,9 @@ services:
     ports:
       - "8090:8090"
     environment:
-      JAVSP_WEB_SELF_UPDATE: "1"
     volumes:
       - ./data:/app/data
       - ./video:/video
-      - /var/run/docker.sock:/var/run/docker.sock
 ```
 
 在该文件所在目录运行：
@@ -77,7 +73,9 @@ docker compose up -d
 
 ### 网页自更新
 
-“系统设置 → 版本与更新”可以检查正式版 `latest`，也可以勾选“加入体验计划”检查 `bata`。开启“发现新版本后自动更新”后，服务会在没有运行中的刮削任务时更新。自更新默认关闭；Docker 部署必须同时设置 `JAVSP_WEB_SELF_UPDATE=1`、将 `/app/data` 挂载到持久化目录并挂载 `/var/run/docker.sock`，旧部署需按上面的配置重新创建容器一次。之后更新助手会在停止旧容器前拉取目标镜像，保留旧容器、启动新容器并确认仍在运行，失败时恢复旧容器。Docker socket 等同于授予容器管理 Docker 的权限，只建议在可信的本机环境启用。
+“系统设置 → 版本与更新”可以检查正式版 `latest`，也可以勾选“加入体验计划”检查 `bata`。自动检查默认开启，自动安装默认关闭；开启后会在没有运行中的刮削任务时下载更新。Docker 版默认只更新**应用程序代码**：按目标镜像中记录的 Git 提交下载源码，逐文件校验后写入 `/app/data`，由容器内监护进程重启服务；失败时自动恢复上一版本，**无需 Docker socket**。请务必将 `/app/data` 挂载到持久化目录。已有旧镜像需手动执行一次 `docker compose pull && docker compose up -d` 安装新版监护进程，此后同一 Dockerfile 和依赖版本的应用更新可直接在网页完成。
+
+如果更新修改了 `Dockerfile` 或 `requirements.txt`，容器内更新会拒绝安装并提示手动拉取新镜像；它不会更新基础镜像、系统软件包或 Python 依赖。确需从网页替换整个镜像时，可在可信环境中额外设置 `JAVSP_WEB_UPDATE_MODE=image`、`JAVSP_WEB_SELF_UPDATE=1` 并挂载 `/var/run/docker.sock`。该 socket 赋予容器宿主机级 Docker 管理权限，请谨慎启用。
 
 Windows EXE、普通 Python 和未挂载 Docker socket 的容器仍可检查版本，但网页不会尝试安装容器；此时按页面提示手动执行 `docker compose pull && docker compose up -d`。
 

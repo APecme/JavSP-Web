@@ -1017,10 +1017,12 @@ function renderUpdateStatus(payload, syncSettings = true) {
     $('#update-interval').value = settings.check_interval_hours || 24;
   }
   const job = payload.job || {};
-  const status = job.message || (result.error ? `检查失败：${result.error}` : result.available ? `发现更新：${result.target || '新版本'}` : result.checked_at ? `当前已是最新（${result.current || ''}）` : '尚未检查');
+  const jobActive = ['scheduled', 'downloading', 'restarting', 'pulling', 'waiting', 'backing_up', 'replacing', 'verifying', 'rolling_back'].includes(job.status);
+  const checkedStatus = result.error ? `检查失败：${result.error}` : result.available ? `发现更新：${result.target || '新版本'}` : result.checked_at && result.switching_channel && result.channel === 'stable' ? `正式版 ${result.target} 尚未比当前体验版更新` : result.checked_at ? `当前已是最新（${result.current || ''}）` : '尚未检查';
+  const status = job.message && (jobActive || ['failed', 'rolled_back'].includes(job.status) || !result.checked_at) ? job.message : checkedStatus;
   $('#update-status').textContent = status;
   $('#update-capability').textContent = capability.reason || (payload.docker_available === false ? '当前部署不支持网页自动安装。' : '');
-  $('#update-apply-now').disabled = !capability.supported || !result.available || Boolean(job.status && ['scheduled', 'pulling', 'waiting', 'backing_up', 'replacing', 'verifying', 'rolling_back'].includes(job.status));
+  $('#update-apply-now').disabled = !capability.supported || !result.available || jobActive;
 }
 
 async function loadUpdateSettings(syncSettings = true) {

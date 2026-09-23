@@ -14,11 +14,11 @@ import uuid
 
 import requests
 
-from . import __version__, storage
+from . import __version__, app_update, storage
 
 REPOSITORY = 'apecme/javsp-web'
 SOCKET = '/var/run/docker.sock'
-ACTIVE = {'scheduled', 'pulling', 'waiting', 'backing_up', 'replacing', 'verifying', 'rolling_back'}
+ACTIVE = {'scheduled', 'downloading', 'restarting', 'pulling', 'waiting', 'backing_up', 'replacing', 'verifying', 'rolling_back'}
 _lock = threading.RLock()
 _check_lock = threading.Lock()
 _scheduler_started = False
@@ -80,8 +80,14 @@ def self_container(client):
 
 
 def capability():
-    if not enabled():
-        return {'supported': False, 'reason': '网页安装需要 Docker 自更新部署配置；请按 README 一次性启用。源码和 EXE 部署仅支持检测。'}
+    if app_update.enabled():
+        return {'supported': True, 'mode': 'app', 'reason': '可在容器内更新应用程序，无需 Docker socket；镜像或依赖发生变化时仍需手动更新镜像。'}
+    if not Path('/.dockerenv').exists():
+        return {'supported': False, 'reason': '当前不是 Docker 部署；源码和 EXE 部署仅支持检测更新。'}
+    if os.environ.get('JAVSP_WEB_SELF_UPDATE') != '1':
+        return {'supported': False, 'reason': '当前容器未启用 JAVSP_WEB_SELF_UPDATE=1；请按 README 重新部署一次。'}
+    if not Path(SOCKET).exists():
+        return {'supported': False, 'reason': '当前容器未挂载 /var/run/docker.sock；请按 README 重新部署一次。'}
     try:
         with docker_client() as client:
             container = self_container(client)
@@ -108,7 +114,7 @@ def update_lock():
 
 def job():
     result = read_state('job')
-    if result.get('status') in ACTIVE and result.get('helper_id') and enabled():
+    if result.get('mode') != 'app' and result.get('status') in ACTIVE and result.get('helper_id') and enabled():
         try:
             with docker_client() as client:
                 helper = client.containers.get(result['helper_id'])
@@ -168,7 +174,7 @@ def registry_target(tag, architecture=None, variant=''):
     version = re.sub(r'^[vV]+', '', env.get('JAVSP_WEB_RELEASE_LABEL', ''))
     if not version:
         raise UpdateError('更新镜像缺少版本标识，已停止自动安装')
-    return {'target': version, 'image': REPOSITORY + '@' + digest, 'image_id': config_id, 'tag': tag}
+    return {'target': version, 'image': REPOSITORY + '@' + digest, 'image_id': config_id, 'tag': tag, 'commit': env.get('JAVSP_WEB_RELEASE_COMMIT', '')}
 
 
 def version_tuple(value):
@@ -180,13 +186,13 @@ def check(force=False):
     with _check_lock:
         selected = channel()
         cached = read_state('check')
-        if not force and cached.get('channel') == selected and time.time() - cached.get('checked_epoch', 0) < 60:
+        if not force and cached.get('channel') == selected and cached.get('current') == current_version() and time.time() - cached.get('checked_epoch', 0) < 60:
             return cached
         result = {'channel': selected, 'current': current_version(), 'checked_at': now(), 'checked_epoch': time.time(), 'available': False, 'error': ''}
         try:
             image_id = ''
             architecture, variant = None, ''
-            if enabled():
+            if enabled() and not app_update.enabled():
                 with docker_client() as client:
                     current = self_container(client).image
                     image_id = current.id
@@ -198,7 +204,11 @@ def check(force=False):
                 raise UpdateError('正式版镜像的版本标识无效')
             result.update(target)
             switching = result['current'].startswith('bata.') != (selected == 'bata')
-            if image_id:
+            if switching and selected == 'stable':
+                result['available'] = bool(version_tuple(__version__) and version_tuple(target['target']) > version_tuple(__version__))
+                if image_id and image_id == target['image_id']:
+                    result['available'] = False
+            elif image_id:
                 result['available'] = image_id != target['image_id']
             elif switching:
                 result['available'] = True
@@ -217,7 +227,7 @@ def check(force=False):
 def status(include_capability=True):
     selected = channel()
     result = read_state('check')
-    if result.get('channel') != selected:
+    if result.get('channel') != selected or result.get('current') != current_version():
         result = {}
     response = {'settings': storage.get_update_settings(), 'result': result, 'job': job(), 'current': current_version(), 'channel': selected}
     if include_capability:
@@ -244,6 +254,12 @@ def apply(automatic=False):
         previous = job()
         if automatic and previous.get('image') == info['image'] and previous.get('status') in {'failed', 'rolled_back', 'interrupted'}:
             raise UpdateError('该镜像上次更新失败，已暂停自动重试；请检查后手动重试')
+        if app_update.enabled():
+            identity = uuid.uuid4().hex
+            record = dict(id=identity, mode='app', status='scheduled', message='应用更新已排队', image=info['image'], target=info['target'], channel=info['channel'], automatic=automatic, started_at=now())
+            write_state('job', record)
+            app_update.schedule(info, record, lambda value: write_state('job', value))
+            return record
         with docker_client() as client:
             current = self_container(client)
             from .update_worker import helper_config
@@ -265,9 +281,9 @@ def scheduler_tick():
     if not settings['check_enabled'] or busy():
         return
     last = read_state('check')
-    due = last.get('channel') != channel() or time.time() - last.get('checked_epoch', 0) >= settings['check_interval_hours'] * 3600
+    due = last.get('channel') != channel() or last.get('current') != current_version() or time.time() - last.get('checked_epoch', 0) >= settings['check_interval_hours'] * 3600
     result = check() if due else last
-    if settings['auto_update'] and result.get('available') and not result.get('error') and enabled() and not active_tasks():
+    if settings['auto_update'] and result.get('available') and not result.get('error') and (app_update.enabled() or enabled()) and not active_tasks():
         apply(automatic=True)
 
 
