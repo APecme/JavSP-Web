@@ -362,6 +362,31 @@ def select_path(body: PathSelectBody, _: dict = Depends(current_user)) -> dict:
         raise HTTPException(status_code=500, detail=f"无法打开系统选择窗口: {exc}") from exc
 
 
+@app.post("/api/path/select-multi")
+def select_multi_paths(body: PathSelectBody, _: dict = Depends(current_user)) -> dict:
+    """多选视频文件：返回 {"paths": [绝对路径, ...]}；用户取消时返回空列表。"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        if body.kind == "directory":
+            selected = filedialog.askdirectory(title="选择待刮削目录")
+            paths = [selected] if selected else []
+        else:
+            selected = filedialog.askopenfilenames(
+                title="选择待刮削视频文件（按住 Ctrl/Shift 可多选）",
+                filetypes=[("视频文件", "*.3gp *.avi *.f4v *.flv *.iso *.m2ts *.m4v *.mkv *.mov *.mp4 *.mpeg *.rm *.rmvb *.ts *.vob *.webm *.wmv *.strm *.mpg"), ("所有文件", "*.*")],
+            )
+            paths = list(selected or [])
+        root.destroy()
+        return {"paths": paths}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"无法打开系统选择窗口: {exc}") from exc
+
+
 @app.get("/api/path/options")
 def path_options(_: dict = Depends(current_user)) -> list[dict]:
     """Compatibility endpoint kept for older Web clients.
