@@ -241,6 +241,9 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/tasks', json={'input_directory': 'x', 'input_files': [' ']}).status_code, 400)
 
     def test_multiselect_dialog_cleanup_and_single_endpoint_compatibility(self):
+        self.assertEqual(sum(getattr(route, 'path', None) == '/api/path/select-multi'
+                             and 'POST' in getattr(route, 'methods', set())
+                             for route in self.client.app.routes), 1)
         root = Mock()
         dialog = types.ModuleType('tkinter.filedialog')
         dialog.askopenfilenames = Mock(return_value=('X:/one.mp4', 'X:/two.mp4'))
