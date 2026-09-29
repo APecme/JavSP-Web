@@ -378,6 +378,47 @@ def _progress_from_logs(lines: list[str]) -> dict:
     return {"stages": stages, "crawlers": crawlers, "crawler_details": crawler_details, "metadata": metadata, "images": images, "image_sources": image_sources, "output": output}
 
 
+def _existing_artwork(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
+def _resolved_image_output(task: dict, output: dict | None = None) -> dict:
+    """Repair stale image extensions using only exact sibling paths, never a tree scan."""
+    output = dict(output if output is not None else task.get("image_output") or {})
+    generated = (task.get("file_organizer") or {}).get("generated_files") or []
+    for key in ("fanart_file", "poster_file"):
+        value = str(output.get(key) or "").strip()
+        if not value:
+            continue
+        original = Path(value)
+        if _existing_artwork(original):
+            continue
+        candidates = [Path(str(path)) for path in generated if path]
+        candidates = [path for path in candidates if path.parent == original.parent
+                      and path.stem == original.stem and path.suffix.lower() in _IMAGE_EXTENSIONS]
+        candidates += [original.with_suffix(ext) for ext in sorted(_IMAGE_EXTENSIONS)]
+        for candidate in dict.fromkeys(candidates):
+            if candidate != original and _existing_artwork(candidate):
+                output[key] = str(candidate)
+                break
+    return output
+
+
+def _artwork_availability(task: dict, output: dict) -> dict:
+    poster_value = str(output.get("poster_file") or "").strip()
+    poster = Path(poster_value) if poster_value else None
+    fallback = _TASK_COVERS_DIR / f"{task['id']}.jpg"
+    cover_count = int(bool(poster and _existing_artwork(poster))) + int(fallback != poster and _existing_artwork(fallback))
+    sources = task.get("image_sources") or (task.get("progress") or {}).get("image_sources") or {}
+    expected_fanart = len(sources.get("preview_pics") or [])
+    incomplete = (bool(sources.get("cover_urls")) and not cover_count) or (expected_fanart > int(task.get("fanart_count") or 0))
+    return {"cover_count": cover_count, "image_retry_available": bool(
+        incomplete and output.get("fanart_file") and not task.get("image_retry_running"))}
+
+
 def _task_progress(task: dict, lines: list[str]) -> dict:
     """Combine recent log progress with artwork data retained on the task itself."""
     progress = _progress_from_logs(lines)
@@ -390,6 +431,7 @@ def _task_progress(task: dict, lines: list[str]) -> dict:
     output = task.get("image_output")
     if isinstance(output, dict) and output.get("fanart_file"):
         progress["output"] = {key: str(output.get(key) or "") for key in {"save_dir", "fanart_file", "poster_file"}}
+    progress["output"] = _resolved_image_output(task, progress.get("output") or {})
     override = task.get("metadata_override")
     if isinstance(override, dict):
         progress["metadata"].update({key: value for key, value in override.items() if key in {"dvdid", "title", "actress", "director", "producer", "publisher", "publish_date"}})
@@ -486,8 +528,8 @@ def _cover_paths(input_path: str, output: dict | None = None) -> list[Path]:
     target = Path(input_path)
     poster_value = str((output or {}).get("poster_file") or "").strip()
     poster_file = Path(poster_value) if poster_value else None
-    if poster_file and poster_file.is_file():
-        return [poster_file]
+    if poster_file:
+        return [poster_file] if _existing_artwork(poster_file) else []
     root_value = str((output or {}).get("save_dir") or "").strip()
     configured_root = Path(root_value) if root_value else None
     if configured_root and configured_root.is_dir():
@@ -501,9 +543,9 @@ def _cover_paths(input_path: str, output: dict | None = None) -> list[Path]:
         recursive = False
     found: list[Path] = []
     try:
-        candidates = root.rglob("*") if recursive else root.glob("poster.jpg")
+        candidates = root.rglob("*") if recursive else root.glob("poster.*")
         for item in candidates:
-            if item.is_file() and item.name.lower() == "poster.jpg" and len(item.relative_to(root).parts) <= 5:
+            if item.stem.lower() == "poster" and item.suffix.lower() in _IMAGE_EXTENSIONS and item.is_file() and len(item.relative_to(root).parts) <= 5:
                 found.append(item)
             if len(found) >= 24:
                 break
@@ -560,8 +602,11 @@ def list_tasks(task_ids: set[str] | None = None) -> list[dict]:
 
 
 def _decorate_task(item: dict) -> dict:
+    if item.get("task_type") == "scan":
+        from .task_scans import decorate_scan
+        return decorate_scan(item)
     item["file_name"] = str(item.get("file_name") or _task_name(item.get("input_directory", "")))
-    item["size_bytes"] = int(item.get("size_bytes") or _file_size(item.get("input_directory", "")))
+    item["size_bytes"] = int(item["size_bytes"] if item.get("size_bytes") is not None else _file_size(item.get("input_directory", "")))
     cleaned_logs = _clean_log_lines((_logs.get(item["id"]) or item.get("log_tail") or [])[-_MAX_LOG_LINES:])
     item["progress"] = _task_progress(item, cleaned_logs)
     image_progress = item["progress"]
@@ -590,26 +635,11 @@ def _decorate_task(item: dict) -> dict:
             image_stage["percent"] = 100
             if not image_stage["total"]:
                 image_stage["done"], image_stage["total"] = 1, 1
-            images["cover_done"] = max(images["cover_done"], 1)
             if images["fanart_total"]:
                 images["fanart_done"] = images["fanart_total"]
     output = image_progress.get("output") or {}
-    fallback_cover = _TASK_COVERS_DIR / f"{item['id']}.jpg"
-    poster_file = Path(str(output.get("poster_file") or ""))
-    item["cover_count"] = int(poster_file.is_file()) + int(fallback_cover.is_file() and fallback_cover != poster_file)
     item["fanart_count"] = int(image_progress.get("images", {}).get("fanart_done") or 0)
-    sources = image_progress.get("image_sources", {})
-    has_image_source = bool(sources.get("cover_urls") or sources.get("preview_pics"))
-    expected_fanart = len(sources.get("preview_pics") or [])
-    images_incomplete = (
-        bool(sources.get("cover_urls")) and not item["cover_count"]
-    ) or (expected_fanart and item["fanart_count"] < expected_fanart)
-    item["image_retry_available"] = bool(
-        has_image_source
-        and output.get("fanart_file")
-        and images_incomplete
-        and not item.get("image_retry_running")
-    )
+    item.update(_artwork_availability(item, output))
     organizer = item.get("file_organizer") if isinstance(item.get("file_organizer"), dict) else {}
     item["restore_available"] = bool(organizer.get("original_files") and organizer.get("organized_files"))
     return item
@@ -627,6 +657,7 @@ def _task_list_summary(item: dict) -> dict:
             "return_code", "error", "batch_id", "task_concurrency", "source", "schedule_id",
             "preset_id", "preset_name", "file_name", "size_bytes", "title", "cover_count",
             "fanart_count", "image_retry_available", "image_retry_running", "restore_available", "image_retry_started_at", "updated_at",
+            "task_type", "scan",
         )
     } | {
         "has_artwork_sources": bool(image_sources.get("cover_urls") or image_sources.get("preview_pics")),
@@ -643,11 +674,9 @@ def _task_list_summary(item: dict) -> dict:
 
 def _stored_task_summary(item: dict) -> dict:
     """Create a legacy summary without parsing a completed task's log history."""
-    output = item.get("image_output") if isinstance(item.get("image_output"), dict) else {}
+    output = _resolved_image_output(item)
     image_sources = item.get("image_sources") if isinstance(item.get("image_sources"), dict) else {}
-    poster_file = Path(str(output.get("poster_file") or ""))
-    fallback_cover = _TASK_COVERS_DIR / f"{item['id']}.jpg"
-    cover_count = int(poster_file.is_file()) + int(fallback_cover.is_file() and fallback_cover != poster_file)
+    cover_count = _artwork_availability(item, output)["cover_count"]
     metadata = item.get("metadata_override") if isinstance(item.get("metadata_override"), dict) else {}
     file_name = str(item.get("file_name") or Path(str(item.get("input_directory") or "")).name)
     title = str(item.get("title") or metadata.get("title") or "")
@@ -870,9 +899,10 @@ def get_cover_path(task_id: str, index: int) -> Path | None:
     if not output:
         legacy = get_task_record(task_id) or task
         output = _task_progress(legacy, legacy.get("log_tail") or []).get("output") or {}
+    output = _resolved_image_output(task, output)
     paths = _cover_paths(task.get("input_directory", ""), output)
     fallback_cover = _TASK_COVERS_DIR / f"{task_id}.jpg"
-    if fallback_cover.is_file():
+    if _existing_artwork(fallback_cover) and fallback_cover not in paths:
         paths.append(fallback_cover)
     return paths[index] if index < len(paths) else None
 
@@ -973,9 +1003,34 @@ def create_tasks(
     *,
     source: str = "manual",
     schedule_id: str | None = None,
+    input_files: list[str] | None = None,
 ) -> list[dict]:
+    prepared = _prepare_tasks(input_directory, preset_id, source=source, schedule_id=schedule_id, input_files=input_files)
+    from .task_store import upsert_many
+    upsert_many(prepared)
+    for task in prepared:
+        _enqueue_task(task)
+    return prepared
+
+
+def _prepare_tasks(
+    input_directory: str,
+    preset_id: str = "default",
+    *,
+    source: str = "manual",
+    schedule_id: str | None = None,
+    input_files: list[str] | None = None,
+    batch_id: str | None = None,
+    on_progress=None,
+) -> list[dict]:
+    """Discover and prepare a complete batch before making any child runnable."""
+    def progress(count, message):
+        if on_progress:
+            on_progress(count, message)
+
+    progress(0, "正在检查输入路径")
     input_path = Path(os.path.abspath(os.path.expanduser(input_directory.strip())))
-    if not input_path.exists():
+    if input_files is None and not input_path.exists():
         raise ValueError("输入路径不存在")
     snapshot = _preset_config_data(preset_id)
     config_data, preset = snapshot
@@ -984,21 +1039,25 @@ def create_tasks(
         concurrency = max(1, min(32, int(preset.get("task_concurrency", 1))))
     except (TypeError, ValueError):
         concurrency = 1
-    batch_id = uuid.uuid4().hex[:12]
-    if input_path.is_file():
+    batch_id = batch_id or uuid.uuid4().hex[:12]
+    if input_files is None and input_path.is_file():
         if not _passes_minimum_size(input_path, minimum_size, config_data):
             raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
-        return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id, _snapshot=snapshot)]
-    if not input_path.is_dir():
+        progress(1, "正在创建单文件任务")
+        return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id, _snapshot=snapshot, _defer=True)]
+    if input_files is None and not input_path.is_dir():
         raise ValueError("输入路径不是目录或文件")
+    video_files = []
     try:
-        video_files = sorted(
-            (
-                item for item in input_path.rglob("*")
-                if item.is_file() and item.suffix.lower() in _VIDEO_EXTENSIONS
-            ),
-            key=lambda item: str(item).lower(),
-        )
+        candidates = (Path(os.path.abspath(os.path.expanduser(p.strip()))) for p in input_files) if input_files is not None else input_path.rglob("*")
+        for item in candidates:
+            progress(len(video_files), f"正在扫描，已发现 {len(video_files)} 个视频文件")
+            # Check suffix first to avoid a remote stat for every non-video.
+            if item.suffix.lower() in _VIDEO_EXTENSIONS and item.is_file():
+                video_files.append(item)
+            elif input_files is not None:
+                raise ValueError(f"所选视频文件不存在或格式不支持: {item}")
+        video_files.sort(key=lambda item: str(item).lower())
     except OSError as exc:
         raise ValueError(f"无法读取输入目录: {exc}") from exc
     if not video_files:
@@ -1008,6 +1067,7 @@ def create_tasks(
     unique_videos: list[Path] = []
     seen_paths: set[str] = set()
     for video in video_files:
+        progress(len(video_files), "正在检查重复路径并合并分 P 文件")
         identity = os.path.normcase(os.path.realpath(str(video)))
         if identity in seen_paths:
             continue
@@ -1019,23 +1079,35 @@ def create_tasks(
     scanner = Cfg.model_validate(config_data).scanner
     groups = group_files(unique_videos, scanner)
     # A short final part belongs to the movie when another part meets the limit.
-    groups = [paths for paths in groups if any(_passes_minimum_size(path, minimum_size, config_data) for path in paths)]
+    eligible = []
+    for paths in groups:
+        for path in paths:
+            progress(len(video_files), "正在检查影片文件大小")
+            if _passes_minimum_size(path, minimum_size, config_data):
+                eligible.append(paths)
+                break
+    groups = eligible
     if not groups:
         raise ValueError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
-    prepared = [
-        create_task(str(paths[0]), preset_id, batch_id=batch_id, task_concurrency=concurrency,
-                    source=source, schedule_id=schedule_id, input_files=[str(path) for path in paths], _snapshot=snapshot, _defer=True)
-        for paths in groups
-    ]
-
-    from .task_store import upsert_many
-    upsert_many(prepared)
-    for task in prepared:
-        _enqueue_task(task)
+    prepared = []
+    try:
+        for paths in groups:
+            progress(len(video_files), f"正在准备影片任务 {len(prepared) + 1}/{len(groups)}")
+            prepared.append(create_task(str(paths[0]), preset_id, batch_id=batch_id, task_concurrency=concurrency,
+                                       source=source, schedule_id=schedule_id, input_files=[str(path) for path in paths], _snapshot=snapshot, _defer=True))
+        progress(len(video_files), f"扫描完成，正在提交 {len(prepared)} 个影片任务")
+    except BaseException:
+        from .task_scans import discard_prepared
+        discard_prepared(prepared)
+        raise
     return prepared
 
 
 def _run_task(task: dict) -> None:
+    if task.get("task_type") == "scan":
+        from .task_scans import run_scan
+        run_scan(task)
+        return
     # The fixed worker pool owns both global and batch reservations, releasing
     # them even when setup or persistence fails.
     with _queue_condition:

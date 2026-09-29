@@ -1,6 +1,7 @@
 """SQLite task records, separate logs and small indexed list summaries."""
 from contextlib import contextmanager
 import json
+import logging
 import shutil
 import sqlite3
 import threading
@@ -145,6 +146,51 @@ def record(task_id, logs=True):
 def summaries():
     with connection() as db:
         return [json.loads(row[0]) for row in db.execute('SELECT summary FROM tasks ORDER BY created_at DESC,id')]
+
+
+def repair_artwork_paths():
+    """Refresh old missing-cover summaries without holding a DB lock during mount I/O."""
+    from .tasks import _resolved_image_output, _artwork_availability
+    marker = 'artwork_extensions_v1'
+    with connection() as db:
+        if db.execute('SELECT 1 FROM task_store_meta WHERE key=?', (marker,)).fetchone():
+            return 0
+        rows = db.execute("""SELECT id,payload,summary FROM tasks
+            WHERE status IN ('succeeded','failed','cancelled')
+            AND coalesce(json_extract(payload,'$.image_retry_running'),0)=0
+            AND coalesce(json_extract(summary,'$.cover_count'),0)=0
+            AND coalesce(json_extract(payload,'$.image_output.poster_file'),'')<>''""").fetchall()
+    repaired, conflicts = 0, False
+    for row in rows:
+        payload, summary = json.loads(row['payload']), json.loads(row['summary'])
+        output = _resolved_image_output(payload)
+        availability = _artwork_availability(payload | {'fanart_count': summary.get('fanart_count')}, output)
+        payload['image_output'] = output
+        summary.update(availability)
+        updated_payload, updated_summary = _dump(payload), _dump(summary)
+        if updated_payload == row['payload'] and updated_summary == row['summary']:
+            continue
+        with connection() as db:
+            # A retry, restore, edit or deletion made during filesystem I/O wins.
+            changed = db.execute('UPDATE tasks SET payload=?,summary=? WHERE id=? AND payload=? AND summary=?',
+                                 (updated_payload, updated_summary, row['id'], row['payload'], row['summary'])).rowcount
+        repaired += changed
+        conflicts |= not changed
+    if not conflicts:
+        with connection() as db:
+            db.execute('INSERT OR IGNORE INTO task_store_meta VALUES(?,?)', (marker, '1'))
+    return repaired
+
+
+def start_artwork_path_repair():
+    def run():
+        try:
+            repaired = repair_artwork_paths()
+            if repaired:
+                logging.info('已修复 %s 条历史任务的封面路径/状态', repaired)
+        except Exception:
+            logging.exception('历史封面路径修复失败，将在下次启动重试')
+    threading.Thread(target=run, name='artwork-path-repair', daemon=True).start()
 
 
 def run_counts(runs):

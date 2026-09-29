@@ -577,7 +577,6 @@ def RunNormalMode(all_movies):
                 logger.warning('下载封面图片失败，已跳过封面处理并继续整理影片')
                 inner_bar.update()
             else:
-                progress_event('images', done=1, total=1, kind='cover', status='completed')
                 cover, pic_path = cover_dl
                 # 确保实际下载的封面的url与即将写入到movie.info中的一致
                 if cover != movie.info.cover:
@@ -588,7 +587,15 @@ def RunNormalMode(all_movies):
                     actual_ext = os.path.splitext(pic_path)[1]
                     movie.poster_file = os.path.splitext(movie.poster_file)[0] + actual_ext
 
-                process_poster(movie)
+                # download_cover may choose a different extension from the source URL.
+                # Persist the actual paths before reporting success (also when move_files is off).
+                progress_event('output', save_dir=os.path.abspath(movie.save_dir), fanart_file=os.path.abspath(movie.fanart_file), poster_file=os.path.abspath(movie.poster_file))
+                try:
+                    process_poster(movie)
+                except Exception as e:
+                    progress_event('images', done=0, total=1, kind='cover', status='failed', error=str(e))
+                    raise
+                progress_event('images', done=1, total=1, kind='cover', status='completed')
                 check_step(True)
 
             if Cfg().summarizer.extra_fanarts.enabled:

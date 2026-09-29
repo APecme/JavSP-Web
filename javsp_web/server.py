@@ -75,12 +75,13 @@ from .media import list_media_libraries, sync_media_server
 from .tasks import active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_task_summaries, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
 from .artwork import image_response
-from .task_store import run_counts
+from .task_store import run_counts, start_artwork_path_repair
 from . import updater
 
 
 ensure_seed_data()
 recover_interrupted_tasks()
+start_artwork_path_repair()
 updater.start_scheduler()
 app = FastAPI(title="JavSP WEB", version=__version__)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
@@ -189,6 +190,7 @@ class CrawlerTestBody(BaseModel):
 class TaskBody(BaseModel):
     input_directory: str = Field(min_length=1)
     preset_id: str = "default"
+    input_files: list[str] | None = Field(default=None, min_length=1, max_length=10000)
 
 
 class TaskMetadataBody(BaseModel):
@@ -340,8 +342,15 @@ def apply_update(_: dict = Depends(require_admin)) -> dict:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@app.post("/api/path/select")
-def select_path(body: PathSelectBody, _: dict = Depends(current_user)) -> dict:
+_native_path_lock = threading.Lock()
+
+
+def _select_native_paths(kind: str, multiple: bool = False) -> list[str]:
+    if IS_DOCKER:
+        raise HTTPException(status_code=400, detail="容器环境请使用网页内的路径浏览器")
+    if not _native_path_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="已有文件选择窗口打开，请先完成选择")
+    root = None
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -349,17 +358,34 @@ def select_path(body: PathSelectBody, _: dict = Depends(current_user)) -> dict:
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        if body.kind == "directory":
-            selected = filedialog.askdirectory(title="选择待刮削目录")
+        if kind == "directory":
+            selected = filedialog.askdirectory(parent=root, title="选择待刮削目录")
         else:
-            selected = filedialog.askopenfilename(
-                title="选择待刮削视频文件",
+            choose = filedialog.askopenfilenames if multiple else filedialog.askopenfilename
+            selected = choose(
+                parent=root, title="选择待刮削视频文件（可按 Ctrl/Shift 多选）" if multiple else "选择待刮削视频文件",
                 filetypes=[("视频文件", "*.3gp *.avi *.f4v *.flv *.iso *.m2ts *.m4v *.mkv *.mov *.mp4 *.mpeg *.rm *.rmvb *.ts *.vob *.webm *.wmv *.strm *.mpg"), ("所有文件", "*.*")],
             )
-        root.destroy()
-        return {"path": selected or None}
+        return list(selected or []) if multiple and kind == "file" else ([selected] if selected else [])
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"无法打开系统选择窗口: {exc}") from exc
+    finally:
+        try:
+            if root is not None:
+                root.destroy()
+        finally:
+            _native_path_lock.release()
+
+
+@app.post("/api/path/select")
+def select_path(body: PathSelectBody, _: dict = Depends(current_user)) -> dict:
+    paths = _select_native_paths(body.kind)
+    return {"path": paths[0] if paths else None}
+
+
+@app.post("/api/path/select-multi")
+def select_multi_paths(body: PathSelectBody, _: dict = Depends(current_user)) -> dict:
+    return {"paths": _select_native_paths(body.kind, multiple=True)}
 
 
 @app.get("/api/path/options")
@@ -1096,8 +1122,9 @@ def tasks(request: Request, limit: int | None = Query(default=None, ge=1, le=500
 @app.post("/api/tasks", status_code=202)
 def start_task(body: TaskBody, _: dict = Depends(current_user)) -> dict:
     try:
-        tasks = create_tasks(body.input_directory, body.preset_id)
-        return {"tasks": tasks, "count": len(tasks)}
+        from .task_scans import submit_scan
+        task = submit_scan(body.input_directory, body.preset_id, body.input_files)
+        return {"tasks": [task], "count": 1, "scan": True}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
