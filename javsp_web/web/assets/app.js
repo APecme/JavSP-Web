@@ -1174,10 +1174,30 @@ async function loadPathTools() {
   }
 }
 
+function clearManualFileSelection() {
+  state.manualInputFiles = [];
+  const message = $('#task-selection-message');
+  if (message) { message.textContent = ''; message.hidden = true; }
+}
+
+function setManualFileSelection(paths) {
+  clearManualFileSelection();
+  state.manualInputFiles = [...new Set(paths.filter(path => typeof path === 'string' && path))];
+  if (!state.manualInputFiles.length) return;
+  $('#input-directory').value = state.manualInputFiles[0];
+  const message = $('#task-selection-message');
+  if (message) {
+    message.textContent = '已选择 ' + state.manualInputFiles.length + ' 个文件，将作为同一批次扫描（自动合并分 P）；修改路径可取消多选。';
+    message.hidden = false;
+  }
+}
+
 async function selectNativePath(kind) {
   try {
-    const selected = await api('/api/path/select', { method: 'POST', body: JSON.stringify({ kind }) });
-    if (selected.path) $('#input-directory').value = selected.path;
+    const multiple = kind === 'files';
+    const selected = await api(multiple ? '/api/path/select-multi' : '/api/path/select', { method: 'POST', body: JSON.stringify({ kind: multiple ? 'file' : kind }) });
+    if (multiple && selected.paths?.length) setManualFileSelection(selected.paths);
+    else if (!multiple && selected.path) { clearManualFileSelection(); $('#input-directory').value = selected.path; }
   } catch (error) {
     $('#task-message').textContent = error.message;
   }
@@ -1189,7 +1209,10 @@ function setPathTarget(path) {
     : (state.pathBrowser.target === 'preset-output-directory'
       ? document.querySelector('[data-config-path="summarizer.path.output_folder_pattern"]')
       : $('#input-directory'));
-  if (target) target.value = path;
+  if (target) {
+    if (target === $('#input-directory')) clearManualFileSelection();
+    target.value = path;
+  }
 }
 
 function renderDockerPathBrowser(data) {
@@ -1477,16 +1500,32 @@ function removeUser(username) {
   });
 }
 
-$('#task-form').addEventListener('submit', async (event) => {
+async function submitManualTask(event) {
   event.preventDefault();
+  if (state.manualTaskSubmitting) return;
+  state.manualTaskSubmitting = true;
+  const button = $('#task-form button[type="submit"]');
   const message = $('#task-message');
+  const payload = { input_directory: $('#input-directory').value, preset_id: $('#task-preset').value };
+  const selection = state.manualInputFiles;
+  if (selection?.length && payload.input_directory === selection[0]) payload.input_files = [...selection];
+  if (button) button.disabled = true;
+  message.textContent = '正在提交后台扫描请求…';
   try {
-    const result = await api('/api/tasks', { method: 'POST', body: JSON.stringify({ input_directory: $('#input-directory').value, preset_id: $('#task-preset').value }) });
-    message.textContent = result.count > 1 ? `已创建 ${result.count} 个影片任务` : `任务 ${result.tasks?.[0]?.id || ''} 已启动`;
-    $('#input-directory').value = '';
+    const result = await api('/api/tasks', { method: 'POST', body: JSON.stringify(payload) });
+    message.textContent = result.scan
+      ? '已创建后台扫描任务 ' + (result.tasks?.[0]?.id || '') + '，请在任务队列查看扫描进度。'
+      : (result.count > 1 ? '已创建 ' + result.count + ' 个影片任务' : '任务 ' + (result.tasks?.[0]?.id || '') + ' 已启动');
+    if ($('#input-directory').value === payload.input_directory && state.manualInputFiles === selection) {
+      $('#input-directory').value = '';
+      clearManualFileSelection();
+    }
     await loadTasks();
   } catch (error) { message.textContent = error.message; }
-});
+  finally { state.manualTaskSubmitting = false; if (button) button.disabled = false; }
+}
+$('#task-form').addEventListener('submit', submitManualTask);
+$('#input-directory').addEventListener('input', clearManualFileSelection);
 
 $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-task-page]'); if (button && !button.disabled) { state.taskPage = Math.max(0, Number(button.dataset.taskPage) || 0); loadTasks(); } });
@@ -1806,7 +1845,16 @@ function syncTaskExpansion(tasks) {
   });
 }
 
+function scanTaskCard(task) {
+  const id = escapeHtml(task.id);
+  const active = ['queued', 'running'].includes(task.status);
+  const labels = { queued: '等待扫描', running: '扫描中', succeeded: '扫描完成', failed: '扫描失败', cancelled: '扫描已取消' };
+  const stop = active ? "<button class=\"button secondary task-stop\" type=\"button\" onclick=\"cancelTask('" + id + "')\">停止扫描</button>" : '';
+  return '<article class="task-card" data-task-card="' + id + '"><div class="task-card-head"><div class="task-card-title"><strong>' + escapeHtml(taskDisplayName(task)) + '</strong><div class="task-path">路径：' + escapeHtml(task.input_directory) + '</div><p role="status">' + escapeHtml(task.scan?.message || '等待扫描') + '</p><p class="muted">发现 ' + Number(task.scan?.discovered_files || 0) + ' 个文件 · 创建 ' + Number(task.scan?.created_tasks || 0) + ' 个影片任务</p></div><div class="task-card-tools"><span class="badge ' + escapeHtml(task.status) + '">' + (labels[task.status] || '') + '</span><button class="icon-button" type="button" data-task-detail="' + id + '">详情</button>' + stop + '<button class="task-delete" type="button" data-delete-task="' + id + '"' + (active ? ' disabled' : '') + '>删除</button></div></div></article>';
+}
+
 function taskCard(task) {
+  if (task.task_type === 'scan') return scanTaskCard(task);
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
   const expanded = state.taskOpen?.[task.id] ?? task.status === 'running';
   const active = ['queued', 'running'].includes(task.status);
@@ -1878,6 +1926,10 @@ async function openTaskDetail(taskId, background = false) {
   } finally { if (detailRequestId === state.detailRequestId) state.detailLoading = false; }
   if (state.activeTaskDetail !== taskId || !dialog.open || detailRequestId !== state.detailRequestId || (background && (state.taskMetadataEditing || state.taskDetailLogSelecting || hasTaskDetailLogSelection()))) return;
   state.detailTask = task;
+  if (task.task_type === 'scan') {
+    $('#task-detail-content').innerHTML = '<p role="status">' + escapeHtml(task.scan?.message || '') + '</p><p class="muted">扫描完成后，影片任务会出现在任务队列中。停止扫描仅停止继续创建任务。</p><pre class="task-log">' + escapeHtml((task.log_tail || []).join('\n')) + '</pre>';
+    return;
+  }
   const metadata = task.progress?.metadata || {};
   const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name], ['文件路径', task.input_directory || '-'], ['整理路径', task.progress?.output?.save_dir || '-']].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');

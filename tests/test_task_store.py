@@ -132,6 +132,117 @@ class TaskStoreTests(unittest.TestCase):
         with patch.object(tasks, 'load_tasks', side_effect=AssertionError('full read')), patch.object(tasks, '_task_progress', side_effect=AssertionError('log parse')):
             self.assertEqual(tasks.get_cover_path('one', 0), path)
 
+    def artwork_record(self, extension='.png', generated=True):
+        from PIL import Image
+        output = {key: str(self.folder / name) for key, name in
+                  [('fanart_file', 'custom-fanart.jpg'), ('poster_file', 'custom-poster.jpg')]}
+        output['save_dir'] = str(self.folder)
+        actual = [self.folder / ('custom-' + role + extension) for role in ('fanart', 'poster')]
+        for path in actual:
+            Image.new('RGB', (24, 36), 'red').save(path)
+        record = self.item(image_output=output, image_sources={'cover_urls': ['https://example.test/cover']},
+                           file_organizer={'generated_files': list(map(str, actual)) if generated else []})
+        record['log_tail'].append('JAVSP_PROGRESS ' + json.dumps(dict(stage='images', kind='cover', done=1, total=1, status='completed')))
+        return record, actual
+
+    def test_actual_extensions_and_custom_names_reach_details_and_cover_api(self):
+        client = self.client()
+        for extension, generated in [('.png', True), ('.jpeg', False), ('.webp', False), ('.PNG', True)]:
+            with self.subTest(extension=extension):
+                record, actual = self.artwork_record(extension, generated)
+                storage.upsert_task(record)
+                detail = client.get('/api/tasks/one').json()
+                self.assertEqual(detail['cover_count'], 1)
+                self.assertEqual(Path(detail['progress']['output']['poster_file']), actual[1])
+                self.assertFalse(detail['image_retry_available'])
+                self.assertEqual(tasks.get_cover_path('one', 0), actual[1])
+                self.assertEqual(client.get('/api/tasks/one/cover/0').status_code, 200)
+                self.assertEqual(client.get('/api/tasks/one/cover/0?thumbnail=true').status_code, 200)
+                self.assertEqual(client.get('/api/tasks?limit=10&view=overview').json()['items'][0]['cover_count'], 1)
+                for path in actual:
+                    path.unlink()
+
+    def legacy_artwork_record(self):
+        record, actual = self.artwork_record()
+        storage.upsert_task(record)
+        with task_store.connection() as db:
+            summary = json.loads(db.execute('SELECT summary FROM tasks WHERE id=?', ('one',)).fetchone()[0])
+            summary.update(cover_count=0, image_retry_available=True)
+            db.execute('UPDATE tasks SET summary=? WHERE id=?', (task_store._dump(summary), 'one'))
+        return record, actual
+
+    def test_history_repair_updates_cached_overview_without_changing_logs(self):
+        record, actual = self.legacy_artwork_record()
+        with patch.object(tasks, '_progress_from_logs', side_effect=AssertionError('history log scan')):
+            self.assertEqual(task_store.repair_artwork_paths(), 1)
+        persisted = storage.get_task_record('one')
+        self.assertEqual(persisted['log_tail'], record['log_tail'])
+        self.assertEqual(persisted['image_output']['poster_file'], str(actual[1]))
+        summary = tasks.list_task_summaries(10, view='overview')['items'][0]
+        self.assertEqual(summary['cover_count'], 1)
+        self.assertFalse(summary['image_retry_available'])
+        self.assertEqual(summary['progress']['metadata']['title'], 'one')
+        with patch.object(tasks, '_resolved_image_output', side_effect=AssertionError('repeat scan')):
+            self.assertEqual(task_store.repair_artwork_paths(), 0)
+
+    def test_missing_artwork_is_not_reported_available_and_never_scans_other_movies(self):
+        record, actual = self.artwork_record()
+        for path in actual:
+            path.unlink()
+        storage.upsert_task(record)
+        with patch.object(Path, 'rglob', side_effect=AssertionError('recursive mount scan')):
+            self.assertIsNone(tasks.get_cover_path('one', 0))
+        detail = tasks.get_task('one')
+        self.assertEqual(detail['cover_count'], 0)
+        self.assertTrue(detail['image_retry_available'])
+        task_store.repair_artwork_paths()
+        self.assertEqual(tasks.list_task_summaries(10)['items'][0]['cover_count'], 0)
+
+    def test_success_without_cover_event_does_not_invent_download_progress(self):
+        storage.upsert_task(self.item())
+        detail = tasks.get_task('one')
+        self.assertEqual(detail['progress']['images']['cover_done'], 0)
+        self.assertEqual(detail['cover_count'], 0)
+
+    def test_history_repair_does_not_block_polling_on_a_slow_mount(self):
+        import threading
+        self.legacy_artwork_record()
+        entered, release = threading.Event(), threading.Event()
+        resolve = tasks._resolved_image_output
+        def slow(task, output=None):
+            if task['id'] == 'one':
+                entered.set()
+                if not release.wait(5):
+                    raise AssertionError('test did not release mount')
+            return resolve(task, output)
+        with patch.object(tasks, '_resolved_image_output', side_effect=slow), concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(task_store.repair_artwork_paths)
+            try:
+                self.assertTrue(entered.wait(2))
+                self.assertEqual(tasks.list_task_summaries(10)['total'], 1)
+                storage.upsert_task(self.item('independent', status='queued'))
+            finally:
+                release.set()
+            self.assertEqual(future.result(timeout=5), 1)
+
+    def test_history_repair_does_not_resurrect_concurrently_deleted_task(self):
+        self.legacy_artwork_record()
+        resolve = tasks._resolved_image_output
+        def deleting(task):
+            storage.delete_task_record(task['id'])
+            return resolve(task)
+        with patch.object(tasks, '_resolved_image_output', side_effect=deleting):
+            self.assertEqual(task_store.repair_artwork_paths(), 0)
+        self.assertIsNone(storage.get_task_record('one'))
+
+    def test_existing_jpg_wins_over_stale_generated_png(self):
+        from PIL import Image
+        record, _ = self.artwork_record()
+        jpg = self.folder / 'custom-poster.jpg'
+        Image.new('RGB', (24, 36)).save(jpg)
+        storage.upsert_task(record)
+        self.assertEqual(tasks.get_cover_path('one', 0), jpg)
+
     def test_update_api_exposes_cached_check_and_worker_status(self):
         self.enterContext(patch.dict(os.environ, {'JAVSP_WEB_RELEASE_LABEL': 'v1.1.36'}))
         client = self.client()
