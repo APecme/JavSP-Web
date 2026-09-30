@@ -57,5 +57,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: JavSP WEB ${{ github.ref_name }}
-          generate_release_notes: true
+          body_path: docs/RELEASE_NOTES_${{ github.ref_name }}.md
+          generate_release_notes: false
           files: dist/JavSP-Web.exe

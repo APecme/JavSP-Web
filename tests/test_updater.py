@@ -32,10 +32,12 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(updater.channel(), 'bata')
 
     def test_stable_check_compares_image_embedded_version(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.37'
         target = {'target': '1.1.38', 'image': 'example@sha256:' + 'a' * 64, 'image_id': 'sha256:' + 'b' * 64, 'tag': 'latest'}
         with patch.object(updater, 'registry_target', return_value=target):
             result = updater.check(force=True)
         self.assertTrue(result['available'])
+        self.assertEqual(result['current'], '1.1.37')
         self.assertEqual(result['target'], '1.1.38')
 
     def test_beta_check_switches_from_stable(self):
