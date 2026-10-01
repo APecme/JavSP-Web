@@ -5,6 +5,13 @@ from pathlib import Path
 from javsp.avid import configured_media_type, get_cid, get_id
 
 
+_PART_NUMBER_RE = re.compile(
+    r'(?:[-_ .]+(?:cd|part|pt)?\s*|(?:cd|part|pt)\s*)'
+    r'(\d{1,3})(?:(?:[-_ .]+)(?:\d{3,4}p|\d{1,2}k))?$',
+    re.I,
+)
+
+
 def media_identity(path, scanner=None):
     configured = configured_media_type(str(path), scanner)
     if configured:
@@ -15,7 +22,7 @@ def media_identity(path, scanner=None):
 
 def part_number(path, scanner=None):
     path = Path(path)
-    match = re.search(r'(?:[-_ .]+(?:cd|part|pt)?\s*|(?:cd|part|pt)\s*)(\d{1,3})$', path.stem, re.I)
+    match = _PART_NUMBER_RE.search(path.stem)
     if not match:
         return None
     base = path.with_name(path.stem[:match.start()] + path.suffix)

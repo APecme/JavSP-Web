@@ -49,6 +49,11 @@ class MultipartTests(unittest.TestCase):
         self.assertEqual(len(movies), 1)
         self.assertEqual(movies[0].part_numbers, [1, 2, 10])
 
+    def test_parts_before_quality_suffix(self):
+        paths = self.files('masex.tv@aqumam00046_1_8k.strm', 'masex.tv@aqumam00046_2_8k.strm')
+        self.assertEqual([part_number(path, self.config.scanner) for path in paths], [1, 2])
+        self.assertEqual(group_files(paths, self.config.scanner), [paths])
+
     def test_identifiers_are_not_parts(self):
         for name in ('ABC-123.mp4', 'FC2-4953812.mp4', '080826_01.mp4', 'HEYDOUGA-1234-123.mp4'):
             with self.subTest(name=name):

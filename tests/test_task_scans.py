@@ -168,6 +168,23 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(finished['scan']['created_tasks'], 2)
         self.assertEqual(finished['scan']['discovered_files'], 3)
 
+    def test_multiselect_falls_back_when_mount_realpath_is_unsupported(self):
+        paths = self.files('FC2-4953812-1.mp4', 'FC2-4953812-2.mp4')
+        scan = self.submit(paths[0], paths)
+        original_realpath = tasks.os.path.realpath
+
+        def realpath(path, *args, **kwargs):
+            if str(path).startswith(str(paths[0].parent)):
+                raise OSError(1005, '底层设备不工作')
+            return original_realpath(path)
+
+        with patch.object(tasks.os.path, 'realpath', side_effect=realpath):
+            tasks._run_task(scan)
+        children = self.children(scan)
+        self.assertEqual(storage.get_task_record(scan['id'])['status'], 'succeeded')
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0]['input_files'], list(map(str, paths)))
+
     def test_single_file_still_creates_one_scrape_task(self):
         video = self.files('ABC-123.mp4')[0]
         scan = self.submit(video)

@@ -1068,7 +1068,10 @@ def _prepare_tasks(
     seen_paths: set[str] = set()
     for video in video_files:
         progress(len(video_files), "正在检查重复路径并合并分 P 文件")
-        identity = os.path.normcase(os.path.realpath(str(video)))
+        try:
+            identity = os.path.normcase(os.path.realpath(str(video)))
+        except OSError:
+            identity = os.path.normcase(os.path.abspath(str(video)))
         if identity in seen_paths:
             continue
         seen_paths.add(identity)
