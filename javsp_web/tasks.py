@@ -1071,6 +1071,8 @@ def _prepare_tasks(
         try:
             identity = os.path.normcase(os.path.realpath(str(video)))
         except OSError:
+            # CloudDrive2/WinFsp 等虚拟挂载盘不支持 GetFinalPathNameByHandle
+            #（返回 WinError 1005），回退到词法级路径去重。
             identity = os.path.normcase(os.path.abspath(str(video)))
         if identity in seen_paths:
             continue
