@@ -35,7 +35,7 @@ const TRANSLATOR_ENGINES = {
   google: [], bing: ['api_key'], baidu: ['app_id', 'api_key'], claude: ['api_key'], openai: ['url', 'api_key', 'model'],
 };
 const FIELD_LABELS = {
-  'scanner.ignored_id_pattern': '番号识别忽略规则', 'scanner.input_directory': '扫描目录', 'scanner.filename_extensions': '影片文件扩展名', 'scanner.ignored_folder_name_pattern': '忽略目录规则', 'scanner.minimum_size': '最小匹配文件大小', 'scanner.skip_nfo_dir': '跳过已有 NFO 的目录', 'scanner.manual': '手动确认扫描结果',
+  'scanner.ignored_id_pattern': '番号识别忽略规则', 'scanner.input_directory': '扫描目录', 'scanner.filename_extensions': '影片文件扩展名', 'scanner.ignored_folder_name_pattern': '忽略目录规则', 'scanner.minimum_size': '最小匹配文件大小', 'scanner.only_match_media_types': '仅扫描匹配影片分类', 'scanner.skip_nfo_dir': '跳过已有 NFO 的目录', 'scanner.manual': '手动确认扫描结果',
   'network.proxy_server': '代理服务器地址', 'network.proxy_free': '免代理站点地址', 'network.proxy_free.avsox': 'Avsox 免代理地址', 'network.proxy_free.javbus': 'JavBus 免代理地址', 'network.proxy_free.javdb': 'JavDB 免代理地址', 'network.proxy_free.javlib': 'JavLib 免代理地址', 'network.retry': '网络重试次数', 'network.timeout': '网络请求超时',
   'crawler.selection.normal': '普通影片爬虫列表', 'crawler.selection.fc2': 'FC2 影片爬虫列表', 'crawler.selection.cid': 'CID 影片爬虫列表', 'crawler.selection.getchu': 'Getchu 影片爬虫列表', 'crawler.selection.gyutto': 'Gyutto 影片爬虫列表', 'crawler.required_keys': '抓取成功必需字段', 'crawler.hardworking': '深度抓取', 'crawler.respect_site_avid': '使用网站返回的番号', 'crawler.fc2fan_local_path': 'FC2Fan 本地镜像目录', 'crawler.sleep_after_scraping': '每部影片刮削后等待时间', 'crawler.use_javdb_cover': 'JavDB 封面使用策略', 'crawler.normalize_actress_name': '统一女优艺名',
   'summarizer.move_files': '移动文件到整理目录', 'summarizer.path.output_folder_pattern': '整理输出目录模板', 'summarizer.path.basename_pattern': '影片相关文件名模板', 'summarizer.path.length_maximum': '最大文件路径长度', 'summarizer.path.length_by_byte': '按字节计算路径长度', 'summarizer.path.max_actress_count': '路径中最多包含的女优数', 'summarizer.path.hard_link': '使用硬链接整理文件', 'summarizer.title.remove_trailing_actor_name': '移除标题末尾女优名', 'summarizer.default.title': '未知标题替代文本', 'summarizer.default.actress': '未知女优替代文本', 'summarizer.default.series': '未知系列替代文本', 'summarizer.default.director': '未知导演替代文本', 'summarizer.default.producer': '未知制作商替代文本', 'summarizer.default.publisher': '未知发行商替代文本', 'summarizer.nfo.basename_pattern': 'NFO 文件名', 'summarizer.nfo.title_pattern': 'NFO 影片标题模板', 'summarizer.nfo.custom_genres_fields': '自定义分类字段', 'summarizer.nfo.custom_tags_fields': '自定义标签字段', 'summarizer.censor_options_representation': '码状态显示文本', 'summarizer.cover.basename_pattern': '封面文件名', 'summarizer.cover.highres': '优先下载高清封面', 'summarizer.cover.add_label': '在封面添加水印标签', 'summarizer.cover.crop.on_id_pattern': '启用封面裁剪的番号规则', 'summarizer.cover.crop.engine': '封面裁剪识别引擎', 'summarizer.fanart.basename_pattern': '横版封面文件名', 'summarizer.extra_fanarts.enabled': '下载剧照', 'summarizer.extra_fanarts.scrap_interval': '剧照请求间隔',
@@ -53,6 +53,7 @@ FIELD_LABELS['summarizer.cover.google_search_fallback'] = 'Google 搜索封面�
 FIELD_LABELS['scanner.media_types'] = '影片分类';
 
 FIELD_LABELS['scanner.strm_ignore_minimum_size'] = 'STRM 忽略最小文件大小';
+FIELD_LABELS['scanner.only_match_media_types'] = '仅扫描匹配影片分类';
 
 const FIELD_NOTES = {
   input_directory: '手动刮削时会由任务路径覆盖。',
@@ -74,6 +75,7 @@ const FIELD_NOTES = {
 FIELD_NOTES.media_types = '填写 YAML 或 JSON 数组；保存时会校验分类 ID、识别方式、兜底分类和对应的爬虫分组。保存后，爬虫标签页会按新分类生成分组。';
 const FIELD_DESCRIPTIONS = {
   'scanner.strm_ignore_minimum_size': '开启后，小于最小文件大小的 .strm 文本文件仍会参与番号识别和刮削；其他视频文件不受影响。',
+  'scanner.only_match_media_types': '开启后，文件名未命中影片分类规则的文件会被跳过，适合过滤同一目录中的广告和其他无关视频。',
   'summarizer.cover.google_search_fallback': '启用后，封面下载失败时仅使用 Google 图片搜索查找候选封面，并使用预设中的代理。',
   'scanner.ignored_id_pattern': '推测番号前会忽略文件名中匹配的字符串；除非熟悉正则表达式，否则不要修改。',
   'scanner.input_directory': '要整理的影片目录。手动刮削任务会临时覆盖此值。',

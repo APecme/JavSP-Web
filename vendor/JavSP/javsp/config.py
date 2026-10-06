@@ -73,6 +73,7 @@ class Scanner(BaseConfig):
     ignored_folder_name_pattern: List[str]
     minimum_size: ByteSize
     strm_ignore_minimum_size: bool = False
+    only_match_media_types: bool = False
     skip_nfo_dir: bool
     manual: bool
     media_types: List[MediaType] = Field(default_factory=default_media_types)

@@ -39,6 +39,10 @@ _worker_batches = {}
 _GLOBAL_TASK_LIMIT = max(1, min(32, int(os.environ.get('JAVSP_WEB_TASK_WORKERS', '4'))))
 
 
+class NoScrapeTasksError(ValueError):
+    """The scan completed normally but found no eligible video files."""
+
+
 def _take_pending_task():
     for task in _pending_tasks:
         batch = str(task.get('batch_id') or task['id'])
@@ -1035,12 +1039,21 @@ def _prepare_tasks(
     snapshot = _preset_config_data(preset_id)
     config_data, preset = snapshot
     minimum_size = _minimum_size_bytes(config_data)
+    vendor_path = str(VENDOR_DIR)
+    if vendor_path not in sys.path:
+        sys.path.insert(0, vendor_path)
+    from javsp.avid import configured_media_type
+    from javsp.config import Cfg
+    scanner = Cfg.model_validate(config_data).scanner
+    only_match_media_types = scanner.only_match_media_types
     try:
         concurrency = max(1, min(32, int(preset.get("task_concurrency", 1))))
     except (TypeError, ValueError):
         concurrency = 1
     batch_id = batch_id or uuid.uuid4().hex[:12]
     if input_files is None and input_path.is_file():
+        if only_match_media_types and configured_media_type(str(input_path), scanner) is None:
+            raise ValueError("文件名未匹配任何影片分类规则，已跳过扫描")
         if not _passes_minimum_size(input_path, minimum_size, config_data):
             raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
         progress(1, "正在创建单文件任务")
@@ -1054,6 +1067,8 @@ def _prepare_tasks(
             progress(len(video_files), f"正在扫描，已发现 {len(video_files)} 个视频文件")
             # Check suffix first to avoid a remote stat for every non-video.
             if item.suffix.lower() in _VIDEO_EXTENSIONS and item.is_file():
+                if only_match_media_types and configured_media_type(str(item), scanner) is None:
+                    continue
                 video_files.append(item)
             elif input_files is not None:
                 raise ValueError(f"所选视频文件不存在或格式不支持: {item}")
@@ -1061,7 +1076,7 @@ def _prepare_tasks(
     except OSError as exc:
         raise ValueError(f"无法读取输入目录: {exc}") from exc
     if not video_files:
-        raise ValueError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
+        raise NoScrapeTasksError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
     # Some mounted filesystems can expose the same file through more than one
     # directory entry. A duplicate task races against its own output directory.
     unique_videos: list[Path] = []
@@ -1078,10 +1093,8 @@ def _prepare_tasks(
             continue
         seen_paths.add(identity)
         unique_videos.append(video)
-    from javsp.config import Cfg
     from javsp.multipart import group_files
 
-    scanner = Cfg.model_validate(config_data).scanner
     groups = group_files(unique_videos, scanner)
     # A short final part belongs to the movie when another part meets the limit.
     eligible = []
@@ -1093,7 +1106,7 @@ def _prepare_tasks(
                 break
     groups = eligible
     if not groups:
-        raise ValueError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
+        raise NoScrapeTasksError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
     prepared = []
     try:
         for paths in groups:

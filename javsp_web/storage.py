@@ -498,6 +498,23 @@ def record_auto_scrape_schedule_result(schedule_id: str, result: str, task_ids: 
                 return
 
 
+def record_auto_scrape_schedule_empty(schedule_id: str, result: str) -> None:
+    """Keep the minute claim but omit an empty scan from the run history."""
+    ensure_seed_data()
+    with _lock:
+        stored = _read_json(AUTO_SCRAPE_SCHEDULES_FILE, [])
+        source = stored.get("schedules", []) if isinstance(stored, dict) else stored
+        for item in source:
+            if isinstance(item, dict) and str(item.get("id") or "") == schedule_id:
+                last_run_key = str(item.get("last_run_key") or "")
+                runs = item.get("runs") if isinstance(item.get("runs"), list) else []
+                item["runs"] = [run for run in runs if not (isinstance(run, dict) and str(run.get("id") or "") == last_run_key)]
+                item["last_result"] = result[:500]
+                item["updated_at"] = now_iso()
+                _write_json(AUTO_SCRAPE_SCHEDULES_FILE, {"schedules": source})
+                return
+
+
 def delete_auto_scrape_schedule_run(schedule_id: str, run_id: str) -> bool:
     """Remove only a saved run record; its tasks and media remain untouched."""
     ensure_seed_data()

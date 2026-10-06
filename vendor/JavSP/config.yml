@@ -21,6 +21,8 @@ scanner:
   minimum_size: 232MiB
   # 是否允许小于最小文件大小的 STRM 文本文件参与刮削
   strm_ignore_minimum_size: false
+  # 是否只扫描文件名命中影片分类规则的文件；适合过滤影片目录中的广告文件
+  only_match_media_types: false
   skip_nfo_dir: yes
   manual: yes
   # 影片分类决定文件名的识别规则以及后续使用的爬虫列表。
