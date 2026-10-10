@@ -118,3 +118,10 @@
   .demo-empty { padding: 18px; text-align: center; flex-direction: column; }
   .demo-empty p { line-height: 1.5; }
 }
+.doc-content { min-width: 0; }
+.doc-table-wrap { max-width: 100%; overflow-x: auto; margin: 24px 0; }
+.doc-table-wrap table { width: 100%; border-collapse: collapse; min-width: 560px; line-height: 1.7; font-size: 14px; }
+.doc-table-wrap caption { text-align: left; font-weight: 700; margin-bottom: 12px; }
+.doc-table-wrap th, .doc-table-wrap td { text-align: left; padding: 12px; border-bottom: 1px solid #ccd4df; vertical-align: top; }
+.doc-table-wrap code { overflow-wrap: anywhere; }
+.doc-example { padding: 20px; overflow-x: auto; background: #f0f3f7; border-radius: 12px; line-height: 1.8; }

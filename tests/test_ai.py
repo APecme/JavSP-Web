@@ -70,6 +70,50 @@ class AITests(unittest.TestCase):
             self.assertEqual(self.client.get(path).status_code, 403)
         self.assertEqual(self.client.post("/api/ai/chat", json={"message": "test"}).status_code, 403)
 
+    def test_advanced_settings_persist_and_validate_merged_limits(self):
+        update = dict(self.config, context_tokens=32768, max_output_tokens=2048, temperature=.2,
+                      history_messages=8, max_rounds=3, max_tool_calls=4, search_enabled=False,
+                      search_results=5, search_pages=2, search_timeout=10, search_page_chars=3000)
+        response = self.client.put('/api/ai/settings', json=update)
+        self.assertEqual(response.status_code, 200, response.text)
+        for key in ('context_tokens', 'max_output_tokens', 'temperature', 'history_messages', 'max_rounds', 'search_enabled'):
+            self.assertEqual(response.json()[key], update[key])
+        self.client.put('/api/ai/settings', json={'model': 'changed'})
+        self.assertEqual(ai.settings()['context_tokens'], 32768)
+        self.assertEqual(self.client.put('/api/ai/settings', json={'max_output_tokens': 32768, 'api_key': 'hidden-value'}).status_code, 400)
+        response = self.client.put('/api/ai/settings', json={'max_output_tokens': 32768, 'api_key': 'hidden-value'})
+        self.assertNotIn('hidden-value', response.text)
+        self.assertEqual(self.client.put('/api/ai/settings', json={'search_enabled': True, 'search_provider': 'searxng'}).status_code, 400)
+
+    def test_disabled_search_is_not_advertised_or_executed(self):
+        conversation = self.conversation()
+        replies = [tool_call('web_search', {'query': 'test'}), {'role': 'assistant', 'content': '搜索未启用'}]
+        with patch.object(ai, 'complete', side_effect=replies) as complete, patch.object(ai_tools, 'execute') as execute:
+            ai_router._run(conversation, self.config | {'search_enabled': False})
+        execute.assert_not_called()
+        names = [item['function']['name'] for item in complete.call_args.args[2]]
+        self.assertNotIn('web_search', names)
+        self.assertNotIn('ai_lookup', names)
+        self.assertEqual(conversation['steps'][0]['status'], 'failed')
+
+    def test_configured_round_limit_and_history_count(self):
+        conversation = self.conversation()
+        conversation['turns'] = [{'role': 'user', 'content': 'old'}, {'role': 'assistant', 'content': 'old reply'},
+                                 {'role': 'user', 'content': 'new'}]
+        with patch.object(ai, 'complete', return_value=tool_call('list_presets', {})) as complete, patch.object(ai_tools, 'execute', return_value=[]):
+            ai_router._run(conversation, self.config | {'max_rounds': 1, 'history_messages': 2})
+        self.assertEqual(complete.call_count, 1)
+        self.assertNotIn('old', [message['content'] for message in complete.call_args.args[1]])
+        self.assertEqual(conversation['status'], 'failed')
+
+    def test_search_test_uses_unsaved_settings_without_saving(self):
+        from javsp_web import ai_scrape
+        with patch.object(ai_scrape, 'search_web', return_value=[{'title': 'result'}]) as search:
+            result = self.client.post('/api/ai/test-search', json={'search_results': 4})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(search.call_args.kwargs['config']['search_results'], 4)
+        self.assertEqual(ai.settings()['search_results'], 8)
+
     def test_prompt_defaults_for_legacy_settings_and_round_trip(self):
         storage._write_json(storage.DATA_DIR / 'ai-settings.json', self.config)
         settings = self.client.get('/api/ai/settings').json()
@@ -362,6 +406,25 @@ class ProviderTests(unittest.TestCase):
         for url in ("file:///etc/passwd", "https://user:pass@host/v1", "https://host/v1?api_key=secret"):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 ai.AISettings(base_url=url)
+
+    def test_output_and_temperature_passed_to_both_protocols(self):
+        for provider in ('compatible', 'anthropic'):
+            raw = {'content': [{'type': 'text', 'text': 'done'}]} if provider == 'anthropic' else {'choices': [{'message': {'content': 'done'}}]}
+            with patch.object(ai.requests, 'post', return_value=self.response(raw)) as post:
+                ai.complete(self.config | {'provider': provider, 'max_output_tokens': 512, 'temperature': .2}, [])
+            self.assertEqual(post.call_args.kwargs['json']['max_tokens'], 512)
+            self.assertEqual(post.call_args.kwargs['json']['temperature'], .2)
+
+    def test_context_trims_complete_old_turns_but_preserves_current_tools(self):
+        current = tool_call('list_presets', {})
+        messages = [{'role': 'system', 'content': 'rules'}, {'role': 'user', 'content': 'old' * 4000},
+                    {'role': 'assistant', 'content': 'old answer'}, {'role': 'user', 'content': 'current'}, current,
+                    {'role': 'tool', 'tool_call_id': 'call-1', 'content': '[]'}]
+        result = ai.fit_context({'context_tokens': 8192, 'max_output_tokens': 512}, messages)
+        self.assertEqual(result, [messages[0], *messages[3:]])
+        self.assertEqual(len(messages), 6)
+        with self.assertRaises(ai.AIError):
+            ai.fit_context({'context_tokens': 8192, 'max_output_tokens': 512}, [messages[0], messages[1]])
 
     def stream_response(self, events):
         response = Mock(status_code=200, headers={'Content-Type': 'text/event-stream; charset=utf-8'})

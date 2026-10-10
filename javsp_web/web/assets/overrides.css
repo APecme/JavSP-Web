@@ -573,6 +573,12 @@ html[data-initial-view="ai-scrape"] [data-panel="ai-scrape"] { display: block; }
 #ai-send[hidden], #ai-stop[hidden] { display: none; }
 .ai-footnote { text-align: center; font-size: 11px; margin: 10px 0 0; }
 .ai-skill-manager { border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 24px; }
+.ai-settings-card > summary { font-size: 18px; }
+.ai-settings-card > summary small { display: block; font-size: 12px; font-weight: normal; margin-top: 6px; }
+.ai-setting-group { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; }
+.ai-setting-group > summary { font-weight: 600; }
+.ai-setting-group[open] > summary { margin-bottom: 14px; }
+.ai-settings-card input, .ai-settings-card textarea, .ai-settings-card select { max-width: 100%; }
 .ai-skill-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #e2e8f0; }
 .ai-skill-row > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .ai-skill-row p { font-size: 12px; margin: 5px 0; }

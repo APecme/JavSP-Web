@@ -8,7 +8,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 import requests
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from . import storage
 
@@ -44,13 +44,34 @@ class AISettings(BaseModel):
     clear_api_key: bool = False
     timeout: int = Field(default=60, ge=10, le=120)
     system_prompt: str = Field(default=DEFAULT_SYSTEM_PROMPT, max_length=12000)
+    context_tokens: int = Field(default=65536, ge=8192, le=1048576)
+    max_output_tokens: int = Field(default=4096, ge=256, le=65536)
+    history_messages: int = Field(default=16, ge=2, le=40)
+    temperature: float | None = Field(default=None, ge=0, le=1)
+    max_rounds: int = Field(default=6, ge=1, le=12)
+    max_tool_calls: int = Field(default=12, ge=1, le=24)
+    search_enabled: bool = True
+    search_provider: Literal["bing", "searxng"] = "bing"
+    search_url: str = Field(default="", max_length=2048)
+    search_results: int = Field(default=8, ge=1, le=20)
+    search_pages: int = Field(default=3, ge=1, le=8)
+    search_page_chars: int = Field(default=16000, ge=1000, le=32000)
+    search_timeout: int = Field(default=15, ge=5, le=60)
+
+    @model_validator(mode="after")
+    def validate_limits(self):
+        if self.max_output_tokens >= self.context_tokens:
+            raise ValueError("最长上下文必须大于最大输出长度，需为输入资料留出空间")
+        if self.search_pages > self.search_results:
+            raise ValueError("最多读取网页数不能超过搜索结果数")
+        return self
 
     @field_validator("system_prompt")
     @classmethod
     def normalize_system_prompt(cls, value):
         return value.strip() or DEFAULT_SYSTEM_PROMPT
 
-    @field_validator("base_url")
+    @field_validator("base_url", "search_url")
     @classmethod
     def validate_url(cls, value):
         value = value.strip().rstrip("/")
@@ -81,14 +102,12 @@ def settings(include_key=False):
 
 
 def merge_settings(body: AISettings):
-    merged = settings(True) | body.model_dump(exclude={"api_key", "clear_api_key"})
-    if "system_prompt" not in body.model_fields_set:
-        merged["system_prompt"] = settings(True)["system_prompt"]
+    merged = settings(True) | body.model_dump(exclude_unset=True, exclude={"api_key", "clear_api_key"})
     if body.clear_api_key:
         merged["api_key"] = ""
     elif body.api_key and body.api_key.strip():
         merged["api_key"] = body.api_key.strip()
-    return merged
+    return AISettings.model_validate(merged).model_dump(exclude={"clear_api_key"})
 
 
 def validate_connection(config):
@@ -103,6 +122,8 @@ def save_settings(body):
         merged = merge_settings(body)
         if merged["enabled"]:
             validate_connection(merged)
+        if merged["search_enabled"] and merged["search_provider"] == "searxng" and not merged["search_url"]:
+            raise AIError("使用 SearXNG 时请填写搜索服务 URL，并启用 JSON 输出")
         storage._write_json(storage.DATA_DIR / "ai-settings.json", merged)
         return settings()
 
@@ -218,8 +239,23 @@ def _stream_result(response, anthropic, deadline, on_update):
     return {"choices": [{"message": {"content": content, "reasoning_content": reasoning, "tool_calls": list(calls.values())}}]}
 
 
+def fit_context(config, messages, tools=None):
+    budget = config.get("context_tokens", 65536) - config.get("max_output_tokens", 4096)
+    fitted = list(messages)
+    def size():
+        return len(json.dumps({"messages": fitted, "tools": tools or []}, ensure_ascii=False).encode("utf-8")) + 512
+    while size() > budget:
+        users = [index for index, message in enumerate(fitted) if message["role"] == "user"]
+        if len(users) < 2:
+            raise AIError("当前消息、工具或网页资料超过最长上下文预算；请缩小资料范围、减少网页数或提高上下文上限")
+        first, second = users[:2]
+        fitted = fitted[:first] + [message for message in fitted[first:second] if message["role"] == "system"] + fitted[second:]
+    return fitted
+
+
 def complete(config, messages, tools=None, on_update=None):
     validate_connection(config)
+    messages = fit_context(config, messages, tools)
     anthropic = config["provider"] == "anthropic"
     suffix = "/messages" if anthropic else "/chat/completions"
     base = config["base_url"].rstrip("/")
@@ -230,7 +266,7 @@ def complete(config, messages, tools=None, on_update=None):
     headers = {"Content-Type": "application/json"}
     if anthropic:
         headers.update({"x-api-key": config.get("api_key", ""), "anthropic-version": "2023-06-01"})
-        payload = {"model": config["model"], "max_tokens": 4096,
+        payload = {"model": config["model"], "max_tokens": config.get("max_output_tokens", 4096),
                    "system": "\n".join(item["content"] for item in messages if item["role"] == "system"),
                    "messages": _anthropic_messages(messages)}
         if tools:
@@ -239,9 +275,11 @@ def complete(config, messages, tools=None, on_update=None):
     else:
         if config.get("api_key"):
             headers["Authorization"] = "Bearer " + config["api_key"]
-        payload = {"model": config["model"], "messages": messages, "max_tokens": 4096, "stream": False}
+        payload = {"model": config["model"], "messages": messages, "max_tokens": config.get("max_output_tokens", 4096), "stream": False}
         if tools:
             payload["tools"] = tools
+    if config.get("temperature") is not None:
+        payload["temperature"] = config["temperature"]
     if on_update:
         payload["stream"] = True
     deadline = time.monotonic() + config["timeout"] + 10

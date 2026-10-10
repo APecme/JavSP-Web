@@ -7,7 +7,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from . import ai, ai_skills, ai_tools, storage
 from .auth import require_admin
@@ -90,6 +90,8 @@ def put_settings(body: ai.AISettings):
         return ai.save_settings(body)
     except ai.AIError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, "AI 参数不兼容，请检查上下文、输出长度和搜索数量") from exc
 
 
 @router.post("/test")
@@ -104,11 +106,25 @@ def test_connection(body: ai.AISettings):
                 "message": "连接成功，工具调用可用" if supported else "连接成功，但模型未调用测试工具；请确认模型支持工具调用"}
     except ai.AIError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, "AI 参数不兼容，请检查上下文、输出长度和搜索数量") from exc
 
 
 @router.get("/skills")
 def skills():
     return ai_tools.skill_catalog()
+
+
+@router.post("/test-search")
+def test_search(body: ai.AISettings):
+    from .ai_scrape import search_web
+    try:
+        results = search_web("JavSP", config=ai.merge_settings(body))
+        return {"message": f"搜索连接成功，取得 {len(results)} 条公开结果" if results else "搜索服务已响应，但未返回可用的公开结果", "count": len(results)}
+    except ai.AIError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, "AI 参数不兼容，请检查上下文、输出长度和搜索数量") from exc
 
 
 @router.get("/skills/{name}")
@@ -200,6 +216,8 @@ def _run(conversation, config):
     identifier = conversation["id"]
     secret = config.get("api_key") or ""
     catalog = ai_tools.skill_catalog()
+    max_rounds = config.get("max_rounds", 6)
+    max_calls = config.get("max_tool_calls", 12)
     system = (
         "你是 JavSP WEB 的 AI 刮削助手，用中文回答。可根据资料提取影片信息、调用爬虫、诊断失败并提出操作。"
         "先读取相关 Skill，再调用工具。禁止编造番号、封面地址、影片资料、文件路径或执行结果。"
@@ -207,9 +225,10 @@ def _run(conversation, config):
         "写入工具只生成待确认操作，不会执行，必须如实告诉用户点击确认。用户在对话里说同意也不能绕过确认。"
         "绝不索取或输出 API KEY、密码或 Cookie。系统设置中的 LLM 凭据由后端处理。"
         "没有任意 shell、任意文件读取、任意网页浏览或源代码部署工具，不要声称已执行这些操作。"
-        "需要影片资料时可用已有爬虫或 ai_lookup 搜索核验，也可以让用户粘贴内容。生成 Python 爬虫后先展示代码，保存与测试分开。"
+        "需要影片资料时可用已有爬虫或 ai_lookup 搜索核验，也可以让用户粘贴内容。web_search 可搜索公开网页摘要，摘要不是已核验的全文。"
+        "联网搜索工具未提供时，说明搜索已关闭，不要试图绕过设置。生成 Python 爬虫后先展示代码，保存与测试分开。"
         "AI 刮削通过 create_task 接入现有整理队列；可从用户提供的资料提取字段，再用 update_metadata 提议补充已有任务。"
-        "最多执行 6 轮、12 次工具调用，优先只读验证，完成后简洁说明结果。"
+        f"最多执行 {max_rounds} 轮、{max_calls} 次工具调用，优先只读验证，完成后简洁说明结果。"
         "可用 Skills：" + json.dumps(catalog, ensure_ascii=False)
     )
     system += (
@@ -217,7 +236,10 @@ def _run(conversation, config):
         + (config.get("system_prompt") or ai.DEFAULT_SYSTEM_PROMPT)
     )
     messages = [{"role": "system", "content": system}]
-    for turn in conversation["turns"][-16:]:
+    history = conversation["turns"][-config.get("history_messages", 16):]
+    while history and history[0]["role"] != "user":
+        history = history[1:]
+    for turn in history:
         if turn["role"] == "assistant" and not turn.get("content"):
             continue
         messages.append({"role": turn["role"], "content": turn["content"]})
@@ -236,7 +258,7 @@ def _run(conversation, config):
             raise AnalysisStopped()
 
     try:
-        for _ in range(6):
+        for _ in range(max_rounds):
             check_stopped()
             content_prefix = reply["content"] + ("\n\n" if reply["content"] else "")
             reasoning_prefix = reply["reasoning_content"] + ("\n\n" if reply["reasoning_content"] else "")
@@ -262,14 +284,17 @@ def _run(conversation, config):
                         _save(conversation)
                     last_saved = time.monotonic()
 
-            message = ai.complete(config, messages, ai_tools.tool_definitions(), on_update=progress)
+            definitions = ai_tools.tool_definitions()
+            if not config.get("search_enabled", True):
+                definitions = [tool for tool in definitions if tool["function"]["name"] not in ("ai_lookup", "web_search")]
+            message = ai.complete(config, messages, definitions, on_update=progress)
             progress(message["content"], message.get("reasoning_content", ""), final=True)
             messages.append(message)
             calls = message.get("tool_calls", [])
             if not calls:
                 conversation["status"] = "completed"
                 break
-            if len(calls) + calls_used > 12:
+            if len(calls) + calls_used > max_calls:
                 raise ai.AIError("已达到本次工具调用上限，请缩小范围或继续提问")
             for call in calls:
                 check_stopped()
@@ -282,6 +307,8 @@ def _run(conversation, config):
                 with _lock:
                     _save(conversation)
                 try:
+                    if name in ("ai_lookup", "web_search") and not config.get("search_enabled", True):
+                        raise ai.AIError("联网搜索已关闭，请到系统设置 → AI 接入中启用")
                     _, mutation = ai_tools.validate_arguments(name, arguments)
                     if mutation:
                         if secret and secret in json.dumps(arguments, ensure_ascii=False):

@@ -31,7 +31,7 @@ class AIScrapeTests(unittest.TestCase):
         self.assertEqual(result['actress'], ['Actor'])
         self.assertIsNone(result['director'])
         self.assertEqual(result['url'], self.sources[0]['url'])
-        self.collect.assert_called_once_with('FNS-262', {'https': 'http://proxy.test'})
+        self.collect.assert_called_once_with('FNS-262', {'https': 'http://proxy.test'}, self.config)
 
     def test_rejects_wrong_identifier_source_title_and_invented_image(self):
         for changed in ({'dvdid': 'FNS-263'}, {'source_url': 'https://other.test'}, {'title': 'Invented title'}, {'cover': 'https://example.test/invented.jpg'}):
@@ -47,10 +47,34 @@ class AIScrapeTests(unittest.TestCase):
 
 
 class SourceTests(unittest.TestCase):
+    def test_disabled_search_does_not_make_requests(self):
+        with patch.object(ai_scrape, '_fetch') as fetch, self.assertRaises(ai.AIError):
+            ai_scrape.search_web('test', config={'search_enabled': False})
+        fetch.assert_not_called()
+
+    def test_searxng_parameters_timeout_and_result_limit(self):
+        raw = json.dumps({'results': [{'url': 'https://public.test/one', 'title': 'one', 'content': 'first'},
+                                      {'url': 'https://public.test/two', 'title': 'two', 'content': 'second'}]}).encode()
+        config = {'search_provider': 'searxng', 'search_url': 'http://search.local:8080', 'search_results': 1, 'search_timeout': 7}
+        with patch.object(ai_scrape, '_public_target', return_value=True), patch.object(ai_scrape, '_fetch', return_value=('url', raw)) as fetch:
+            result = ai_scrape.search_web('query', {'https': 'proxy'}, config)
+        self.assertEqual(len(result), 1)
+        self.assertIn('/search?q=query&format=json', fetch.call_args.args[0])
+        self.assertEqual(fetch.call_args.kwargs, {'timeout': 7, 'trusted_service': True})
+
+    def test_page_and_text_limits_used(self):
+        results = [{'url': 'https://example.test/FNS-262', 'title': 'FNS-262', 'snippet': ''}] * 2
+        page = ('<html>FNS-262 ' + 'content ' * 500 + '</html>').encode()
+        with patch.object(ai_scrape, 'search_web', return_value=results), patch.object(ai_scrape, '_fetch', return_value=(results[0]['url'], page)) as fetch:
+            sources = ai_scrape.collect_sources('FNS-262', config={'search_pages': 1, 'search_page_chars': 1000, 'search_timeout': 8})
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(len(sources[0]['text']), 1000)
+        self.assertEqual(fetch.call_args.kwargs['timeout'], 8)
+
     def test_extract_page_and_lazy_images_from_search_results(self):
         rss = b'<rss><channel><item><title>FNS-262</title><link>https://example.test/FNS-262</link></item></channel></rss>'
         page = b'<html><body><h1>FNS-262 Verified title</h1><img data-src="/FNS-262_1200.jpg"><script>unsafe instructions</script></body></html>'
-        with patch.object(ai_scrape, '_fetch', side_effect=[('https://bing.test', rss), ('https://example.test/FNS-262', page)]):
+        with patch.object(ai_scrape, '_public_target', return_value=True), patch.object(ai, 'settings', return_value={}), patch.object(ai_scrape, '_fetch', side_effect=[('https://bing.test', rss), ('https://example.test/FNS-262', page)]):
             result = ai_scrape.collect_sources('FNS-262')
         self.assertEqual(result[0]['images'], ['https://example.test/FNS-262_1200.jpg'])
         self.assertNotIn('unsafe instructions', result[0]['text'])

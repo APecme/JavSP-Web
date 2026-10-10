@@ -51,13 +51,14 @@ def _public_target(url):
         return False
 
 
-def _fetch(url, proxies):
-    deadline = time.monotonic() + 30
+def _fetch(url, proxies, timeout=15, trusted_service=False):
+    deadline = time.monotonic() + timeout
     for _ in range(4):
-        if not _public_target(url):
+        if not trusted_service and not _public_target(url):
             raise ai.AIError("AI 资料地址不是可公开访问的网页")
+        trusted_service = False
         with requests.get(url, proxies=proxies, headers={"User-Agent": "Mozilla/5.0 (compatible; JavSP-WEB/1.0)"},
-                          timeout=(5, 12), allow_redirects=False, stream=True) as response:
+                          timeout=(min(5, timeout), timeout), allow_redirects=False, stream=True) as response:
             if response.is_redirect:
                 url = urljoin(url, response.headers.get("Location", ""))
                 continue
@@ -77,28 +78,59 @@ def _matches(identifier, text):
     return re.search(r"(?<![A-Z0-9])" + pattern + r"(?![A-Z0-9])", text, re.I) is not None
 
 
-def collect_sources(identifier, proxies=None):
+def search_web(query, proxies=None, config=None):
+    config = config or ai.settings(True)
+    if not config.get("search_enabled", True):
+        raise ai.AIError("联网搜索已关闭，请到系统设置 → AI 接入中启用")
     proxies = proxies or {}
-    search_url = "https://www.bing.com/search?" + urlencode({"q": f'"{identifier}"', "format": "rss"})
+    provider = config.get("search_provider", "bing")
+    timeout = config.get("search_timeout", 15)
     try:
-        _, raw = _fetch(search_url, proxies)
-        root = ET.fromstring(raw)
-    except (requests.RequestException, ET.ParseError, ai.AIError) as exc:
-        raise ai.AIError("AI 刮削未能取得搜索结果，请检查搜索站点访问和预设代理") from exc
+        if provider == "searxng":
+            base = config.get("search_url", "").rstrip("/")
+            if not base:
+                raise ai.AIError("请填写 SearXNG 搜索服务 URL")
+            url = (base if base.endswith("/search") else base + "/search") + "?" + urlencode({"q": query, "format": "json"})
+            _, raw = _fetch(url, proxies, timeout=timeout, trusted_service=True)
+            entries = json.loads(raw)["results"]
+            results = [{"url": item.get("url", ""), "title": item.get("title", ""), "snippet": item.get("content", "")} for item in entries]
+        else:
+            url = "https://www.bing.com/search?" + urlencode({"q": query, "format": "rss"})
+            _, raw = _fetch(url, proxies, timeout=timeout)
+            root = ET.fromstring(raw)
+            results = [{"url": item.findtext("link", ""), "title": item.findtext("title", ""), "snippet": item.findtext("description", "")} for item in root.findall(".//item")]
+    except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError, ET.ParseError) as exc:
+        raise ai.AIError("未能取得搜索结果，请检查搜索服务、JSON 输出配置及网络连接") from exc
+    output, seen = [], set()
+    for item in results[:config.get("search_results", 8)]:
+        url = item["url"]
+        if not isinstance(url, str) or url in seen or not _public_target(url):
+            continue
+        seen.add(url)
+        output.append({"url": url, "title": str(item["title"])[:500], "snippet": str(item["snippet"])[:2000]})
+        if len(output) >= config.get("search_results", 8):
+            break
+    return output
+
+
+def collect_sources(identifier, proxies=None, config=None):
+    config = config or ai.settings(True)
+    proxies = proxies or {}
+    results = search_web(f'"{identifier}"', proxies, config)
     sources, seen = [], set()
-    for item in root.findall(".//item")[:8]:
-        url = item.findtext("link", "")
+    for item in results:
+        url = item["url"]
         if url in seen:
             continue
         seen.add(url)
-        if not _matches(identifier, " ".join((item.findtext("title", ""), item.findtext("description", ""), url))):
+        if not _matches(identifier, " ".join((item["title"], item["snippet"], url))):
             continue
         try:
-            resolved, raw = _fetch(url, proxies)
+            resolved, raw = _fetch(url, proxies, timeout=config.get("search_timeout", 15))
             document = lxml.html.fromstring(raw)
             for element in document.xpath("//script|//style|//nav|//footer|//form"):
                 element.drop_tree()
-            text = " ".join(document.text_content().split())[:16000]
+            text = " ".join(document.text_content().split())[:config.get("search_page_chars", 16000)]
             if not _matches(identifier, text + " " + resolved):
                 continue
             images = []
@@ -110,7 +142,7 @@ def collect_sources(identifier, proxies=None):
             sources.append({"url": resolved, "text": text, "images": images[:60]})
         except (requests.RequestException, ValueError, lxml.etree.LxmlError):
             continue
-        if len(sources) >= 3:
+        if len(sources) >= config.get("search_pages", 3):
             break
     if not sources:
         raise ai.AIError("AI 刮削未找到可核实的影片页面，未生成资料")
@@ -124,7 +156,7 @@ def lookup(identifier, proxies=None):
     ai.validate_connection(config)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,159}", identifier):
         raise ai.AIError("AI 刮削需要明确的影片番号或 CID")
-    sources = collect_sources(identifier, proxies)
+    sources = collect_sources(identifier, proxies, config)
     schema = MovieFields.model_json_schema()
     system = (
         "你是影片元数据提取器。只根据提供的公开网页提取指定番号的事实，返回符合 schema 的单个 JSON 对象。"
