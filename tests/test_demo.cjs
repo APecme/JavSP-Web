@@ -27,9 +27,17 @@ test('demo uses the current application assets and all documentation links resol
   for (const name of ['app.js', 'app.css', 'overrides.css', 'ai.js', 'ai-markdown.js']) {
     assert.equal(read(`docs/assets/${name === 'app.js' ? 'demo-app.js' : name}`), read(`javsp_web/web/assets/${name}`));
   }
-  const document = read('docs/docs.html');
-  for (const [, anchor] of document.matchAll(/href="#([^"]+)"/g)) assert.ok(document.includes(`id="${anchor}"`), anchor);
-  for (const [, file] of document.matchAll(/(?:src|href)="(assets\/[^"?#]+)"/g)) assert.ok(fs.existsSync(path.join(root, 'docs', file)), file);
+  const pages = ['docs.html', ...fs.readdirSync(path.join(root, 'docs')).filter(file => /^guide-.*\.html$/.test(file))];
+  assert.equal(pages.length, 6);
+  for (const page of pages) {
+    const document = read(`docs/${page}`);
+    for (const [, anchor] of document.matchAll(/href="#([^"]+)"/g)) assert.ok(document.includes(`id="${anchor}"`), `${page}#${anchor}`);
+    for (const [, file] of document.matchAll(/(?:src|href)="(assets\/[^"?#]+)"/g)) assert.ok(fs.existsSync(path.join(root, 'docs', file)), file);
+    for (const [, file, anchor] of document.matchAll(/href="([a-z-]+\.html)(?:#([a-z-]+))?"/g)) {
+      const target = read(`docs/${file}`);
+      if (anchor) assert.ok(target.includes(`id="${anchor}"`), `${page} -> ${file}#${anchor}`);
+    }
+  }
   assert.match(read('docs/demo.html'), /demo-seed.js.*\n<script src="demo-mock.js/);
 });
 
@@ -47,6 +55,22 @@ test('task pagination, filtering and cancellation survive pending timers', async
   assert.equal((await json(`/api/tasks/${created.task_id}`)).status, 'cancelled');
   await json(`/api/tasks/${created.task_id}`, 'DELETE');
   assert.equal((await json('/api/tasks')).total, 2);
+});
+
+test('old chapter bookmarks redirect to the matching topic page', () => {
+  const pages = fs.readdirSync(path.join(root, 'docs')).filter(file => /^guide-.*\.html$/.test(file));
+  for (const page of pages) {
+    for (const [, anchor] of read(`docs/${page}`).matchAll(/<section id="([^"]+)"/g)) {
+      let destination;
+      const context = vm.createContext({
+        document: { querySelector: selector => selector === '.guide-directory' ? {} : null, querySelectorAll: () => [] },
+        window: { addEventListener() {} },
+        location: { hash: `#${anchor}`, replace: value => { destination = value; } },
+      });
+      vm.runInContext(read('docs/script.js'), context);
+      assert.equal(destination, `${page}#${anchor}`);
+    }
+  }
 });
 
 test('AI conversation lifecycle and unsupported actions', async () => {

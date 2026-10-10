@@ -39,6 +39,22 @@ document.querySelectorAll('.copy-button').forEach((button) => button.addEventLis
   setTimeout(() => { button.textContent = original; }, 1600);
 }));
 
+if (document.querySelector('.guide-directory')) {
+  const chapterPages = {
+    start: 'guide-install.html', windows: 'guide-install.html', docker: 'guide-install.html',
+    manual: 'guide-scraping.html', mounted: 'guide-scraping.html', preset: 'guide-scraping.html', crawlers: 'guide-scraping.html',
+    ai: 'guide-ai.html', 'ai-search': 'guide-ai.html', 'ai-context': 'guide-ai.html', 'ai-skills': 'guide-ai.html',
+    automation: 'guide-automation.html', downloads: 'guide-automation.html', media: 'guide-automation.html',
+    updates: 'guide-maintenance.html', trouble: 'guide-maintenance.html',
+  };
+  const openChapter = () => {
+    const page = chapterPages[location.hash.slice(1)];
+    if (page) location.replace(page + location.hash);
+  };
+  window.addEventListener('hashchange', openChapter);
+  openChapter();
+}
+
 const chapterLinks = [...document.querySelectorAll('.doc-nav a[href^="#"]')];
 if (chapterLinks.length) {
   const chapters = [...document.querySelectorAll('.doc-content section[id]')];

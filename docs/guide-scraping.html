@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="从单次任务到批量整理，了解预设、分类、分 P 与爬虫之间的关系。">
+  <meta name="theme-color" content="#0b1020">
+  <title>刮削与整理 | JavSP WEB 教程</title>
+  <link rel="icon" href="assets/javsp-logo.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="subpages.css?v=topics-20261010">
+</head>
+<body class="docs-page">
+  <header class="site-header"><a class="brand" href="index.html" aria-label="JavSP WEB 首页"><img src="assets/javsp-logo.png" alt=""><span>JavSP <b>WEB</b></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button><nav id="site-nav" class="site-nav" aria-label="主导航"><a href="index.html">首页</a><a class="is-current" href="docs.html">文档</a><a href="demo.html">示例站点</a><a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav></header>
+  <main class="docs-shell page-width">
+<aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-scraping.html" aria-current="page">刮削与整理</a><a class="doc-chapter-link" href="#manual">手动刮削与任务</a><a class="doc-chapter-link" href="#mounted">挂载盘、STRM 与分 P</a><a class="doc-chapter-link" href="#preset">刮削预设与分类</a><a class="doc-chapter-link" href="#crawlers">爬虫与网络</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
+<article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 02</p><h1>刮削与整理</h1><p class="doc-lede">从单次任务到批量整理，了解预设、分类、分 P 与爬虫之间的关系。</p></header>
+<section id="manual"><h2>手动刮削：提交、查看与处理结果</h2>
+        <ol><li>进入“手动刮削”，填写文件或目录路径；Docker 使用“浏览容器路径”，Windows 本机可使用文件选择器。</li><li>选定刮削预设，点击“启动 JavSP”。目录会先生成后台扫描任务，再生成影片任务；不是一次性在浏览器中扫描全部文件。</li><li>在任务队列查看状态、扫描数量和阶段进度。支持按状态、关键词、大小和时间筛选，并分页查看。</li><li>打开“详情”，先看最终结果，再展开数据源和图片日志。单个爬虫失败不代表整个任务失败；以最终是否取得必需资料并完成整理为准。</li></ol>
+        <figure class="doc-figure"><a href="assets/guide/manual.webp" target="_blank"><img src="assets/guide/manual.webp" width="1440" height="1050" loading="lazy" alt="手动刮削页面：输入路径、选择预设、查看队列和任务详情"></a><figcaption>当前前端中的手动刮削入口与任务队列（演示数据，点击可放大）。</figcaption></figure>
+        <h3>什么时候重试，什么时候处理文件？</h3><ul><li><b>只有图片失败：</b>使用可用的图片重试入口；封面还可从任务详情发起搜索、选择候选或上传，不必反复创建整部影片任务。</li><li><b>资料错误：</b>在详情中编辑影片资料并保存；需要同步媒体库时按提示刷新。先核对番号与来源，避免把错误资料写回。</li><li><b>整理目标冲突：</b>检查已有输出文件或剧照目录是否属于完整入库或未完成残留；不要把“删除任务记录”当作清理输出。</li><li><b>停止和删除：</b>运行中的任务先停止再删除。删除记录不会自动撤销整理；可用的“还原”操作依赖该任务保存的整理记录与实际文件状态。</li></ul>
+        <p>“概览”适合按封面浏览历史任务、查看详情和批量管理记录；“手动刮削”适合跟踪当前队列。任务日志摘要可复制，详细调试日志见排错章节。</p>
+      </section>
+<section id="mounted"><h2>挂载盘、STRM 与分 P 文件</h2>
+        <p>CloudDrive2、WebDAV 等挂载目录仍按普通路径提交；先确保服务端能列出目录，Docker 内能通过挂载路径读到文件。目录枚举慢时查看扫描任务，避免连续点击启动创建重复扫描。</p>
+        <ul><li><b>取消慢扫描：</b>点击“停止扫描”停止后续任务创建；底层网络文件系统仍在等待时，需等当前调用返回。已经创建的影片任务需单独处理。</li><li><b>STRM：</b>预设默认最小匹配大小为 <code>232MiB</code>。STRM 是很小的文本文件，可在“扫描器”勾选“STRM 忽略最小文件大小”，其他视频仍遵守大小限制。</li><li><b>分 P：</b>同番号的 <code>ABC-123-1.mp4</code>、<code>ABC-123-2.mp4</code> 可作为分段识别。分段编号必须明确且不重复；一个目录里的广告视频不能因为共同目录名而被当作分 P。</li><li><b>批量选择：</b>本机文件选择器支持一次多选。多选后手动修改路径会取消原多选列表。Docker 当前浏览器选择目录或单文件，不上传本地影片。</li></ul>
+        <p>广告混入时优先检查“影片分类”规则，并启用“仅扫描匹配影片分类”。不要通过把所有文件都放宽为影片来解决“没有找到符合大小的文件”。</p>
+      </section>
+<section id="preset"><h2>刮削预设：识别规则、来源与整理方式</h2>
+        <p>进入“刮削预设”，可新建、编辑和删除预设，选择窗口表单或完整 <code>config.yml</code>。保存后供新任务使用；已创建任务持有配置快照，不会随编辑自动改变。</p>
+        <div class="doc-table-wrap"><table><thead><tr><th>分组</th><th>重点检查</th></tr></thead><tbody><tr><td>扫描器</td><td>扩展名、最小大小、STRM 开关、忽略目录、已有 NFO 的目录、多线程刮削数量。</td></tr><tr><td>影片分类</td><td>分类 ID、优先级、识别方式、命名捕获组与标准番号格式。</td></tr><tr><td>网络</td><td>代理、站点镜像、请求超时与重试。用代理测试入口核对实际出口。</td></tr><tr><td>爬虫</td><td>每个分类的数据源与优先顺序、成功必需字段，以及 AI 直刮或失败兜底。</td></tr><tr><td>文件夹整理 / 图片</td><td>输出目录模板、文件名、移动/硬链接、封面裁剪、剧照下载。</td></tr><tr><td>翻译器</td><td>翻译服务与字段。它与系统 AI 接入独立，配置一个不会自动配置另一个。</td></tr></tbody></table></div>
+        <h3>分类为什么会影响数据源？</h3><p>高优先级规则先匹配。正则需包含 <code>(?P&lt;avid&gt;...)</code>，<code>avid_format</code> 决定生成的番号。分类 ID 与“爬虫”中的来源列表对应；例如自定义“无码”规则先匹配了 FC2，实际使用的是“无码”来源，而不是 FC2 来源。遇到此类问题先调整优先级或该分类的数据源。</p>
+        <figure class="doc-figure"><a href="assets/guide/presets.webp" target="_blank"><img src="assets/guide/presets.webp" width="1440" height="1050" loading="lazy" alt="刮削预设表单与影片分类配置入口"></a><figcaption>预设以分组表单展示配置；更改后记得保存（演示数据）。</figcaption></figure>
+        <p>“跳过已有 NFO 的目录”检查的是扫描输入目录，不保证输出目标没有冲突。“仅扫描匹配影片分类”适合过滤无关视频，但前提是规则能识别你要保留的影片。新规则先用少量文件验证。</p>
+        <p>输出模板和硬链接有文件系统要求，使用前核对输入与输出磁盘及权限。更多核心字段说明可查阅 <a href="https://github.com/Yuukiy/JavSP/wiki" target="_blank" rel="noreferrer">JavSP Wiki</a>。</p>
+      </section>
+<section id="crawlers"><h2>爬虫与网络：先单独测试，再运行整批</h2>
+        <ol><li>进入“爬虫配置”，选择具体爬虫，输入一个确定存在的番号并运行测试。</li><li>查看抓取字段和运行输出：是否取得标题、封面，是否出现 403、超时或解析异常。</li><li>在“刮削预设 → 爬虫”调整该分类使用的数据源与顺序；爬虫配置页管理代码，预设页决定任务使用哪些爬虫。</li><li>自定义爬虫保存后再单独测试；仅保存代码不代表能抓到资料。内置爬虫只读，可移除和恢复。</li></ol>
+        <p>代理地址由服务端使用。Docker 中 <code>127.0.0.1</code> 指向容器，宿主机代理需使用可达地址。HTTPS 证书失败时检查镜像域名、代理证书和系统信任，不要关闭证书校验。403 需同时检查出口与该站点的登录 Cookie；同步 Cookie 成功也不保证站点授权。</p>
+        <p>AI 可以协助分析和生成爬虫，但保存自定义代码需要确认，并在后续测试或任务中实际执行；应先检查生成代码和测试结果。</p>
+      </section>
+<nav class="doc-pager" aria-label="相邻主题"><a href="guide-install.html"><small>上一主题</small>安装与部署 ←</a><a href="guide-ai.html"><small>下一主题</small>AI 助手 →</a></nav></article>
+</main>
+  <footer class="site-footer"><div class="page-width footer-inner"><span>© 2026 APecme · JavSP WEB</span><span>GPL-3.0 / Anti 996 License</span><a href="index.html">返回首页 →</a></div></footer>
+  <script src="script.js?v=topics-20261010"></script>
+</body>
+</html>
+
