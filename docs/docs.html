@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="JavSP WEB 使用文档：Windows、Docker、预设和自动化集成。">
+  <meta name="description" content="JavSP WEB 完整使用教程：安装、手动与挂载盘刮削、预设分类、爬虫、AI、下载器、媒体库、更新和故障排查。">
   <meta name="theme-color" content="#0b1020">
   <title>使用文档 | JavSP WEB</title>
   <link rel="icon" href="assets/javsp-logo.png" type="image/png">
@@ -16,12 +16,70 @@
 <body class="docs-page">
   <header class="site-header"><a class="brand" href="index.html" aria-label="JavSP WEB 首页"><img src="assets/javsp-logo.png" alt=""><span>JavSP <b>WEB</b></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button><nav id="site-nav" class="site-nav" aria-label="主导航"><a href="index.html">首页</a><a class="is-current" href="docs.html">文档</a><a href="demo.html">示例站点</a><a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav></header>
   <main class="docs-shell page-width">
-    <aside class="doc-nav"><p>DOCUMENTATION</p><a class="is-current" href="#start">开始使用</a><a href="#windows">Windows</a><a href="#docker">Docker</a><a href="#preset">刮削预设</a><a href="#ai">AI 接入教程</a><a href="#ai-search">联网搜索</a><a href="#ai-context">上下文与生成</a><a href="#ai-skills">提示词与 Skills</a><a href="#automation">自动化集成</a><a href="#trouble">问题排查</a><a class="doc-demo-link" href="demo.html">打开示例站点 <span>→</span></a></aside>
+    <aside class="doc-nav"><p>使用教程</p><a class="is-current" href="#start">开始使用</a><a href="#windows">Windows</a><a href="#docker">Docker / Compose</a><a href="#manual">手动刮削与任务</a><a href="#mounted">挂载盘、STRM 与分 P</a><a href="#preset">刮削预设与分类</a><a href="#crawlers">爬虫与网络</a><a href="#ai">AI 接入与对话</a><a href="#ai-search">联网搜索</a><a href="#ai-context">上下文与生成</a><a href="#ai-skills">提示词与 Skills</a><a href="#automation">定时自动刮削</a><a href="#downloads">下载器与路径映射</a><a href="#media">媒体库与 CookieCloud</a><a href="#updates">更新、账号与备份</a><a href="#trouble">问题排查</a><a class="doc-demo-link" href="demo.html">打开交互示例 <span>→</span></a></aside>
     <article class="doc-content">
-      <section id="start"><p class="eyebrow">DOCUMENTATION / 01</p><h1>从安装到第一部影片。</h1><p class="doc-lede">JavSP WEB 将 JavSP 的刮削能力放进浏览器。选择适合你的运行方式，完成首次登录，然后创建并启动任务。</p><div class="doc-note"><b>首次登录</b><span>默认账号和密码都是 <code>admin</code>。进入后，请在系统设置中立即修改密码。</span></div><div class="doc-steps"><div><span>01</span><b>运行服务</b><p>使用 Windows EXE 或 Docker 启动。</p></div><div><span>02</span><b>检查预设</b><p>在刮削预设中按自己的媒体库规则调整。</p></div><div><span>03</span><b>创建任务</b><p>选择视频或目录并从队列查看处理结果。</p></div></div></section>
-      <section id="windows"><h2>Windows</h2><p>从 Releases 下载 <code>JavSP-Web.exe</code> 并双击运行。程序会进入 Windows 通知区域，并自动打开登录页。</p><div class="doc-command"><code>http://127.0.0.1:8090/login</code><button class="copy-button" data-copy="http://127.0.0.1:8090/login">复制地址</button></div><a class="text-link" href="https://github.com/APecme/JavSP-Web/releases/latest" target="_blank" rel="noreferrer">下载最新 Windows 版本 <span>↗</span></a></section>
-      <section id="docker"><h2>Docker</h2><p>将影片目录映射到容器，再在网页中填写容器内路径。以下命令会把当前目录的数据保存到 <code>./data</code>，并将影片暴露为 <code>/video</code>。</p><div class="doc-command doc-command-multiline"><code>docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:/app/data" -v "/your/videos:/video" apecme/javsp-web:latest</code><button class="copy-button" data-copy='docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:/app/data" -v "/your/videos:/video" apecme/javsp-web:latest'>复制命令</button></div><div class="doc-note"><b>路径提示</b><span>Docker 内填写的是挂载后的路径，例如 <code>/video/Movies</code>，不是主机上的 <code>D:\Videos</code>。</span></div></section>
-      <section id="preset"><h2>刮削预设</h2><p>预设保存网站选择、命名规则、扫描器和网络配置。你可以为不同媒体库或来源创建独立预设，在启动任务时直接选用。</p><ul><li>单个文件与整个目录都可以创建任务。</li><li>任务队列会显示识别、元数据与图片阶段的进度和日志。</li><li>图片失败时可从任务详情重新下载，无需重新刮削整个目录。</li></ul></section>
+      <section id="start"><p class="eyebrow">JAVSP WEB / 使用教程</p><h1>从安装到稳定整理媒体库。</h1><p class="doc-lede">先用少量影片验证路径、预设和资料来源，再接入定时任务与下载器。每一节都对应程序中的实际入口。</p>
+        <div class="doc-note"><b>适用版本</b><span>本教程覆盖当前体验版功能；正式版尚未包含的功能需先升级。插图来自当前程序前端的交互示例，使用虚构任务和地址；界面相同，但示例不会读写影片、连接模型或执行真实更新。</span></div>
+        <div class="doc-steps"><div><span>01</span><b>安装与登录</b><p>Windows 本机使用 EXE，服务器或 NAS 使用 Docker。</p></div><div><span>02</span><b>检查预设</b><p>确认分类、数据源、输出路径以及移动/硬链接设置。</p></div><div><span>03</span><b>小范围验证</b><p>先刮削一个影片目录，核对日志和输出，再开启自动化。</p></div></div>
+        <p>首次账号和密码均为 <code>admin</code>。登录后到“系统设置 → 用户管理”修改密码。网页填写的路径必须由运行 JavSP WEB 的那台机器或容器访问，浏览器所在电脑的文件并不会自动上传。</p>
+        <p>想先熟悉界面，可打开<a href="demo.html">交互示例</a>。示例版本使用 <code>demo.内容指纹</code> 标识当前前端，不冒充 Docker/EXE 发行版本；更改只保留到刷新，不要输入真实密钥。</p>
+      </section>
+      <section id="windows"><h2>Windows：本机运行与文件选择</h2>
+        <ol><li>从 Releases 下载 <code>JavSP-Web.exe</code>，放入可写入的固定文件夹。</li><li>双击运行，程序进入 Windows 通知区域并打开浏览器。若没有自动打开，访问下方地址。</li><li>登录后选择“手动刮削”，可选择文件夹、单个视频或批量选择视频文件；多选时使用 Ctrl / Shift。</li><li>第一次使用先确认预设中的输出路径与整理方式，避免在未经检查的默认设置下整理整个媒体库。</li></ol>
+        <div class="doc-command"><code>http://127.0.0.1:8090/login</code><button class="copy-button" data-copy="http://127.0.0.1:8090/login">复制地址</button></div>
+        <p>EXE 的配置和任务数据默认保存在程序旁的 <code>data</code> 目录。关闭浏览器不等于退出程序；通过通知区域菜单退出后再替换 EXE。EXE 可检查新版本，但不能通过网页安装，需下载后手动替换并保留数据目录。</p>
+        <p>页面打不开时先检查程序是否运行、8090 端口是否被占用。EXE 默认监听本机地址；需要长期供其他设备使用时，建议使用 Docker 部署。</p>
+        <a class="text-link" href="https://github.com/APecme/JavSP-Web/releases/latest" target="_blank" rel="noreferrer">下载 Windows 正式版 <span>↗</span></a>
+      </section>
+      <section id="docker"><h2>Docker / Compose：先挂载，再填写容器路径</h2>
+        <p>安装 Docker 与 Compose 插件后，新建工作文件夹，并将以下内容保存为 <code>docker-compose.yml</code>。配置直接拉取已构建的 <code>latest</code> 镜像，无需下载源码或执行 build。</p>
+        <pre class="doc-example"><code>services:
+  javsp-web:
+    image: apecme/javsp-web:latest
+    container_name: javsp-web
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      JAVSP_WEB_HOST: 0.0.0.0
+      JAVSP_WEB_PORT: 8090
+      JAVSP_WEB_TIMEZONE: Asia/Shanghai
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/app/data
+      - ./video:/video</code></pre>
+        <p>把影片放入 <code>./video</code>，或替换冒号左侧为真实影片目录，例如 <code>/mnt/media:/video</code>。Windows Docker 可使用 <code>D:/Videos:/video</code>。在 Compose 文件所在目录执行：</p>
+        <div class="doc-command doc-command-multiline"><code>docker compose config --quiet<br>docker compose up -d</code><button class="copy-button" data-copy="docker compose config --quiet&#10;docker compose up -d">复制命令</button></div>
+        <p>浏览器打开 <code>http://服务器地址:8090/login</code>。若宿主机 8090 已占用，可将端口映射改成 <code>8091:8090</code>，网页访问 8091；容器端口无需改变。</p>
+        <div class="doc-note"><b>路径示例</b><span>宿主机 <code>/mnt/media/待整理</code> → 容器 <code>/video/待整理</code>。在“待处理路径”和定时规则中填后者。输入和输出目录都应挂载，容器需有相应写入权限。</span></div>
+        <p><code>/app/data</code> 必须持久化，它包含账号、配置、任务、AI 设置和应用更新数据。不要为了修复容器而直接删除该目录。启动失败可查看 <code>docker compose logs --tail 100 javsp-web</code>。如何更新见<a href="#updates">版本与备份</a>。</p>
+      </section>
+      <section id="manual"><h2>手动刮削：提交、查看与处理结果</h2>
+        <ol><li>进入“手动刮削”，填写文件或目录路径；Docker 使用“浏览容器路径”，Windows 本机可使用文件选择器。</li><li>选定刮削预设，点击“启动 JavSP”。目录会先生成后台扫描任务，再生成影片任务；不是一次性在浏览器中扫描全部文件。</li><li>在任务队列查看状态、扫描数量和阶段进度。支持按状态、关键词、大小和时间筛选，并分页查看。</li><li>打开“详情”，先看最终结果，再展开数据源和图片日志。单个爬虫失败不代表整个任务失败；以最终是否取得必需资料并完成整理为准。</li></ol>
+        <figure class="doc-figure"><a href="assets/guide/manual.webp" target="_blank"><img src="assets/guide/manual.webp" width="1440" height="1050" loading="lazy" alt="手动刮削页面：输入路径、选择预设、查看队列和任务详情"></a><figcaption>当前前端中的手动刮削入口与任务队列（演示数据，点击可放大）。</figcaption></figure>
+        <h3>什么时候重试，什么时候处理文件？</h3><ul><li><b>只有图片失败：</b>使用可用的图片重试入口；封面还可从任务详情发起搜索、选择候选或上传，不必反复创建整部影片任务。</li><li><b>资料错误：</b>在详情中编辑影片资料并保存；需要同步媒体库时按提示刷新。先核对番号与来源，避免把错误资料写回。</li><li><b>整理目标冲突：</b>检查已有输出文件或剧照目录是否属于完整入库或未完成残留；不要把“删除任务记录”当作清理输出。</li><li><b>停止和删除：</b>运行中的任务先停止再删除。删除记录不会自动撤销整理；可用的“还原”操作依赖该任务保存的整理记录与实际文件状态。</li></ul>
+        <p>“概览”适合按封面浏览历史任务、查看详情和批量管理记录；“手动刮削”适合跟踪当前队列。任务日志摘要可复制，详细调试日志见排错章节。</p>
+      </section>
+      <section id="mounted"><h2>挂载盘、STRM 与分 P 文件</h2>
+        <p>CloudDrive2、WebDAV 等挂载目录仍按普通路径提交；先确保服务端能列出目录，Docker 内能通过挂载路径读到文件。目录枚举慢时查看扫描任务，避免连续点击启动创建重复扫描。</p>
+        <ul><li><b>取消慢扫描：</b>点击“停止扫描”停止后续任务创建；底层网络文件系统仍在等待时，需等当前调用返回。已经创建的影片任务需单独处理。</li><li><b>STRM：</b>预设默认最小匹配大小为 <code>232MiB</code>。STRM 是很小的文本文件，可在“扫描器”勾选“STRM 忽略最小文件大小”，其他视频仍遵守大小限制。</li><li><b>分 P：</b>同番号的 <code>ABC-123-1.mp4</code>、<code>ABC-123-2.mp4</code> 可作为分段识别。分段编号必须明确且不重复；一个目录里的广告视频不能因为共同目录名而被当作分 P。</li><li><b>批量选择：</b>本机文件选择器支持一次多选。多选后手动修改路径会取消原多选列表。Docker 当前浏览器选择目录或单文件，不上传本地影片。</li></ul>
+        <p>广告混入时优先检查“影片分类”规则，并启用“仅扫描匹配影片分类”。不要通过把所有文件都放宽为影片来解决“没有找到符合大小的文件”。</p>
+      </section>
+      <section id="preset"><h2>刮削预设：识别规则、来源与整理方式</h2>
+        <p>进入“刮削预设”，可新建、编辑和删除预设，选择窗口表单或完整 <code>config.yml</code>。保存后供新任务使用；已创建任务持有配置快照，不会随编辑自动改变。</p>
+        <div class="doc-table-wrap"><table><thead><tr><th>分组</th><th>重点检查</th></tr></thead><tbody><tr><td>扫描器</td><td>扩展名、最小大小、STRM 开关、忽略目录、已有 NFO 的目录、多线程刮削数量。</td></tr><tr><td>影片分类</td><td>分类 ID、优先级、识别方式、命名捕获组与标准番号格式。</td></tr><tr><td>网络</td><td>代理、站点镜像、请求超时与重试。用代理测试入口核对实际出口。</td></tr><tr><td>爬虫</td><td>每个分类的数据源与优先顺序、成功必需字段，以及 AI 直刮或失败兜底。</td></tr><tr><td>文件夹整理 / 图片</td><td>输出目录模板、文件名、移动/硬链接、封面裁剪、剧照下载。</td></tr><tr><td>翻译器</td><td>翻译服务与字段。它与系统 AI 接入独立，配置一个不会自动配置另一个。</td></tr></tbody></table></div>
+        <h3>分类为什么会影响数据源？</h3><p>高优先级规则先匹配。正则需包含 <code>(?P&lt;avid&gt;...)</code>，<code>avid_format</code> 决定生成的番号。分类 ID 与“爬虫”中的来源列表对应；例如自定义“无码”规则先匹配了 FC2，实际使用的是“无码”来源，而不是 FC2 来源。遇到此类问题先调整优先级或该分类的数据源。</p>
+        <figure class="doc-figure"><a href="assets/guide/presets.webp" target="_blank"><img src="assets/guide/presets.webp" width="1440" height="1050" loading="lazy" alt="刮削预设表单与影片分类配置入口"></a><figcaption>预设以分组表单展示配置；更改后记得保存（演示数据）。</figcaption></figure>
+        <p>“跳过已有 NFO 的目录”检查的是扫描输入目录，不保证输出目标没有冲突。“仅扫描匹配影片分类”适合过滤无关视频，但前提是规则能识别你要保留的影片。新规则先用少量文件验证。</p>
+        <p>输出模板和硬链接有文件系统要求，使用前核对输入与输出磁盘及权限。更多核心字段说明可查阅 <a href="https://github.com/Yuukiy/JavSP/wiki" target="_blank" rel="noreferrer">JavSP Wiki</a>。</p>
+      </section>
+      <section id="crawlers"><h2>爬虫与网络：先单独测试，再运行整批</h2>
+        <ol><li>进入“爬虫配置”，选择具体爬虫，输入一个确定存在的番号并运行测试。</li><li>查看抓取字段和运行输出：是否取得标题、封面，是否出现 403、超时或解析异常。</li><li>在“刮削预设 → 爬虫”调整该分类使用的数据源与顺序；爬虫配置页管理代码，预设页决定任务使用哪些爬虫。</li><li>自定义爬虫保存后再单独测试；仅保存代码不代表能抓到资料。内置爬虫只读，可移除和恢复。</li></ol>
+        <p>代理地址由服务端使用。Docker 中 <code>127.0.0.1</code> 指向容器，宿主机代理需使用可达地址。HTTPS 证书失败时检查镜像域名、代理证书和系统信任，不要关闭证书校验。403 需同时检查出口与该站点的登录 Cookie；同步 Cookie 成功也不保证站点授权。</p>
+        <p>AI 可以协助分析和生成爬虫，但保存自定义代码需要确认，并在后续测试或任务中实际执行；应先检查生成代码和测试结果。</p>
+      </section>
       <section id="ai">
         <p class="eyebrow">AI / QUICK START</p><h2>连接模型，开始第一段对话。</h2>
         <p>管理员进入“系统设置 → AI 接入”。整个卡片与其中的模型、搜索、上下文、提示词和 Skills 都可折叠。若当前版本没有这些设置，请先更新到包含高级 AI 配置的体验版。</p>
@@ -34,7 +92,9 @@
         </tbody></table></div>
         <p>LLM 超时默认 60 秒，可设 10～120 秒。容器中的 <code>127.0.0.1</code> 指向容器自身，外部模型服务需填写容器能访问的地址。</p>
         <h3>会话与自动刮削</h3><p>历史列表支持搜索、切换、重命名、删除；手机端点击会话列表按钮打开。回复支持逐步显示、复制及停止生成。删除会话不会删除已创建的任务，停止生成不会撤销已确认的操作。</p>
+        <figure class="doc-figure"><a href="assets/guide/ai-settings.webp" target="_blank"><img src="assets/guide/ai-settings.webp" width="1440" height="1200" loading="lazy" alt="AI 接入的模型配置和可折叠高级设置"></a><figcaption>模型、联网搜索、上下文和 Skills 分组配置（演示地址，不是真实服务）。</figcaption></figure>
         <p>要用于定时或批量任务，还需在“刮削预设 → 爬虫”勾选“启用 AI 刮削”。建议同时勾选“当所有爬虫刮削失败时启用 AI 刮削”，先使用普通爬虫；取消则直接使用 AI。自动 AI 刮削依赖联网搜索，请同时开启搜索开关。</p>
+        <figure class="doc-figure"><a href="assets/guide/ai-chat.webp" target="_blank"><img src="assets/guide/ai-chat.webp" width="1440" height="1050" loading="lazy" alt="AI 会话列表、回复、思考区域和消息输入框"></a><figcaption>对话与会话管理界面；示例回复是固定模拟内容，未调用模型。</figcaption></figure>
       </section>
       <section id="ai-search"><h2>联网搜索：选择来源，控制读取量。</h2>
         <p>“允许 AI 联网搜索”默认开启，控制公开网页搜索工具与 AI 影片资料提取。关闭后仍可分析已有任务、读取预设和使用普通爬虫，但直接 AI 刮削或 AI 兜底会提示搜索未启用。此开关不控制模型服务商自身的内置联网功能。</p>
@@ -76,8 +136,54 @@ description: 分析失败任务，按原因分组并给出可验证的建议
         <p>提示词和 Skills 不会增加工具权限。对话中整理文件、保存爬虫、修改预设和影片资料仍先生成预览，需要点击“确认执行”。自动刮削由已启用的预设和规则执行，不逐个弹出对话确认。</p>
         <h3>常见问题</h3><ul><li><b>连接成功但没有调用工具：</b>检查模型是否支持工具调用。</li><li><b>HTTP 401 / 403：</b>核对密钥、账号权限和服务地址。</li><li><b>HTTP 400 或温度错误：</b>先将温度留空，再核对输出上限和服务商支持的参数。</li><li><b>SearXNG 返回 403 或格式错误：</b>确认已启用 JSON，且允许应用服务器访问。</li><li><b>搜索有结果但刮削失败：</b>摘要不等于有效来源，请检查详情页访问、预设代理和必需字段。</li><li><b>没有思考内容：</b>仅模型明确返回思考字段时展示，不会凭空补写。</li></ul>
       </section>
-      <section id="automation"><h2>自动化集成</h2><p>在系统设置中添加 qBittorrent、Emby 或 Jellyfin。下载完成可自动创建刮削任务，任务完成后可触发媒体库扫描。</p><div class="doc-callout"><span>自动刮削规则不会重叠执行</span><p>当同一规则的上一次任务仍在排队、运行或重试图片时，下一次触发会被跳过并写入记录。</p></div></section>
-      <section id="trouble"><h2>问题排查</h2><p>提交 Issue 前，请附上任务日志、部署方式和已脱敏的配置。网络或数据源问题可先在预设中检查代理与连接状态。</p><a class="button button-primary" href="https://github.com/APecme/JavSP-Web/issues" target="_blank" rel="noreferrer">前往 Issue <span>↗</span></a></section>
+      <section id="automation"><h2>定时自动刮削：固定时间扫描文件夹</h2>
+        <ol><li>先在“手动刮削”验证目标目录与预设，确认输出正确。</li><li>进入“自动刮削 → 添加定时规则”，填写名称、Cron 时间、服务端文件夹路径并选择预设。</li><li>勾选“启用此规则”后保存，检查规则显示的“下次执行”。时间按应用时区计算，推荐部署时设为 <code>Asia/Shanghai</code>。</li><li>到执行时间后，查看“最近结果”和执行记录，再到任务队列查看生成的影片任务。规则保存在数据目录中，重启后保留。</li></ol>
+        <div class="doc-table-wrap"><table><thead><tr><th>五段 Cron（分 时 日 月 周）</th><th>执行时间</th></tr></thead><tbody><tr><td><code>0 2 * * *</code></td><td>每天 02:00</td></tr><tr><td><code>0 */6 * * *</code></td><td>每天 00:00、06:00、12:00、18:00</td></tr><tr><td><code>30 3 * * 1</code></td><td>每周一 03:30</td></tr></tbody></table></div>
+        <figure class="doc-figure"><a href="assets/guide/automation.webp" target="_blank"><img src="assets/guide/automation.webp" width="1440" height="1050" loading="lazy" alt="定时规则设置：Cron、文件夹、预设与启用开关"></a><figcaption>定时规则设置入口；静态示例不会实际运行计划。</figcaption></figure>
+        <div class="doc-callout"><span>同一规则不会重叠执行</span><p>上一批任务仍在排队、运行或重试图片时，下一次触发会跳过。没有符合条件的新文件属于空扫描结果，不应反复创建失败任务。</p></div>
+        <p>要暂停规则，编辑后取消启用并保存。删除规则不会删除已生成的任务或已整理文件。避免让多个规则反复扫描同一输入目录；NFO 跳过、大小限制和分类过滤仍以选中的预设为准。</p>
+      </section>
+      <section id="downloads"><h2>下载器与路径映射：下载完成后自动整理</h2>
+        <h3>连接 qBittorrent</h3><ol><li>在 qBittorrent 中开启 Web UI，设置账号密码，确认 JavSP WEB 服务端可以访问。</li><li>进入“系统设置 → 下载器”，添加名称、Web UI 地址、账号和密码，测试连接后保存。Docker 中不能用 <code>localhost</code> 指代另一个容器。</li><li>在“下载管理”选择下载器，查看连接状态和种子。需要接管时设置标签、分类范围，再保存管理设置；留空意味着扩大匹配范围。</li><li>在“自动刮削”配置下载完成规则，填写匹配标签、分类和刮削预设。先用一个已完成的测试下载核对执行记录。</li></ol>
+        <h3>把下载器路径转换为应用能访问的路径</h3><p>两个容器可能看到同一份文件的不同路径。在“系统设置 → 路径映射”填写下载器上报的源路径与 JavSP WEB 的目标路径：</p>
+        <pre class="doc-example"><code>下载器： /downloads/DEMO-001/DEMO-001.mkv
+源路径： /downloads
+目标路径：/video/待整理
+应用读取：/video/待整理/DEMO-001/DEMO-001.mkv</code></pre>
+        <p>映射只转换路径，不会创建挂载或复制文件。需要先把真实目录挂载到 JavSP WEB 容器。使用路径检查入口核对转换结果与可访问性；“下载器已连接”只证明 API 可用，不能证明影片可读。</p>
+        <h3>限速、做种与删除</h3><p>限速按每个已接管种子单独应用，单位为 KiB/s；分享率、做种分钟和非活跃分钟也可配置。<code>-1</code> 表示该项不限制。开启“达到限制后自动删种（保留文件）”后，已完成种子达到任一有效阈值就会删种，不删除影片文件。默认先关闭自动删种，确认范围后再启用；整理时移动文件会影响原下载路径，仍需做种时先核对硬链接方案。</p>
+        <p>下载完成不等于刮削成功。查看自动刮削执行记录，区分规则未命中、路径不可达、任务已创建和刮削失败，再处理对应环节。</p>
+      </section>
+      <section id="media"><h2>媒体库与 CookieCloud</h2>
+        <h3>连接 Emby / Jellyfin</h3><ol><li>在媒体服务器中创建 API 密钥，在“系统设置 → 媒体服务器”选择类型并填写服务地址。</li><li>点击“验证并读取媒体库”，勾选需要管理的媒体库后保存。</li><li>先使用“同步媒体库”核对连通性，再按需开启“刮削任务完成后自动扫描媒体库”，设置自动扫描延迟。</li><li>需要从任务进入播放页面时填写浏览器可访问的“外部播放地址”。内部 API 地址与外部播放地址可不同；影片仍须已被媒体服务器识别入库。</li></ol>
+        <p>媒体服务器也需要挂载整理后的输出目录。同步触发扫描，不会替媒体服务器建立目录挂载；NFO、图片写入成功后若资料未更新，先核对媒体库路径、扫描状态及媒体服务器的元数据读取策略。</p>
+        <h3>同步站点登录 Cookie</h3><ol><li>先配置自己的 CookieCloud 服务和浏览器扩展，在浏览器登录所需站点并同步。</li><li>展开“系统设置 → CookieCloud”，填写服务地址、UUID、密码；加密类型先选“自动识别”，不匹配时再选扩展使用的类型。</li><li>点击“测试同步”，成功后启用并保存。任务启动时同步 Cookie，供支持该 Cookie 的站点使用。</li></ol>
+        <p>密码留空保留已保存值；勾选清除才会删除。Cookie 过期时需重新登录并同步。测试成功只说明能读取同步数据，站点仍可能因权限、出口或验证要求拒绝访问。</p>
+      </section>
+      <section id="updates"><h2>更新、账号与备份</h2>
+        <h3>Docker 网页更新</h3><ol><li>进入“系统设置 → 软件更新”，查看当前版本、更新通道与检查结果。</li><li>点击“检测更新”，发现新版本后点击“立即更新”。更新时页面显示遮罩与阶段状态，服务重启期间短暂断开属于正常过程；恢复后核对版本和结果。</li><li>按需开启自动检测（默认间隔 24 小时）及自动更新。自动更新默认关闭；有排队、刮削或图片任务时需等待任务结束。</li></ol>
+        <p><b>加入体验计划：</b>勾选后立即保存并尝试下载、应用 <code>bata</code> 程序包，无需再点击安装。使用 <code>bata</code> 镜像时保持加入体验计划。体验通道检查体验版本，正式通道检查正式版本；安装失败应阅读错误原因，不能只凭复选框判断已完成升级。</p>
+        <p>网页更新替换应用程序并重启应用。新程序启动验证失败时会尝试回退，页面显示实际结果；不要在更新中删除数据目录。若更新提示需要新镜像或镜像依赖发生变化，在 Compose 所在目录执行：</p>
+        <div class="doc-command doc-command-multiline"><code>docker compose pull<br>docker compose up -d</code><button class="copy-button" data-copy="docker compose pull&#10;docker compose up -d">复制命令</button></div>
+        <p>Windows EXE 与源码运行仅支持检测版本。EXE 退出后手动替换程序，源码按项目安装方式更新代码和依赖；都应保留原数据目录。</p>
+        <h3>账号与备份</h3><p>管理员在“用户管理”添加、编辑或删除账号。管理员可管理系统设置、自动刮削、爬虫和 AI；操作员没有这些管理入口。首次登录应更改默认密码。</p>
+        <p>迁移或更新前备份整个数据目录：Docker 为挂载到 <code>/app/data</code> 的宿主机目录，EXE 默认是程序旁的 <code>data</code>。建议停止应用后复制，避免备份过程中数据库仍在写入。影片与输出图片单独备份，数据目录备份不能代替媒体备份；其中的密钥、Cookie 和账号数据不要公开分享。</p>
+      </section>
+      <section id="trouble"><h2>问题排查：从最终失败阶段开始</h2>
+        <div class="doc-table-wrap"><table><thead><tr><th>现象</th><th>先检查什么</th></tr></thead><tbody>
+          <tr><td>没有找到符合最小大小的影片 / 没有创建任务</td><td>输入路径在服务端是否可读；扩展名、232MiB 默认门槛、STRM 选项、分类过滤及跳过 NFO。空扫描不代表爬虫故障。</td></tr>
+          <tr><td>分 P 编号不明确或重复</td><td>同番号文件的分段标记是否唯一；是否混入广告，或目录名导致无关视频被识别为同一番号。先检查分类过滤。</td></tr>
+          <tr><td>所有数据源未找到资料</td><td>识别后的番号、命中分类及该分类来源。用爬虫测试一个来源，再判断未收录、访问失败还是解析失败。</td></tr>
+          <tr><td>缺少标题、封面等必需字段</td><td>资料是否完整、来源是否有效；不要为了显示成功而盲目删除必需字段要求。需要 AI 兜底时检查系统和预设两处开关。</td></tr>
+          <tr><td>整理目标中的文件或目录已存在</td><td>核对目标影片、NFO、封面和“剧照”目录的现有内容，区分已入库和失败残留。重抓资料或删除任务记录不能消除文件冲突。</td></tr>
+          <tr><td>403、超时、证书错误</td><td>预设代理、镜像域名、服务端出口、系统时间和证书信任；需要登录的站点再检查 Cookie。不要关闭 HTTPS 校验。</td></tr>
+          <tr><td>下载完成但未刮削</td><td>规则是否启用、标签/分类是否命中、路径映射是否正确。查看下载自动刮削记录，不要只看下载器连接状态。</td></tr>
+          <tr><td>AI 连接或搜索失败</td><td>先分别测试模型和搜索；核对协议、模型 ID、工具调用支持及上下文限制。详见 AI 章节。</td></tr>
+        </tbody></table></div>
+        <h3>提供能定位问题的日志</h3><p>先打开失败任务详情，记录任务 ID、最终错误与相关阶段日志。完整调试日志在 <code>data/task-logs/&lt;任务ID&gt;.log</code>，每个任务最多保留两份 2MiB 日志。容器启动问题另附 <code>docker compose logs --tail 100 javsp-web</code>。</p>
+        <p>提交 Issue 时说明当前版本、Docker/EXE/源码部署方式、复现步骤、预设中相关选项和脱敏日志。移除密钥、Cookie、密码与私人地址；不要把完整数据目录直接上传。</p>
+        <a class="button button-primary" href="https://github.com/APecme/JavSP-Web/issues" target="_blank" rel="noreferrer">前往 Issue <span>↗</span></a>
+      </section>
     </article>
   </main>
   <footer class="site-footer"><div class="page-width footer-inner"><span>© 2026 APecme · JavSP WEB</span><span>GPL-3.0 / Anti 996 License</span><a href="index.html">返回首页 →</a></div></footer>

@@ -4,7 +4,7 @@
 .demo-page { background: #f7f8fa; }
 
 .docs-shell { display: grid; grid-template-columns: 205px minmax(0, 1fr); gap: 75px; padding: 70px 0 120px; }
-.doc-nav { align-self: start; position: sticky; top: 30px; display: flex; flex-direction: column; border-left: 1px solid var(--line); font-size: 12px; }
+.doc-nav { align-self: start; position: sticky; top: 30px; max-height: calc(100vh - 60px); overflow-y: auto; display: flex; flex-direction: column; border-left: 1px solid var(--line); font-size: 12px; }
 .doc-nav p { margin: 0 0 14px 16px; color: #9aa1ae; font: 10px var(--mono); letter-spacing: .1em; }
 .doc-nav a { padding: 7px 16px; color: var(--muted); border-left: 2px solid transparent; }
 .doc-nav a:hover,
@@ -94,7 +94,7 @@
 
 @media (max-width: 800px) {
   .docs-shell { grid-template-columns: 1fr; padding: 42px 0 75px; gap: 38px; }
-  .doc-nav { position: static; display: grid; grid-template-columns: repeat(3, 1fr); border-left: 0; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .doc-nav { position: static; max-height: none; display: grid; grid-template-columns: repeat(3, 1fr); border-left: 0; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
   .doc-nav p { grid-column: 1 / -1; margin: 0 0 8px; }
   .doc-nav a { padding: 6px 0; border-left: 0; }
   .doc-nav a.is-current { color: var(--accent); }
@@ -125,3 +125,7 @@
 .doc-table-wrap th, .doc-table-wrap td { text-align: left; padding: 12px; border-bottom: 1px solid #ccd4df; vertical-align: top; }
 .doc-table-wrap code { overflow-wrap: anywhere; }
 .doc-example { padding: 20px; overflow-x: auto; background: #f0f3f7; border-radius: 12px; line-height: 1.8; }
+.doc-figure { margin: 28px 0; }
+.doc-figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; }
+.doc-figure figcaption { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.doc-content p, .doc-content li { overflow-wrap: anywhere; }

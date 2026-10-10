@@ -39,6 +39,27 @@ document.querySelectorAll('.copy-button').forEach((button) => button.addEventLis
   setTimeout(() => { button.textContent = original; }, 1600);
 }));
 
+const chapterLinks = [...document.querySelectorAll('.doc-nav a[href^="#"]')];
+if (chapterLinks.length) {
+  const chapters = [...document.querySelectorAll('.doc-content section[id]')];
+  let chapterFrame = false;
+  const updateChapter = () => {
+    const current = chapters.filter(section => section.getBoundingClientRect().top <= 140).at(-1) || chapters[0];
+    chapterLinks.forEach(link => {
+      const active = link.hash === `#${current.id}`;
+      link.classList.toggle('is-current', active);
+      if (active) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    });
+    chapterFrame = false;
+  };
+  window.addEventListener('scroll', () => {
+    if (!chapterFrame) { chapterFrame = true; requestAnimationFrame(updateChapter); }
+  }, { passive: true });
+  window.addEventListener('load', updateChapter);
+  updateChapter();
+}
+
 const startDemo = document.querySelector('#start-demo');
 if (startDemo) {
   const demoFile = document.querySelector('#demo-file');

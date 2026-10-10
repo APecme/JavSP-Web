@@ -3,13 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/javsp-logo.png">
-  <link rel="icon" type="image/x-icon" href="assets/javsp-logo.ico">
-  <title>JavSP WEB</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/javsp-logo.png?v=2">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+  <title>交互示例 | JavSP WEB</title>
   <style>html[data-initial-view] [data-panel]{display:none}.view.active{display:block}html[data-initial-view="overview"] [data-panel="overview"],html[data-initial-view="scrape"] [data-panel="scrape"],html[data-initial-view="auto-scrape"] [data-panel="auto-scrape"],html[data-initial-view="downloads"] [data-panel="downloads"],html[data-initial-view="crawler-config"] [data-panel="crawler-config"],html[data-initial-view="presets"] [data-panel="presets"],html[data-initial-view="settings"] [data-panel="settings"]{display:block}</style>
-    <link rel="stylesheet" href="assets/app.css">
+    <link rel="stylesheet" href="assets/app.css?v=f92afd90cdc9">
+<link rel="stylesheet" href="demo.css?v=f92afd90cdc9">
 </head>
-<body>
+<body class="demo-mode">
+<script src="demo-seed.js?v=f92afd90cdc9"></script>
+<script src="demo-mock.js?v=f92afd90cdc9"></script>
   <script>(function(){try{var v=localStorage.getItem('javsp-web.active-view');if(v)document.documentElement.dataset.initialView=v;}catch(e){}})();</script>
   <div class="app-shell">
     <aside class="sidebar">
@@ -18,6 +21,7 @@
         <p class="nav-label">工作区</p>
         <button class="nav-item active" data-view="overview">概览</button>
         <button class="nav-item" data-view="scrape">手动刮削</button>
+        <button class="nav-item" data-view="ai-scrape" id="ai-scrape-nav">AI 刮削</button>
         <button class="nav-item" data-view="auto-scrape" id="auto-scrape-nav">自动刮削</button>
         <button class="nav-item" data-view="downloads">下载管理</button>
         <p class="nav-label">配置</p>
@@ -27,16 +31,40 @@
       </nav>
       <div class="sidebar-footer"><span class="status-dot"></span>本机服务在线</div>
     </aside>
-    <main class="main">
-      <header class="topbar"><div><p class="eyebrow" id="section-eyebrow">工作区</p><h1 id="section-title">概览</h1></div><div class="account"><span id="app-version" class="app-version" data-update-status="checking" title="正在检查更新">v1.1.31</span><span id="current-user"></span><button class="icon-button" id="logout" title="退出登录">退出</button></div></header>
+    <main class="main"><aside class="demo-notice" role="note"><strong>交互示例 · demo.f92afd90cdc9</strong><span>使用当前程序界面与模拟数据，不连接模型、不访问影片文件。更改仅保留到刷新；请勿填写真实密钥。</span><a href="docs.html">使用教程 ↗</a></aside>
+      <header class="topbar"><div><p class="eyebrow" id="section-eyebrow">工作区</p><h1 id="section-title">概览</h1></div><div class="account"><span id="app-version" class="app-version" data-update-status="checking" title="正在检查更新">读取版本…</span><span id="current-user"></span><button class="icon-button" id="logout" title="退出登录">退出</button></div></header>
 
       <section class="view active" data-panel="overview">
         <div class="metric-grid"><article class="metric"><span>任务总数</span><strong id="metric-total">0</strong></article><article class="metric"><span>运行中</span><strong id="metric-running">0</strong></article><article class="metric"><span>最近结果</span><strong id="metric-result">-</strong></article></div>
         <div class="panel"><div class="panel-heading"><div><h2>最近任务</h2><p class="muted">查看本机最近的刮削执行状态</p></div><button class="button secondary" data-go="scrape">新建任务</button></div><div id="overview-tasks" class="task-list empty">还没有任务记录</div></div>
       </section>
 
+      <section class="view" data-panel="ai-scrape">
+        <div class="ai-layout">
+          <aside class="ai-history" aria-label="会话管理">
+            <button class="button secondary" id="ai-new-chat" type="button">＋ 新建对话</button>
+            <input id="ai-history-search" type="search" placeholder="搜索对话" aria-label="搜索对话">
+            <div id="ai-history-list" class="ai-history-list"></div>
+            <p id="ai-history-status" class="muted" role="status"></p>
+          </aside>
+          <div class="panel ai-workspace" id="ai-workspace">
+            <div class="panel-heading"><button class="icon-button" id="ai-toggle-history" type="button" aria-expanded="false" aria-label="显示会话列表">☰</button><h2 id="ai-chat-title">AI 刮削助手</h2></div>
+            <p id="ai-connection-status" class="muted"></p>
+            <div class="ai-scroll">
+            <div id="ai-conversation" class="ai-conversation" role="log" aria-label="AI 刮削对话"></div>
+            <p id="ai-status" role="status" aria-live="polite"></p>
+            </div>
+            <form id="ai-chat-form" class="ai-composer">
+              <textarea id="ai-message" rows="2" maxlength="12000" required aria-label="向 AI 发送消息" placeholder="发送消息，描述要刮削的影片或需要解决的问题…"></textarea>
+              <div class="ai-composer-actions"><button class="icon-button" type="button" data-go="settings">LLM 设置</button><span class="muted">Enter 发送 · Shift + Enter 换行</span><button class="button secondary" id="ai-stop" type="button" hidden>停止生成 ■</button><button class="button primary" id="ai-send" type="submit" aria-label="发送消息">发送 ↑</button></div>
+            </form>
+            <small class="muted ai-footnote">AI 可能出错，请核实资料。文件整理和设置变更需确认后执行。</small>
+          </div>
+        </div>
+      </section>
+
       <section class="view" data-panel="scrape">
-        <div class="panel narrow"><div class="panel-heading"><div><h2>启动一次刮削</h2><p class="muted">输入 JavSP 运行环境可访问的路径，可以是目录或单个视频文件。</p></div></div><form id="task-form" class="stack"><label>待处理路径<input id="input-directory" placeholder="例如：C:\\Videos 或 C:\\Videos\\PETS-067.mkv" required></label><div id="path-tools" class="path-tools hidden"><button class="button secondary native-path-button" type="button" data-path-kind="directory">选择刮削文件夹</button><button class="button secondary native-path-button" type="button" data-path-kind="file">选择视频文件</button><button class="button secondary docker-path-button hidden" id="docker-path-browser" type="button">浏览容器路径</button></div><label>刮削预设<select id="task-preset" required></select></label><div class="form-actions"><button class="button primary" type="submit">启动 JavSP</button><span id="task-message" class="muted"></span></div></form></div>
+        <div class="panel narrow"><div class="panel-heading"><div><h2>启动一次刮削</h2><p class="muted">输入 JavSP 运行环境可访问的路径，可以是目录或单个视频文件。</p></div></div><form id="task-form" class="stack"><label>待处理路径<input id="input-directory" placeholder="例如：C:\\Videos 或 C:\\Videos\\PETS-067.mkv" required></label><div id="path-tools" class="path-tools hidden"><button class="button secondary native-path-button" type="button" data-path-kind="directory">选择刮削文件夹</button><button class="button secondary native-path-button" type="button" data-path-kind="file">选择视频文件</button><button class="button secondary native-path-button" type="button" data-path-kind="files">批量选择视频文件</button><button class="button secondary docker-path-button hidden" id="docker-path-browser" type="button">浏览容器路径</button></div><span id="task-selection-message" class="muted" hidden></span><label>刮削预设<select id="task-preset" required></select></label><div class="form-actions"><button class="button primary" type="submit">启动 JavSP</button><span id="task-message" class="muted"></span></div></form></div>
         <div class="panel"><div class="panel-heading"><div><h2>任务队列</h2><p class="muted">日志会在任务运行期间持续更新。</p></div><button class="button secondary" id="refresh-tasks">刷新</button></div><div id="task-table" class="task-list empty">还没有任务记录</div></div>
       </section>
 
@@ -60,6 +88,7 @@
         <section class="view" data-panel="crawler-config"><div class="panel"><div class="panel-heading"><div><h2>爬虫配置</h2><p class="muted">管理爬虫的抓取规则与行为；各预设使用的爬虫和顺序在“刮削预设”中设置。</p></div></div><div id="crawler-config-content"></div></div></section>
 
       <section class="view" data-panel="settings">
+        <div class="panel narrow" id="update-settings-panel"><div class="panel-heading"><div><h2>版本与更新</h2><p class="muted">正式版使用 latest；加入体验计划会立即尝试安装 bata 应用包。</p></div><span id="update-channel-badge" class="badge">正式版</span></div><form id="update-settings-form" class="stack"><label class="check-label"><input id="update-check-enabled" type="checkbox">自动检查更新</label><label class="check-label"><input id="update-auto-update" type="checkbox">发现新版本后自动更新</label><label class="check-label"><input id="update-experience" type="checkbox">加入体验计划（使用 bata 标签）</label><label>检查间隔（小时）<input id="update-interval" type="number" min="1" max="168" step="1"></label><div class="form-actions"><button class="button secondary" id="update-check-now" type="button">立即检查</button><button class="button secondary" id="update-apply-now" type="button">立即更新</button><button class="button primary" id="update-save" type="submit">保存设置</button><span id="update-settings-message" class="muted" aria-live="polite"></span></div><p id="update-status" class="muted"></p><p id="update-capability" class="muted"></p></form></div>
         <details class="panel narrow cookiecloud-panel" id="cookiecloud-panel"><summary class="panel-heading"><div><h2>CookieCloud</h2><p class="muted">同步浏览器登录 Cookie，供需要登录凭据的刮削站点在任务启动时使用。</p></div></summary><form id="cookiecloud-form" class="stack"><label class="check-label"><input id="cookiecloud-enabled" type="checkbox">启用 CookieCloud 同步</label><label>服务地址<input id="cookiecloud-server-url" type="url" inputmode="url" placeholder="https://cookiecloud.example.com"></label><label>UUID<input id="cookiecloud-uuid" autocomplete="off" placeholder="CookieCloud UUID"></label><label>加密类型<select id="cookiecloud-crypto-type"><option value="auto">自动识别</option><option value="legacy">CryptoJS（动态 IV）</option><option value="aes-128-cbc-fixed">AES-128-CBC（固定 IV）</option></select></label><label>密码<input id="cookiecloud-password" type="password" autocomplete="new-password" placeholder="留空则保留已保存密码"></label><label class="check-label"><input id="cookiecloud-clear-password" type="checkbox">清除已保存密码</label><div class="form-actions"><button class="button secondary" id="test-cookiecloud" type="button">测试同步</button><button class="button primary" type="submit">保存 CookieCloud 配置</button><span id="cookiecloud-message" class="muted" aria-live="polite"></span></div></form></details>
         <div class="panel narrow"><div class="panel-heading"><div><h2>下载器</h2><p class="muted">可添加多个 qBittorrent 下载器；保存前会验证 Web API。</p></div><button class="button primary" id="add-downloader" type="button">+ 添加下载器</button></div><div id="downloader-list" class="downloader-list"></div></div>
         <div class="panel"><div class="panel-heading"><div><h2>用户管理</h2><p class="muted">编辑按钮可以同时修改账户名和密码；新密码必须输入两次。</p></div><button class="button primary" id="add-user">添加用户</button></div><div id="users-table" class="user-list"></div></div>
@@ -78,8 +107,18 @@
   <dialog id="auto-scrape-run-dialog" class="task-detail-dialog"><form method="dialog"><div class="panel-heading"><div><h2 id="auto-scrape-run-title">定时任务日志</h2><p id="auto-scrape-run-subtitle" class="muted"></p></div><button class="icon-button" type="button" data-dialog-close>关闭</button></div><div id="auto-scrape-run-content" class="auto-scrape-run-content"></div></form></dialog>
   <dialog id="google-cover-dialog" class="app-dialog google-cover-dialog"><form method="dialog"><div class="dialog-heading"><h2>选择爬虫封面</h2><button class="dialog-close" type="button" data-dialog-close>关闭</button></div><div id="google-cover-candidates" class="google-cover-candidates"></div><p id="google-cover-message" class="form-error dialog-message"></p><div class="dialog-actions"><button class="button secondary" type="button" data-dialog-close>取消</button></div></form></dialog>
   <div id="overview-context-menu" class="overview-context-menu" hidden><button type="button" data-overview-context-select>选择</button><button type="button" class="danger" data-overview-context-delete>删除任务记录</button></div>
-  <link rel="stylesheet" href="assets/overrides.css">
-  <script src="demo-mock.js"></script><script src="assets/demo-app.js"></script>
+  <div id="update-overlay" class="update-overlay" role="alertdialog" aria-modal="true" aria-labelledby="update-overlay-title" aria-describedby="update-overlay-status" data-phase="running" tabindex="-1" hidden>
+    <div class="update-overlay-card">
+      <span class="update-overlay-spinner" aria-hidden="true"></span>
+      <h2 id="update-overlay-title">正在更新应用</h2>
+      <p id="update-overlay-status" aria-live="polite">正在准备更新…</p>
+      <small>更新期间服务可能暂时断开，请保持此页面打开。</small>
+      <button id="update-overlay-close" class="button secondary" type="button" hidden>关闭提示</button>
+    </div>
+  </div>
+  <link rel="stylesheet" href="assets/overrides.css?v=f92afd90cdc9">
+  <script src="assets/demo-app.js?v=f92afd90cdc9"></script>
+  <script src="assets/ai-markdown.js?v=f92afd90cdc9"></script>
+  <script src="assets/ai.js?v=f92afd90cdc9"></script>
 </body>
 </html>
-

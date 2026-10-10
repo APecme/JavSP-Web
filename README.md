@@ -159,6 +159,8 @@ Docker 使用系统 CA 证书库并在启动时更新。若代理使用自签名
 
 欢迎提交 Issue、改进文档、补充测试数据或发起 Pull Request。
 
+官网 [完整教程](https://apecme.github.io/JavSP-Web/docs.html) 与 [交互示例](https://apecme.github.io/JavSP-Web/demo.html) 位于 `docs/`。示例使用当前应用前端和内存模拟数据，不执行真实刮削、联网或软件更新。修改前端、AI 默认值、内置 Skills 或示例接口后，安装 PyYAML 并运行 `python scripts/build_demo.py`，再运行 `node tests/test_demo.cjs`。Pages 工作流会重新生成、校验并发布示例，版本以内容指纹标识；教程截图位于 `docs/assets/guide/`，界面变化时应一并更新。
+
 ## 许可与声明
 
 本项目包含并依赖 JavSP 核心。JavSP 核心遵循 [GPL-3.0](./vendor/JavSP/LICENSE) 与 [Anti 996 License](https://github.com/996icu/996.ICU/blob/master/LICENSE_CN) 的相关条款。使用本项目时，请遵守当地法律法规、数据源服务条款及 JavSP 的使用说明。
