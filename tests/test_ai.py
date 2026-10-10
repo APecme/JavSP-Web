@@ -31,6 +31,7 @@ class AITests(unittest.TestCase):
         self.user = {"username": "ai-admin", "role": "admin"}
         self.enterContext(patch.dict(server.app.dependency_overrides, {server.current_user: lambda: self.user}))
         self.enterContext(patch.object(ai_router, "_active", set()))
+        self.enterContext(patch.object(ai_router, "_cancelled", set()))
         self.client = TestClient(server.app)
         self.addCleanup(self.client.close)
         self.config = {"enabled": True, "provider": "compatible", "base_url": "https://llm.test/v1",
@@ -98,7 +99,7 @@ class AITests(unittest.TestCase):
         conversation = self.conversation("读取预设")
         replies = [tool_call("get_preset", {"preset_id": "default"}), {"role": "assistant", "content": "完成"}]
         seen = []
-        def complete(config, messages, tools):
+        def complete(config, messages, tools, on_update=None):
             seen.append(copy.deepcopy(messages))
             return replies.pop(0)
         with patch.object(ai_tools, "execute", return_value={"api_key": "another-key", "nested": {"password": "secret"}}), patch.object(ai, "complete", side_effect=complete):
@@ -138,6 +139,89 @@ class AITests(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/ai/skills").json()), 5)
         with self.assertRaises(ValueError):
             ai_tools.validate_arguments("read_skill", {"name": "../../config"})
+
+    def test_conversation_management_persistence_and_ownership(self):
+        first = self.conversation("第一段对话")
+        self.run_reply(first, [{"role": "assistant", "content": "完成"}])
+        second = self.conversation("第二段对话")
+        self.run_reply(second, [{"role": "assistant", "content": "完成"}])
+        items = self.client.get('/api/ai/conversations').json()
+        self.assertEqual({item['title'] for item in items}, {'第一段对话', '第二段对话'})
+        self.assertNotIn('turns', items[0])
+        path = '/api/ai/conversations/' + first['id']
+        self.assertEqual(self.client.patch(path, json={'title': '新标题'}).status_code, 200)
+        self.assertEqual(self.client.get(path).json()['title'], '新标题')
+        self.assertEqual(self.client.patch(path, json={'title': '   '}).status_code, 400)
+        self.assertEqual(self.client.patch(path, json={'title': '长' * 81}).status_code, 422)
+        self.user['username'] = 'another-admin'
+        self.assertEqual(self.client.get('/api/ai/conversations').json(), [])
+        self.assertEqual(self.client.patch(path, json={'title': '不能修改'}).status_code, 404)
+        self.assertEqual(self.client.delete(path).status_code, 404)
+        self.assertEqual(self.client.post(path + '/stop').status_code, 404)
+        self.user['username'] = 'ai-admin'
+        self.assertEqual(self.client.delete(path).status_code, 200)
+        self.assertEqual(self.client.get(path).status_code, 404)
+        self.assertEqual(len(self.client.get('/api/ai/conversations').json()), 1)
+
+    def test_running_conversation_cannot_be_deleted_or_renamed(self):
+        conversation = self.conversation()
+        path = '/api/ai/conversations/' + conversation['id']
+        self.assertEqual(self.client.delete(path).status_code, 409)
+        self.assertEqual(self.client.patch(path, json={'title': '新标题'}).status_code, 409)
+
+    def test_stream_progress_persisted_before_completion(self):
+        conversation = self.conversation()
+        def complete(config, messages, tools, on_update):
+            on_update('', '模型提供的分析 private-ai-key')
+            snapshot = self.client.get('/api/ai/conversations/' + conversation['id']).json()
+            self.assertEqual(snapshot['status'], 'running')
+            self.assertIn('模型提供的分析', snapshot['turns'][-1]['reasoning_content'])
+            self.assertNotIn('private-ai-key', json.dumps(snapshot))
+            on_update('部分回复 private-ai-', '')
+            self.assertNotIn('private-ai-', conversation['turns'][-1]['content'])
+            on_update('部分回复', '模型提供的分析')
+            return {'role': 'assistant', 'content': '完整回复', 'reasoning_content': '模型提供的分析'}
+        with patch.object(ai, 'complete', side_effect=complete):
+            ai_router._run(conversation, self.config)
+        result = self.client.get('/api/ai/conversations/' + conversation['id']).json()
+        self.assertEqual(result['turns'][-1]['content'], '完整回复')
+        self.assertEqual(result['turns'][-1]['status'], 'completed')
+
+    def test_stop_preserves_partial_reply_and_prevents_tools(self):
+        conversation = self.conversation()
+        def complete(config, messages, tools, on_update):
+            on_update('已收到的回复', '')
+            self.client.post('/api/ai/conversations/' + conversation['id'] + '/stop')
+            return tool_call('list_presets', {})
+        with patch.object(ai, 'complete', side_effect=complete), patch.object(ai_tools, 'execute') as execute:
+            ai_router._run(conversation, self.config)
+            execute.assert_not_called()
+        self.assertEqual(conversation['status'], 'stopped')
+        self.assertEqual(conversation['turns'][-1]['content'], '已收到的回复')
+        self.assertNotIn(conversation['id'], ai_router._active)
+
+    def test_tool_history_retained_and_attached_to_reply(self):
+        conversation = self.conversation()
+        with patch.object(ai_tools, 'execute', return_value=[]):
+            first = self.run_reply(conversation, [tool_call('list_presets', {}), {'role': 'assistant', 'content': '已查看'}])
+        turn_id = first['turns'][-1]['id']
+        self.assertEqual(first['steps'][0]['turn_id'], turn_id)
+        with patch.object(ai_router, '_start_analysis'):
+            response = self.client.post('/api/ai/chat', json={'conversation_id': conversation['id'], 'message': '继续'})
+        second = response.json()
+        self.assertEqual(second['steps'][0]['turn_id'], turn_id)
+        saved = storage._read_json(ai_router._path(conversation['id']), None)
+        self.run_reply(saved, [{'role': 'assistant', 'content': '下一次回复'}])
+        self.assertEqual(len(saved['turns']), 4)
+
+    def test_legacy_conversation_has_title_and_turn_ids(self):
+        conversation = self.conversation('旧对话')
+        conversation.pop('title')
+        conversation['turns'][0].pop('id')
+        ai_router._save(conversation)
+        result = self.client.get('/api/ai/conversations/' + conversation['id']).json()
+        self.assertEqual(result['title'], '旧对话')
+        self.assertEqual(result['turns'][0]['id'], 'legacy-0')
 
     def test_skills_add_edit_delete_and_restore_persist(self):
         source = '---\nname: local-rule\ndescription: Test rule\n---\n\nKeep verified metadata.\n'
@@ -239,6 +323,65 @@ class ProviderTests(unittest.TestCase):
         for url in ("file:///etc/passwd", "https://user:pass@host/v1", "https://host/v1?api_key=secret"):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 ai.AISettings(base_url=url)
+
+    def stream_response(self, events):
+        response = Mock(status_code=200, headers={'Content-Type': 'text/event-stream; charset=utf-8'})
+        response.iter_lines.return_value = [b'data: ' + (json.dumps(event).encode() if isinstance(event, dict) else event) for event in events]
+        context = Mock()
+        context.__enter__ = Mock(return_value=response)
+        context.__exit__ = Mock(return_value=False)
+        return context
+
+    def test_stream_reasoning_text_and_split_tool_arguments(self):
+        events = [
+            {'choices': [{'delta': {'reasoning_content': '检查预设'}}]},
+            {'choices': [{'delta': {'content': '正在查询'}}]},
+            {'choices': [{'delta': {'tool_calls': [{'index': 0, 'id': 'call-1', 'function': {'name': 'get_preset', 'arguments': '{"preset_'}}]}}]},
+            {'choices': [{'delta': {'tool_calls': [{'index': 0, 'function': {'arguments': 'id":"default"}'}}]}, 'finish_reason': 'tool_calls'}]},
+            b'[DONE]',
+        ]
+        updates = []
+        with patch.object(ai.requests, 'post', return_value=self.stream_response(events)) as post:
+            result = ai.complete(self.config, [], on_update=lambda content, reasoning: updates.append((content, reasoning)))
+        self.assertTrue(post.call_args.kwargs['json']['stream'])
+        self.assertEqual(updates[0], ('', '检查预设'))
+        self.assertEqual(result['content'], '正在查询')
+        self.assertEqual(json.loads(result['tool_calls'][0]['function']['arguments']), {'preset_id': 'default'})
+
+    def test_anthropic_stream_thinking_signature_and_tool(self):
+        events = [
+            {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'thinking', 'thinking': ''}},
+            {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'thinking_delta', 'thinking': '模型分析'}},
+            {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'signature_delta', 'signature': 'signed'}},
+            {'type': 'content_block_start', 'index': 1, 'content_block': {'type': 'text', 'text': ''}},
+            {'type': 'content_block_delta', 'index': 1, 'delta': {'type': 'text_delta', 'text': '查询预设'}},
+            {'type': 'content_block_start', 'index': 2, 'content_block': {'type': 'tool_use', 'id': 'call-1', 'name': 'list_presets', 'input': {}}},
+            {'type': 'content_block_delta', 'index': 2, 'delta': {'type': 'input_json_delta', 'partial_json': '{}'}},
+            {'type': 'message_stop'},
+        ]
+        with patch.object(ai.requests, 'post', return_value=self.stream_response(events)):
+            result = ai.complete(self.config | {'provider': 'anthropic'}, [], on_update=Mock())
+        self.assertEqual(result['reasoning_content'], '模型分析')
+        self.assertEqual(result['content'], '查询预设')
+        converted = ai._anthropic_messages([result])
+        self.assertEqual(converted[0]['content'][0]['signature'], 'signed')
+        self.assertEqual(result['tool_calls'][0]['function']['arguments'], '{}')
+
+    def test_stream_interruption_and_truncation_fail(self):
+        for events in ([{'choices': [{'delta': {'content': '一部分'}}]}],
+                       [{'choices': [{'delta': {}, 'finish_reason': 'length'}]}],
+                       [{'error': {'message': 'private-key'}}]):
+            with self.subTest(events=events), patch.object(ai.requests, 'post', return_value=self.stream_response(events)):
+                with self.assertRaises(ai.AIError) as raised:
+                    ai.complete(self.config, [], on_update=Mock())
+                self.assertNotIn('private-key', str(raised.exception))
+
+    def test_stream_request_accepts_json_from_nonstreaming_provider(self):
+        context = self.response({'choices': [{'message': {'content': '完整回复'}}]})
+        context.__enter__.return_value.headers = {'Content-Type': 'application/json'}
+        with patch.object(ai.requests, 'post', return_value=context):
+            result = ai.complete(self.config, [], on_update=Mock())
+        self.assertEqual(result['content'], '完整回复')
 
 
 if __name__ == "__main__":

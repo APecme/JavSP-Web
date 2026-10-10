@@ -38,18 +38,22 @@
 
       <section class="view" data-panel="ai-scrape">
         <div class="ai-layout">
+          <aside class="ai-history" aria-label="会话管理">
+            <button class="button secondary" id="ai-new-chat" type="button">＋ 新建对话</button>
+            <input id="ai-history-search" type="search" placeholder="搜索对话" aria-label="搜索对话">
+            <div id="ai-history-list" class="ai-history-list"></div>
+            <p id="ai-history-status" class="muted" role="status"></p>
+          </aside>
           <div class="panel ai-workspace" id="ai-workspace">
-            <div class="panel-heading"><div><h2>AI 刮削助手</h2></div><button class="button secondary" id="ai-new-chat" type="button">新建对话</button></div>
+            <div class="panel-heading"><button class="icon-button" id="ai-toggle-history" type="button" aria-expanded="false" aria-label="显示会话列表">☰</button><h2 id="ai-chat-title">AI 刮削助手</h2></div>
             <p id="ai-connection-status" class="muted"></p>
             <div class="ai-scroll">
             <div id="ai-conversation" class="ai-conversation" role="log" aria-label="AI 刮削对话"></div>
-            <details id="ai-steps-wrap" hidden><summary>工具执行记录</summary><div id="ai-steps"></div></details>
-            <div id="ai-actions" class="ai-actions"></div>
             <p id="ai-status" role="status" aria-live="polite"></p>
             </div>
             <form id="ai-chat-form" class="ai-composer">
               <textarea id="ai-message" rows="2" maxlength="12000" required aria-label="向 AI 发送消息" placeholder="发送消息，描述要刮削的影片或需要解决的问题…"></textarea>
-              <div class="ai-composer-actions"><button class="icon-button" type="button" data-go="settings">LLM 设置</button><span class="muted">Enter 发送 · Shift + Enter 换行</span><button class="button primary" id="ai-send" type="submit" aria-label="发送消息">发送 ↑</button></div>
+              <div class="ai-composer-actions"><button class="icon-button" type="button" data-go="settings">LLM 设置</button><span class="muted">Enter 发送 · Shift + Enter 换行</span><button class="button secondary" id="ai-stop" type="button" hidden>停止生成 ■</button><button class="button primary" id="ai-send" type="submit" aria-label="发送消息">发送 ↑</button></div>
             </form>
             <small class="muted ai-footnote">AI 可能出错，请核实资料。文件整理和设置变更需确认后执行。</small>
           </div>
@@ -111,6 +115,7 @@
   </div>
   <link rel="stylesheet" href="/assets/overrides.css?v=__ASSET_VERSION__">
   <script src="/assets/app.js?v=__ASSET_VERSION__"></script>
+  <script src="/assets/ai-markdown.js?v=__ASSET_VERSION__"></script>
   <script src="/assets/ai.js?v=__ASSET_VERSION__"></script>
 </body>
 </html>

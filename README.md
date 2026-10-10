@@ -47,7 +47,7 @@ docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 `
 
 ### Docker Compose
 
-新建 `docker-compose.yml`，填入以下内容：
+新建 `docker-compose.yml`，填入以下内容。此配置使用已构建的 `latest` 镜像，无需下载源码或本地构建：
 
 ```yaml
 services:
@@ -58,6 +58,12 @@ services:
     ports:
       - "8090:8090"
     environment:
+      JAVSP_WEB_HOST: 0.0.0.0
+      JAVSP_WEB_PORT: 8090
+      JAVSP_WEB_TIMEZONE: Asia/Shanghai
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - ./video:/video
@@ -66,6 +72,7 @@ services:
 在该文件所在目录运行：
 
 ```powershell
+docker compose config --quiet
 docker compose up -d
 ```
 
@@ -106,6 +113,8 @@ CloudDrive2、WebDAV 等挂载盘也使用上述流程。点击启动后先创�
 2. 支持 OpenAI 兼容服务（包括 DeepSeek、Ollama）及 Anthropic。URL 填 API 基础地址，通常以 `/v1` 结尾；模型需要支持工具调用。Docker 内填写容器可访问的地址。
 3. 在 AI 刮削页描述任务，例如“查看 FNS-262 最近的失败原因”或“使用默认预设整理 /video/example”。可展开工具执行记录查看实际数据。
 4. 整理文件、保存爬虫、修改预设、创建定时规则和保存影片资料都会先生成操作预览，点击“确认执行”后才生效。新建的刮削任务进入现有任务队列；保存爬虫不代表测试成功。
+
+左侧会话列表支持新建、搜索、切换、重命名和删除，对话历史按账号保存，刷新页面后可继续。回复会随模型输出逐步显示，支持标题、列表、代码块和复制；模型提供的思考内容与工具记录可在对应回复中展开查看。未提供思考内容时仅显示处理状态。点击“停止生成”可中断后续分析，已确认执行的操作不会被撤销。
 
 AI 接入与预设中的翻译服务独立。启用系统 AI 后，“刮削预设 → 爬虫”增加两个选项：
 

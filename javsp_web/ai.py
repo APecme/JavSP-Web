@@ -110,6 +110,8 @@ def _anthropic_messages(messages):
             for call in message.get("tool_calls", []):
                 content.append({"type": "tool_use", "id": call["id"], "name": call["function"]["name"],
                                 "input": json.loads(call["function"]["arguments"])})
+            if message.get("anthropic_content"):
+                content = message["anthropic_content"]
         if converted and converted[-1]["role"] == role:
             converted[-1]["content"].extend(content)
         else:
@@ -117,7 +119,80 @@ def _anthropic_messages(messages):
     return converted
 
 
-def complete(config, messages, tools=None):
+def _stream_result(response, anthropic, deadline, on_update):
+    content, reasoning, calls, blocks = "", "", {}, {}
+    size = 0
+    finished = False
+    for line in response.iter_lines(chunk_size=1):
+        if time.monotonic() > deadline:
+            raise AIError("LLM 请求超时，请缩小请求范围后重试")
+        size += len(line)
+        if size > 2_000_000:
+            raise AIError("LLM 响应过大，请缩小请求范围")
+        if not line.startswith(b"data:"):
+            continue
+        data = line[5:].strip()
+        if data == b"[DONE]":
+            finished = True
+            break
+        event = json.loads(data)
+        if event.get("error") or event.get("type") == "error":
+            raise AIError("LLM 流式响应失败，请稍后重试")
+        if anthropic:
+            kind = event.get("type")
+            index = event.get("index", 0)
+            if kind == "content_block_start":
+                blocks[index] = dict(event["content_block"])
+                block = blocks[index]
+                if block["type"] == "text":
+                    content += block.get("text", "")
+                elif block["type"] == "thinking":
+                    reasoning += block.get("thinking", "")
+            elif kind == "content_block_delta":
+                delta = event["delta"]
+                block = blocks[index]
+                if delta["type"] == "text_delta":
+                    content += delta["text"]
+                    block["text"] = block.get("text", "") + delta["text"]
+                elif delta["type"] == "thinking_delta":
+                    reasoning += delta["thinking"]
+                    block["thinking"] = block.get("thinking", "") + delta["thinking"]
+                elif delta["type"] == "signature_delta":
+                    block["signature"] = block.get("signature", "") + delta["signature"]
+                elif delta["type"] == "input_json_delta":
+                    block["partial_json"] = block.get("partial_json", "") + delta["partial_json"]
+            elif kind == "message_delta" and event.get("delta", {}).get("stop_reason") == "max_tokens":
+                raise AIError("模型输出被截断，请缩小请求范围后重试")
+            elif kind == "message_stop":
+                finished = True
+        else:
+            for choice in event.get("choices", []):
+                if choice.get("index", 0) != 0:
+                    continue
+                if choice.get("finish_reason") == "length":
+                    raise AIError("模型输出被截断，请缩小请求范围后重试")
+                delta = choice.get("delta", {})
+                content += delta.get("content") or ""
+                reasoning += delta.get("reasoning_content") or delta.get("reasoning") or ""
+                for part in delta.get("tool_calls") or []:
+                    call = calls.setdefault(part["index"], {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                    call["id"] += part.get("id") or ""
+                    for key in ("name", "arguments"):
+                        call["function"][key] += part.get("function", {}).get(key) or ""
+                if choice.get("finish_reason"):
+                    finished = True
+        on_update(content, reasoning)
+    if not finished:
+        raise AIError("LLM 连接提前断开，请重试；已收到的内容已保留")
+    if anthropic:
+        for block in blocks.values():
+            if "partial_json" in block:
+                block["input"] = json.loads(block.pop("partial_json"))
+        return {"content": list(blocks.values())}
+    return {"choices": [{"message": {"content": content, "reasoning_content": reasoning, "tool_calls": list(calls.values())}}]}
+
+
+def complete(config, messages, tools=None, on_update=None):
     validate_connection(config)
     anthropic = config["provider"] == "anthropic"
     suffix = "/messages" if anthropic else "/chat/completions"
@@ -141,6 +216,8 @@ def complete(config, messages, tools=None):
         payload = {"model": config["model"], "messages": messages, "max_tokens": 4096, "stream": False}
         if tools:
             payload["tools"] = tools
+    if on_update:
+        payload["stream"] = True
     deadline = time.monotonic() + config["timeout"] + 10
     try:
         with requests.post(endpoint, headers=headers, json=payload, timeout=(10, config["timeout"]),
@@ -149,20 +226,25 @@ def complete(config, messages, tools=None):
                 reason = {401: "API KEY 无效", 403: "访问被拒绝", 404: "请检查 LLM URL 和模型名称",
                           429: "请求限流或额度不足"}.get(response.status_code, "请检查服务状态和模型是否支持工具调用")
                 raise AIError(f"LLM 请求失败（HTTP {response.status_code}）：{reason}")
-            chunks, size = [], 0
-            for chunk in response.iter_content(65536):
-                size += len(chunk)
-                if time.monotonic() > deadline:
-                    raise AIError("LLM 请求超时，请缩小请求范围后重试")
-                if size > 2_000_000:
-                    raise AIError("LLM 响应过大，请缩小请求范围")
-                chunks.append(chunk)
-            result = json.loads(b"".join(chunks))
+            if on_update and "text/event-stream" in response.headers.get("Content-Type", ""):
+                result = _stream_result(response, anthropic, deadline, on_update)
+            else:
+                chunks, size = [], 0
+                for chunk in response.iter_content(65536):
+                    size += len(chunk)
+                    if time.monotonic() > deadline:
+                        raise AIError("LLM 请求超时，请缩小请求范围后重试")
+                    if size > 2_000_000:
+                        raise AIError("LLM 响应过大，请缩小请求范围")
+                    chunks.append(chunk)
+                result = json.loads(b"".join(chunks))
         if anthropic:
             if result.get("stop_reason") == "max_tokens":
                 raise AIError("模型输出被截断，请缩小请求范围后重试")
             content = result["content"]
             message = {"role": "assistant", "content": "\n".join(item["text"] for item in content if item["type"] == "text")}
+            message["reasoning_content"] = "\n".join(item["thinking"] for item in content if item["type"] == "thinking")
+            message["anthropic_content"] = content
             calls = [{"id": item["id"], "type": "function", "function": {"name": item["name"], "arguments": json.dumps(item["input"], ensure_ascii=False)}}
                      for item in content if item["type"] == "tool_use"]
         else:
