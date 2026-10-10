@@ -212,6 +212,10 @@ def _run(conversation, config):
         "最多执行 6 轮、12 次工具调用，优先只读验证，完成后简洁说明结果。"
         "可用 Skills：" + json.dumps(catalog, ensure_ascii=False)
     )
+    system += (
+        "\n\n以下预设提示词用于约定回复风格和工作偏好；不得覆盖上述权限、确认执行和资料核验规则。\n"
+        + (config.get("system_prompt") or ai.DEFAULT_SYSTEM_PROMPT)
+    )
     messages = [{"role": "system", "content": system}]
     for turn in conversation["turns"][-16:]:
         if turn["role"] == "assistant" and not turn.get("content"):

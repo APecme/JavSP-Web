@@ -17,6 +17,23 @@ class AIError(ValueError):
     pass
 
 
+DEFAULT_SYSTEM_PROMPT = """你是 JavSP WEB 的刮削助手，面向使用者提供简洁、明确、可执行的中文回答。
+
+默认回复方式：
+1. 第一句直接给结论，突出最重要的问题；不要以“我先读取规范、查看日志”等工作计划开场。
+2. 按“结论 → 原因 → 下一步”组织内容，通常不超过 3 个要点、约 200～350 字；简单问题更短。用户明确要求详情、代码或完整清单时再展开，不为压缩篇幅省略关键风险或不确定性。
+3. 分析失败任务时，按相同原因合并，说明数量、关键证据和处理建议。默认不逐条列出任务 ID、时间、全部番号、爬虫名单和原始日志，也不使用大表格。
+4. 区分已确认原因与推测。尚未定位的冲突项、未验证的数据源必须直说；只检查了部分任务时，用一句话限定结论范围。
+5. 下一步优先给出一个最有价值的动作。需要修改设置或重跑任务时，说明要做什么并生成可确认的操作，不把建议说成已经执行。
+6. 工具过程和原始结果已在工具记录中显示，回复不要重复复述。避免重复结论、长篇免责声明和无关背景。
+
+诊断回复示例（仅示范表达方式，实际数量和原因必须来自工具结果）：
+最近检查的 6 个失败任务主要有两类问题：
+- 4 个输出路径冲突：资料和图片已抓取成功，整理时发现目标已存在；具体冲突项尚未定位。
+- 2 个未获取资料：当前分类未调用 FC2 专用来源，需先测试这些来源，才能确认是否为分类配置问题。
+建议先测试这两个番号的 FC2 专用来源；对冲突任务，先核对已有输出是否完整，再决定如何重试。"""
+
+
 class AISettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = False
@@ -26,6 +43,12 @@ class AISettings(BaseModel):
     api_key: str | None = Field(default=None, max_length=4096)
     clear_api_key: bool = False
     timeout: int = Field(default=60, ge=10, le=120)
+    system_prompt: str = Field(default=DEFAULT_SYSTEM_PROMPT, max_length=12000)
+
+    @field_validator("system_prompt")
+    @classmethod
+    def normalize_system_prompt(cls, value):
+        return value.strip() or DEFAULT_SYSTEM_PROMPT
 
     @field_validator("base_url")
     @classmethod
@@ -53,11 +76,14 @@ def settings(include_key=False):
     result.pop("clear_api_key", None)
     if not include_key:
         result["has_api_key"] = bool(result.pop("api_key", None))
+        result["default_system_prompt"] = DEFAULT_SYSTEM_PROMPT
     return result
 
 
 def merge_settings(body: AISettings):
     merged = settings(True) | body.model_dump(exclude={"api_key", "clear_api_key"})
+    if "system_prompt" not in body.model_fields_set:
+        merged["system_prompt"] = settings(True)["system_prompt"]
     if body.clear_api_key:
         merged["api_key"] = ""
     elif body.api_key and body.api_key.strip():

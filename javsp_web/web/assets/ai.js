@@ -7,6 +7,7 @@
   let viewRevision = 0;
   let stopping = false;
   let historyRevision = 0;
+  let defaultSystemPrompt = '';
   const drafts = new Map();
   const actionNames = { create_task: '创建刮削任务', save_crawler: '保存爬虫代码', change_preset: '修改刮削预设', create_preset: '创建刮削预设', create_schedule: '创建自动刮削规则', update_metadata: '保存影片资料' };
   const toolNames = { ...actionNames, read_skill: '读取 Skill', list_crawlers: '查看爬虫', get_crawler: '读取爬虫代码', test_crawler: '测试爬虫', list_presets: '查看预设', get_preset: '读取预设', list_tasks: '查找任务', get_task: '读取任务', list_schedules: '查看自动刮削规则' };
@@ -394,6 +395,9 @@
         <label>API KEY<input id="ai-key" type="password" autocomplete="new-password" maxlength="4096" placeholder="留空保留已保存的密钥"></label>
         <label class="check-label"><input id="ai-clear-key" type="checkbox">清除已保存的 API KEY</label>
         <label>请求超时（秒）<input id="ai-timeout" type="number" min="10" max="120" value="60" required></label>
+        <label>预设提示词<textarea id="ai-system-prompt" rows="10" maxlength="12000" placeholder="留空使用默认提示词"></textarea></label>
+        <small class="muted">控制 AI 对话的回复方式。默认先给结论、合并同类问题，再给处理建议；需要详情时可在对话中要求展开。保存后从下一条消息开始生效，不影响自动刮削的资料提取规则。</small>
+        <div class="form-actions"><button class="button secondary" id="ai-reset-prompt" type="button">恢复默认提示词</button></div>
         <div class="form-actions"><button class="button secondary" id="ai-test" type="button">测试连接</button><button class="button primary" type="submit">保存 AI 配置</button></div>
         <p id="ai-settings-message" class="muted" role="status"></p>
       </form>
@@ -409,6 +413,10 @@
       await submitSettings(false);
     });
     $('#ai-test').addEventListener('click', () => submitSettings(true));
+    $('#ai-reset-prompt').addEventListener('click', () => {
+      $('#ai-system-prompt').value = defaultSystemPrompt;
+      $('#ai-settings-message').textContent = '已填入默认提示词，点击“保存 AI 配置”后生效。';
+    });
     $('#ai-add-skill').addEventListener('click', () => {
       $('#ai-skill-source').value = '---\nname: my-skill\ndescription: 描述这个技能的用途和触发场景\n---\n\n# 技能说明\n\n填写 AI 应遵循的处理方式。\n';
       $('#ai-skill-form').hidden = false;
@@ -473,6 +481,8 @@
     $('#ai-base-url').value = settings.base_url;
     $('#ai-model').value = settings.model;
     $('#ai-timeout').value = settings.timeout;
+    defaultSystemPrompt = settings.default_system_prompt || '';
+    $('#ai-system-prompt').value = settings.system_prompt || defaultSystemPrompt;
     $('#ai-key').value = '';
     $('#ai-clear-key').checked = false;
     $('#ai-settings-message').textContent = settings.has_api_key ? '已保存 API KEY，留空即可保留。' : '尚未保存 API KEY。';
@@ -481,7 +491,7 @@
   async function submitSettings(test) {
     const form = $('#ai-settings-form');
     if (!form.reportValidity()) return;
-    const payload = { enabled: $('#ai-enabled').checked, provider: $('#ai-provider').value, base_url: $('#ai-base-url').value.trim(), model: $('#ai-model').value.trim(), api_key: $('#ai-key').value || null, clear_api_key: $('#ai-clear-key').checked, timeout: Number($('#ai-timeout').value) };
+    const payload = { enabled: $('#ai-enabled').checked, provider: $('#ai-provider').value, base_url: $('#ai-base-url').value.trim(), model: $('#ai-model').value.trim(), api_key: $('#ai-key').value || null, clear_api_key: $('#ai-clear-key').checked, timeout: Number($('#ai-timeout').value), system_prompt: $('#ai-system-prompt').value.trim() };
     const message = $('#ai-settings-message');
     form.querySelectorAll('button').forEach(button => { button.disabled = true; });
     message.textContent = test ? '正在连接 LLM 并验证工具调用…' : '正在保存…';

@@ -70,6 +70,45 @@ class AITests(unittest.TestCase):
             self.assertEqual(self.client.get(path).status_code, 403)
         self.assertEqual(self.client.post("/api/ai/chat", json={"message": "test"}).status_code, 403)
 
+    def test_prompt_defaults_for_legacy_settings_and_round_trip(self):
+        storage._write_json(storage.DATA_DIR / 'ai-settings.json', self.config)
+        settings = self.client.get('/api/ai/settings').json()
+        self.assertEqual(settings['system_prompt'], ai.DEFAULT_SYSTEM_PROMPT)
+        self.assertEqual(settings['default_system_prompt'], ai.DEFAULT_SYSTEM_PROMPT)
+        custom = '先说最重要的原因，再给一条处理建议。'
+        result = self.client.put('/api/ai/settings', json=self.config | {'system_prompt': custom}).json()
+        self.assertEqual(result['system_prompt'], custom)
+        self.assertEqual(self.client.get('/api/ai/settings').json()['system_prompt'], custom)
+        saved = storage._read_json(storage.DATA_DIR / 'ai-settings.json', {})
+        self.assertEqual(saved['system_prompt'], custom)
+        self.assertNotIn('default_system_prompt', saved)
+        self.client.put('/api/ai/settings', json=self.config | {'model': 'updated-model'})
+        self.assertEqual(ai.settings(True)['system_prompt'], custom)
+        self.client.put('/api/ai/settings', json=self.config | {'system_prompt': '  '})
+        self.assertEqual(ai.settings(True)['system_prompt'], ai.DEFAULT_SYSTEM_PROMPT)
+        self.assertEqual(self.client.put('/api/ai/settings', json=self.config | {'system_prompt': '字' * 12001}).status_code, 422)
+
+    def test_prompt_reaches_model_and_existing_conversation_uses_new_setting(self):
+        conversation = self.conversation('分析失败原因')
+        with patch.object(ai, 'complete', return_value={'role': 'assistant', 'content': '已检查'}) as complete:
+            ai_router._run(conversation, ai.settings(True))
+        prompt = complete.call_args.args[1][0]['content']
+        self.assertIn(ai.DEFAULT_SYSTEM_PROMPT, prompt)
+        self.assertIn('必须如实告诉用户点击确认', prompt)
+        custom = '请优先描述分类匹配问题。'
+        self.client.put('/api/ai/settings', json=self.config | {'system_prompt': custom})
+        with patch.object(ai_router, '_start_analysis') as start:
+            response = self.client.post('/api/ai/chat', json={'conversation_id': conversation['id'], 'message': '继续分析'})
+        self.assertEqual(response.status_code, 202)
+        pending, config = start.call_args.args
+        self.assertEqual(config['system_prompt'], custom)
+        with patch.object(ai, 'complete', return_value={'role': 'assistant', 'content': '已分析'}) as complete:
+            ai_router._run(pending, config)
+        prompt = complete.call_args.args[1][0]['content']
+        self.assertIn(custom, prompt)
+        self.assertNotIn(ai.DEFAULT_SYSTEM_PROMPT, prompt)
+        self.assertIn('必须如实告诉用户点击确认', prompt)
+
     def test_action_is_not_executed_until_confirmed_and_only_once(self):
         conversation = self.conversation()
         with patch.object(self.server, "start_task", return_value={"count": 1, "scan": True}) as create:
