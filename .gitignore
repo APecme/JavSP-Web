@@ -12,6 +12,9 @@ data/config.yml
 data/task-config/
 data/task-covers/
 data/task-logs/
+data/ai-settings.json
+data/ai-skills.json
+data/ai-conversations/
 data/RELEASE_NOTES_*.md
 data/*.tmp
 video/

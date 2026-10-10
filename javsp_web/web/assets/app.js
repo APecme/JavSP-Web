@@ -360,6 +360,7 @@ function renderConfigFields() {
     const paths = [];
     const walk = (value, path) => {
       if (!pathMatchesTab(path, tab.prefixes)) return;
+      if (tab.section === 'crawler' && ['ai_enabled', 'ai_fallback_only'].includes(path) && !state.aiEnabled) return;
       if (tab.section === 'scanner' && (path === 'input_directory' || (tab.id === 'scanner' && path === 'media_types'))) return;
       if (tab.section === 'translator' && path === 'engine') {
         paths.push([path, value]);
@@ -374,6 +375,11 @@ function renderConfigFields() {
       const complex = Array.isArray(value) || (value && typeof value === 'object');
       const boolean = typeof value === 'boolean';
       const sourcePath = `${tab.section}.${path}`;
+      if (sourcePath === 'crawler.ai_enabled' || sourcePath === 'crawler.ai_fallback_only') {
+        const label = path === 'ai_enabled' ? '启用 AI 刮削' : '当所有爬虫刮削失败时启用 AI 刮削';
+        const help = path === 'ai_enabled' ? '使用系统设置中的 LLM 获取影片资料。' : '勾选时先运行爬虫，全部失败或缺少必需字段时再由 AI 补充；取消勾选则直接使用 AI。';
+        return `<label class="config-field"><span class="check-label"><input type="checkbox" class="config-field-input" data-config-path="${sourcePath}"${value ? ' checked' : ''}>${label}</span><small class="config-description">${help}</small></label>`;
+      }
       const placeholder = sourcePath === 'network.proxy_server' ? 'http://127.0.0.1:7890 或 socks5://127.0.0.1:7890' : '';
       const inputValue = value === null || value === undefined ? '' : (sourcePath === 'scanner.media_types' ? JSON.stringify(value, null, 2) : displayFieldValue(value));
       const control = sourcePath === 'crawler.selection' ? crawlerConfigMarkup(value) : (sourcePath === 'translator.engine' ? translatorEngineControl(value) : (boolean ? `<select class="config-field-input" data-config-path="${sourcePath}"><option value="true"${value ? ' selected' : ''}>是</option><option value="false"${value ? '' : ' selected'}>否</option></select>` : (complex ? `<textarea class="config-field-input" data-config-path="${sourcePath}" spellcheck="false">${escapeHtml(inputValue)}</textarea>` : `<input class="config-field-input" data-config-path="${sourcePath}" value="${escapeHtml(inputValue)}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ''}>`)));
@@ -408,7 +414,7 @@ function readConfigFields() {
   document.querySelectorAll('.config-field-input').forEach((control) => {
     if (!control.dataset.configPath) return;
     const [section, ...path] = control.dataset.configPath.split('.');
-    setPathValue(values, `${section}.${path.join('.')}`, control.value);
+    setPathValue(values, `${section}.${path.join('.')}`, control.type === 'checkbox' ? control.checked : control.value);
   });
   document.querySelectorAll('.config-array[data-config-path]').forEach((control) => {
     const items = [...control.querySelectorAll('[data-array-value]')]
@@ -525,15 +531,16 @@ async function loadCrawlerSource(name) {
 const apiRequests = new Map();
 const taskResponses = new Map();
 async function api(path, options = {}) {
+  const { timeoutMs, ...requestOptions } = options;
   const method = String(options.method || 'GET').toUpperCase();
   if (method === 'GET' && apiRequests.has(path)) return apiRequests.get(path);
   const request = (async () => {
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), method === 'GET' ? 20000 : 90000);
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs ?? (method === 'GET' ? 20000 : 90000));
     try {
       const cached = method === 'GET' && path.startsWith('/api/tasks?') ? taskResponses.get(path) : null;
       const conditional = cached ? { 'If-None-Match': cached.etag } : {};
-      const response = await fetch(path, { credentials: 'include', ...options, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...conditional, ...(options.headers || {}) } });
+      const response = await fetch(path, { credentials: 'include', ...requestOptions, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...conditional, ...(options.headers || {}) } });
       if (response.status === 401) { location.href = '/login'; throw new Error('登录已过期'); }
       if (response.status === 304 && cached) return cached.data;
       const data = await response.json();
@@ -1420,10 +1427,12 @@ function newPreset() {
 
 async function loadPresets() {
   try {
+    const runtime = await api('/api/runtime');
+    state.aiEnabled = runtime.ai_enabled === true;
     state.presets = await api('/api/presets');
     if ($('#auto-scrape-rule-list')) renderAutoScrapeRules(state.autoScrapeRules);
     if (!state.editingPreset || !state.presets.some((item) => item.id === state.editingPreset)) editPreset(state.presets[0]?.id);
-    else renderPresetList();
+    else { renderPresetList(); renderConfigFields(); }
   } catch (error) { $('#preset-message').textContent = error.message; }
 }
 
@@ -2545,7 +2554,7 @@ function showView(view) {
   document.documentElement.removeAttribute('data-initial-view');
   document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
-  const title = { overview: '概览', scrape: '手动刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', 'crawler-config': '爬虫配置', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
+  const title = { overview: '概览', scrape: '手动刮削', 'ai-scrape': 'AI 刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', 'crawler-config': '爬虫配置', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
   $('#section-title').textContent = title;
   $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' || view === 'crawler-config' ? '配置' : '工作区';
   if (view === 'overview' || view === 'scrape') { state.tasks = []; state.tasksSignature = ''; if (view === 'scrape') ensureTaskFilters(); loadTasks(); }
@@ -2553,6 +2562,8 @@ function showView(view) {
   if (view === 'auto-scrape') { loadPresets(); loadCrawlerNames(); loadAutoScrapeSchedules(); }
   if (view === 'downloads') { loadDownloadManagement(); loadDownloads(); }
   if (view === 'crawler-config') loadCrawlerConfig();
+  if (view === 'ai-scrape') window.JavspAI?.load();
+  if (view === 'settings') window.JavspAI?.loadSettings();
   if (view === 'presets') { loadPresets(); loadCrawlerNames(); }
   if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); loadCookieCloud(); loadUpdateSettings(); }
   localStorage.setItem('javsp-web.active-view', view);
@@ -3349,8 +3360,8 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     state.user = await api('/api/auth/me');
     restoreUpdateOverlay();
     $('#current-user').textContent = state.user.username;
-    if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); }
-    if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config'].includes(savedView))) showView(savedView);
+    if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); $('#ai-scrape-nav').remove(); }
+    if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config', 'ai-scrape'].includes(savedView))) showView(savedView);
     else showView('overview');
     api('/api/runtime').then(checkForAppUpdate).catch(console.error);
     scheduleGitHubStarInvite();

@@ -1140,7 +1140,8 @@ def _run_task(task: dict) -> None:
     _persist(task)
     command = [sys.executable, "--run-javsp", "-c", task["config_path"]] if IS_FROZEN else [sys.executable, "-m", "javsp", "-c", task["config_path"]]
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(CUSTOM_CRAWLERS_DIR) + os.pathsep + str(VENDOR_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = os.pathsep.join((str(CUSTOM_CRAWLERS_DIR), str(VENDOR_DIR), str(Path(__file__).resolve().parent.parent), env.get("PYTHONPATH", "")))
+    env["JAVSP_WEB_DATA_DIR"] = str(DATA_DIR.resolve())
     # The embedded worker reports structured events; terminal tqdm redraws are disabled.
     env["JAVSP_PROGRESS"] = "1"
     cookiecloud_file: Path | None = None

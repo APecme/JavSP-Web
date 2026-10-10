@@ -10,6 +10,7 @@ import sys
 import subprocess
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
 
@@ -21,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'vendor' / 'JavSP'))
 
 from javsp_web.task_logs import build_log_entries, log_text
-from javsp.datatype import MovieInfo
+from javsp.datatype import Movie, MovieInfo
 from javsp.web import fc2, javmenu
 from javsp.web.mirrors import get_with_mirror_fallback
 from javsp.web.exceptions import (MovieNotFoundError, MovieDuplicateError, SiteBlocked,
@@ -66,8 +67,13 @@ class LogTests(unittest.TestCase):
         self.assertEqual(_process_failure_reason(['影片刮削失败: extrafanart 已存在']), 'extrafanart 已存在')
 
     def test_file_exists_failure_is_actionable(self):
-        rows = build_log_entries([], 'failed', '[WinError 183] 文件已存在')
-        self.assertIn('extrafanart', '\n'.join(log_text(rows)))
+        for error in ('[WinError 183] 文件已存在', 'FileExistsError: extrafanart', '[Errno 17] File exists'):
+            with self.subTest(error=error):
+                rows = build_log_entries([], 'failed', error)
+                text = '\n'.join(log_text(rows))
+                self.assertIn('整理输出目录', text)
+                self.assertIn('剧照', text)
+                self.assertNotIn('extrafanart', text)
 
     def test_worker_keeps_traceback_in_rotating_diagnostic_file(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -149,6 +155,58 @@ class LogTests(unittest.TestCase):
         rows = build_log_entries(lines)
         self.assertEqual(len([r for r in rows if r['group'] == 'sources']), 2)
         self.assertEqual(sum('磁盘空间不足' in r['message'] for r in rows), 1)
+
+
+class SummaryFailureTests(unittest.TestCase):
+    def run_failed_movie(self, title, cover):
+        movie = Movie('FNS-262')
+        info = MovieInfo('FNS-262')
+        info.title, info.cover = title, cover
+        config = SimpleNamespace(
+            crawler=SimpleNamespace(required_keys=['cover', 'title'], selection={'normal': ['t66y']},
+                                    respect_site_avid=False, normalize_actress_name=False),
+            summarizer=SimpleNamespace(title=SimpleNamespace(remove_trailing_actor_name=False),
+                                       extra_fanarts=SimpleNamespace(enabled=False)),
+            translator=SimpleNamespace(engine='google'),
+        )
+        events = []
+        translate = Mock(return_value=False)
+        namespace = dict(Movie=Movie, MovieInfo=MovieInfo, Dict=dict, Cfg=lambda: config,
+                         os=os, logger=logging.getLogger('summary-test'),
+                         tqdm=lambda *args, **kwargs: args[0] if args else Mock(),
+                         progress_enabled=lambda: True,
+                         progress_event=lambda stage, **values: events.append((stage, values)),
+                         fallback_media_type_id=lambda: 'normal',
+                         parallel_crawler=lambda *args: {'t66y': info}, translate_movie_info=translate)
+        tree = ast.parse((ROOT / 'vendor/JavSP/javsp/__main__.py').read_text(encoding='utf-8'))
+        functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                     and node.name in ('info_summary', 'RunNormalMode')]
+        exec(compile(ast.Module(body=functions, type_ignores=[]), 'summary-test', 'exec'), namespace)
+        with self.assertRaises(RuntimeError):
+            namespace['RunNormalMode']([movie])
+        error = next(values['error'] for stage, values in events
+                     if stage == 'movie' and values.get('status') == 'failed')
+        rows = build_log_entries([event(stage, **values) for stage, values in events], 'failed', error)
+        return '\n'.join(log_text(rows)), translate
+
+    def test_missing_cover_reports_field_and_does_not_translate(self):
+        text, translate = self.run_failed_movie('演示标题', None)
+        self.assertIn('必需字段：封面', text)
+        self.assertNotIn('资料汇总完成', text)
+        self.assertNotIn('步骤错误', text)
+        translate.assert_not_called()
+
+    def test_all_missing_fields_are_reported(self):
+        text, translate = self.run_failed_movie(None, None)
+        self.assertIn('必需字段：封面、标题', text)
+        translate.assert_not_called()
+
+    def test_translation_failure_is_distinct_from_missing_fields(self):
+        text, translate = self.run_failed_movie('演示标题', 'https://example.test/cover.jpg')
+        self.assertIn('资料汇总完成', text)
+        self.assertIn('影片信息翻译失败', text)
+        self.assertNotIn('步骤错误', text)
+        translate.assert_called_once()
 
 
 class ParserTests(unittest.TestCase):

@@ -325,10 +325,18 @@ def info_summary(movie: Movie, all_info: Dict[str, MovieInfo]):
             }
 
     # 检查是否所有必需的字段都已经获得了值
-    for attr in Cfg().crawler.required_keys:
-        if not getattr(final_info, attr, None):
-            logger.error(f"所有抓取器均未获取到字段: '{attr}'，抓取失败")
-            return False
+    missing = [attr for attr in Cfg().crawler.required_keys if not getattr(final_info, attr, None)]
+    if missing:
+        labels = {
+            'dvdid': '番号', 'cid': 'CID', 'url': 'URL', 'plot': '剧情',
+            'cover': '封面', 'big_cover': '高清封面', 'genre': '类型', 'score': '评分',
+            'title': '标题', 'ori_title': '原始标题', 'magnet': '下载链接', 'serial': '系列',
+            'actress': '演员', 'director': '导演', 'duration': '时长', 'producer': '制作商',
+            'publisher': '发行商', 'publish_date': '发行日期', 'preview_pics': '剧照',
+            'preview_video': '预告片',
+        }
+        fields = '、'.join(labels.get(attr, attr) for attr in missing)
+        raise ValueError(f'资料汇总失败：所有数据源均未取得必需字段：{fields}。请检查数据源及预设中的“抓取成功必需字段”')
     # 必需字段均已获得了值：将最终的数据附加到movie
     movie.info = final_info
     return True
@@ -526,7 +534,24 @@ def RunNormalMode(all_movies):
             inner_bar.set_description(f'启动并发任务')
             crawler_total = len(Cfg().crawler.selection.get(movie.data_src, Cfg().crawler.selection.get(fallback_media_type_id(), [])))
             progress_event('concurrent', done=0, total=crawler_total)
-            all_info = parallel_crawler(movie, inner_bar)
+            ai_enabled = getattr(Cfg().crawler, 'ai_enabled', False)
+            ai_fallback = getattr(Cfg().crawler, 'ai_fallback_only', True)
+            if ai_enabled:
+                from javsp_web.ai_scrape import enabled as ai_available, scrape_movie as ai_scrape_movie
+                ai_enabled = ai_available()
+            all_info = {} if ai_enabled and not ai_fallback else parallel_crawler(movie, inner_bar)
+            if ai_enabled and (not ai_fallback or not all_info or any(
+                not any(getattr(info, field, None) for info in all_info.values())
+                for field in Cfg().crawler.required_keys
+            )):
+                progress_event('crawler', name='AI 刮削', status='running')
+                try:
+                    ai_info = ai_scrape_movie(movie, read_proxy())
+                    all_info['ai'] = ai_info
+                    progress_event('crawler', name='AI 刮削', status='success')
+                except Exception as exc:
+                    progress_event('crawler', name='AI 刮削', status='failed', reason=str(exc))
+                    raise ValueError(f'AI 刮削失败：{exc}') from exc
             progress_event('concurrent', done=crawler_total, total=crawler_total)
             msg = f'为其配置的{crawler_total}个抓取器均未获取到影片信息'
             check_step(all_info, msg)
@@ -534,13 +559,13 @@ def RunNormalMode(all_movies):
             inner_bar.set_description('汇总数据')
             progress_event('summary', done=0, total=1)
             has_required_keys = info_summary(movie, all_info)
+            check_step(has_required_keys, '资料汇总失败：缺少抓取成功必需字段')
             progress_event('summary', done=1, total=1)
-            check_step(has_required_keys)
 
             if Cfg().translator.engine:
                 inner_bar.set_description('翻译影片信息')
                 success = translate_movie_info(movie.info)
-                check_step(success)
+                check_step(success, '影片信息翻译失败，请检查预设中的翻译服务配置及网络连接')
 
             progress_event(
                 'metadata',

@@ -176,6 +176,8 @@ class UseJavDBCover(str, Enum):
     fallback = "fallback"
 
 class Crawler(BaseConfig):
+    ai_enabled: bool = False
+    ai_fallback_only: bool = True
     selection: Dict[str, List[str]]
     required_keys: list[MovieInfoField]
     hardworking: bool

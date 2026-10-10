@@ -4,6 +4,7 @@ from PyInstaller.utils.hooks import collect_data_files
 root = Path(SPECPATH)
 datas = [(str(root / "javsp_web" / "web"), "javsp_web/web"), (str(root / "vendor" / "JavSP"), "vendor/JavSP")]
 datas += collect_data_files("pystray")
+datas += [(str(root / "javsp_web" / "skills"), "javsp_web/skills")]
 
 a = Analysis(["launcher.py"], pathex=[str(root), str(root / "vendor" / "JavSP")], datas=datas, hiddenimports=[
     "uvicorn", "uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",

@@ -86,6 +86,8 @@ start_artwork_path_repair()
 updater.start_scheduler()
 app = FastAPI(title="JavSP WEB", version=__version__)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+from .ai_router import router as ai_router
+app.include_router(ai_router)
 WEB_DIR = Path(__file__).resolve().parent / "web"
 ASSET_VERSION = hashlib.sha256(b''.join(path.read_bytes() for path in sorted((WEB_DIR / 'assets').iterdir()) if path.is_file())).hexdigest()[:16]
 RELEASE_LABEL = os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").strip()
@@ -308,7 +310,8 @@ class UpdateSettingsBody(BaseModel):
 
 @app.get("/api/runtime")
 def runtime(_: dict = Depends(current_user)) -> dict:
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name()}
+    from .ai import settings as ai_settings
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name(), "ai_enabled": ai_settings()["enabled"]}
 
 
 @app.get("/api/update")

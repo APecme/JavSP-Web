@@ -78,6 +78,8 @@ network:
 
 ################################
 crawler:
+  ai_enabled: false
+  ai_fallback_only: true
   # 要使用的爬虫列表（汇总数据时从前到后进行）
   # airav avsox avwiki fanza fc2 fc2fan javbus javdb javlib javmenu jav321 mgstage prestige arzon arzon_iv
   selection:
