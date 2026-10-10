@@ -19,9 +19,9 @@
 <aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-maintenance.html" aria-current="page">维护与排错</a><a class="doc-chapter-link" href="#updates">更新、账号与备份</a><a class="doc-chapter-link" href="#trouble">问题排查</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
 <article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 05</p><h1>维护与排错</h1><p class="doc-lede">管理更新、账号和备份，并按任务失败阶段定位常见问题。</p></header>
 <section id="updates"><h2>更新、账号与备份</h2>
-        <h3>Docker 网页更新</h3><ol><li>进入“系统设置 → 软件更新”，查看当前版本、更新通道与检查结果。</li><li>点击“检测更新”，发现新版本后点击“立即更新”。更新时页面显示遮罩与阶段状态，服务重启期间短暂断开属于正常过程；恢复后核对版本和结果。</li><li>按需开启自动检测（默认间隔 24 小时）及自动更新。自动更新默认关闭；有排队、刮削或图片任务时需等待任务结束。</li></ol>
-        <p><b>加入体验计划：</b>勾选后立即保存并尝试下载、应用 <code>bata</code> 程序包，无需再点击安装。使用 <code>bata</code> 镜像时保持加入体验计划。体验通道检查体验版本，正式通道检查正式版本；安装失败应阅读错误原因，不能只凭复选框判断已完成升级。</p>
-        <p>网页更新替换应用程序并重启应用。新程序启动验证失败时会尝试回退，页面显示实际结果；不要在更新中删除数据目录。若更新提示需要新镜像或镜像依赖发生变化，在 Compose 所在目录执行：</p>
+        <h3>Docker 网页更新</h3><ol><li>进入“系统设置 → 软件更新”，查看当前版本、更新通道与检查结果。</li><li>点击“检测更新”，发现新版本后点击“立即更新”。等待页面提示更新完成。期间服务会短暂断开，恢复后检查当前版本是否已更新。</li><li>按需开启自动检测（默认间隔 24 小时）及自动更新。自动更新默认关闭；有排队、刮削或图片任务时需等待任务结束。</li></ol>
+        <p><b>加入体验计划：</b>想提前试用新功能，可勾选“加入体验计划”，程序会自动开始安装 <code>bata</code> 体验版。之后会继续接收体验版更新。使用 <code>bata</code> 镜像部署时，此项会保持勾选。</p>
+        <p>更新失败时先查看页面提示。若提示已回退，说明程序已恢复旧版本，可按错误信息排查后重试。需要更新 Docker 镜像时，在 Compose 所在目录执行：</p>
         <div class="doc-command doc-command-multiline"><code>docker compose pull<br>docker compose up -d</code><button class="copy-button" data-copy="docker compose pull&#10;docker compose up -d">复制命令</button></div>
         <p>Windows EXE 与源码运行仅支持检测版本。EXE 退出后手动替换程序，源码按项目安装方式更新代码和依赖；都应保留原数据目录。</p>
         <h3>账号与备份</h3><p>管理员在“用户管理”添加、编辑或删除账号。管理员可管理系统设置、自动刮削、爬虫和 AI；操作员没有这些管理入口。首次登录应更改默认密码。</p>
@@ -29,16 +29,16 @@
       </section>
 <section id="trouble"><h2>问题排查：从最终失败阶段开始</h2>
         <div class="doc-table-wrap"><table><thead><tr><th>现象</th><th>先检查什么</th></tr></thead><tbody>
-          <tr><td>没有找到符合最小大小的影片 / 没有创建任务</td><td>输入路径在服务端是否可读；扩展名、232MiB 默认门槛、STRM 选项、分类过滤及跳过 NFO。空扫描不代表爬虫故障。</td></tr>
+          <tr><td>没有找到符合最小大小的影片 / 没有创建任务</td><td>先确认程序能访问输入目录，再检查文件扩展名、最小大小（默认 232MiB）、STRM 选项，以及是否被分类或 NFO 规则跳过。</td></tr>
           <tr><td>分 P 编号不明确或重复</td><td>同番号文件的分段标记是否唯一；是否混入广告，或目录名导致无关视频被识别为同一番号。先检查分类过滤。</td></tr>
           <tr><td>所有数据源未找到资料</td><td>识别后的番号、命中分类及该分类来源。用爬虫测试一个来源，再判断未收录、访问失败还是解析失败。</td></tr>
-          <tr><td>缺少标题、封面等必需字段</td><td>资料是否完整、来源是否有效；不要为了显示成功而盲目删除必需字段要求。需要 AI 兜底时检查系统和预设两处开关。</td></tr>
+          <tr><td>缺少标题、封面等必需字段</td><td>查看数据源日志，确认哪些资料没有取得，再测试其他来源。需要让 AI 接着尝试时，检查系统和预设中的 AI 开关。</td></tr>
           <tr><td>整理目标中的文件或目录已存在</td><td>核对目标影片、NFO、封面和“剧照”目录的现有内容，区分已入库和失败残留。重抓资料或删除任务记录不能消除文件冲突。</td></tr>
           <tr><td>403、超时、证书错误</td><td>预设代理、镜像域名、服务端出口、系统时间和证书信任；需要登录的站点再检查 Cookie。不要关闭 HTTPS 校验。</td></tr>
           <tr><td>下载完成但未刮削</td><td>规则是否启用、标签/分类是否命中、路径映射是否正确。查看下载自动刮削记录，不要只看下载器连接状态。</td></tr>
           <tr><td>AI 连接或搜索失败</td><td>先分别测试模型和搜索；核对协议、模型 ID、工具调用支持及上下文限制。详见 AI 章节。</td></tr>
         </tbody></table></div>
-        <h3>提供能定位问题的日志</h3><p>先打开失败任务详情，记录任务 ID、最终错误与相关阶段日志。完整调试日志在 <code>data/task-logs/&lt;任务ID&gt;.log</code>，每个任务最多保留两份 2MiB 日志。容器启动问题另附 <code>docker compose logs --tail 100 javsp-web</code>。</p>
+        <h3>提供日志以便排查</h3><p>打开失败任务详情，记录任务 ID 和错误信息。需要完整日志时，到 <code>data/task-logs/&lt;任务ID&gt;.log</code> 查找。如果容器无法启动，可运行 <code>docker compose logs --tail 100 javsp-web</code> 查看原因。</p>
         <p>提交 Issue 时说明当前版本、Docker/EXE/源码部署方式、复现步骤、预设中相关选项和脱敏日志。移除密钥、Cookie、密码与私人地址；不要把完整数据目录直接上传。</p>
         <a class="button button-primary" href="https://github.com/APecme/JavSP-Web/issues" target="_blank" rel="noreferrer">前往 Issue <span>↗</span></a>
       </section>

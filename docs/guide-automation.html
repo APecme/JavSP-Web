@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="用定时规则和下载完成事件触发整理，再连接媒体库与 CookieCloud。">
+  <meta name="description" content="设置定时整理、下载完成后自动刮削，以及 Emby / Jellyfin 媒体库同步。">
   <meta name="theme-color" content="#0b1020">
   <title>自动化与集成 | JavSP WEB 教程</title>
   <link rel="icon" href="assets/javsp-logo.png" type="image/png">
@@ -17,12 +17,12 @@
   <header class="site-header"><a class="brand" href="index.html" aria-label="JavSP WEB 首页"><img src="assets/javsp-logo.png" alt=""><span>JavSP <b>WEB</b></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button><nav id="site-nav" class="site-nav" aria-label="主导航"><a href="index.html">首页</a><a class="is-current" href="docs.html">文档</a><a href="demo.html">示例站点</a><a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav></header>
   <main class="docs-shell page-width">
 <aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-automation.html" aria-current="page">自动化与集成</a><a class="doc-chapter-link" href="#automation">定时自动刮削</a><a class="doc-chapter-link" href="#downloads">下载器与路径映射</a><a class="doc-chapter-link" href="#media">媒体库与 CookieCloud</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
-<article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 04</p><h1>自动化与集成</h1><p class="doc-lede">用定时规则和下载完成事件触发整理，再连接媒体库与 CookieCloud。</p></header>
+<article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 04</p><h1>自动化与集成</h1><p class="doc-lede">设置定时整理、下载完成后自动刮削，以及 Emby / Jellyfin 媒体库同步。</p></header>
 <section id="automation"><h2>定时自动刮削：固定时间扫描文件夹</h2>
-        <ol><li>先在“手动刮削”验证目标目录与预设，确认输出正确。</li><li>进入“自动刮削 → 添加定时规则”，填写名称、Cron 时间、服务端文件夹路径并选择预设。</li><li>勾选“启用此规则”后保存，检查规则显示的“下次执行”。时间按应用时区计算，推荐部署时设为 <code>Asia/Shanghai</code>。</li><li>到执行时间后，查看“最近结果”和执行记录，再到任务队列查看生成的影片任务。规则保存在数据目录中，重启后保留。</li></ol>
+        <ol><li>先在“手动刮削”验证目标目录与预设，确认输出正确。</li><li>进入“自动刮削 → 添加定时规则”，填写名称、Cron 时间、服务端文件夹路径并选择预设。</li><li>勾选“启用此规则”后保存，检查规则显示的“下次执行”。时间按应用时区计算，推荐部署时设为 <code>Asia/Shanghai</code>。</li><li>到执行时间后，查看“最近结果”和执行记录，再到任务队列查看生成的影片任务。重启程序后无需重新添加规则。</li></ol>
         <div class="doc-table-wrap"><table><thead><tr><th>五段 Cron（分 时 日 月 周）</th><th>执行时间</th></tr></thead><tbody><tr><td><code>0 2 * * *</code></td><td>每天 02:00</td></tr><tr><td><code>0 */6 * * *</code></td><td>每天 00:00、06:00、12:00、18:00</td></tr><tr><td><code>30 3 * * 1</code></td><td>每周一 03:30</td></tr></tbody></table></div>
-        <figure class="doc-figure"><a href="assets/guide/automation.webp" target="_blank"><img src="assets/guide/automation.webp" width="1440" height="1050" loading="lazy" alt="定时规则设置：Cron、文件夹、预设与启用开关"></a><figcaption>定时规则设置入口；静态示例不会实际运行计划。</figcaption></figure>
-        <div class="doc-callout"><span>同一规则不会重叠执行</span><p>上一批任务仍在排队、运行或重试图片时，下一次触发会跳过。没有符合条件的新文件属于空扫描结果，不应反复创建失败任务。</p></div>
+        <figure class="doc-figure"><a href="assets/guide/automation.webp" target="_blank"><img src="assets/guide/automation.webp" width="1440" height="1050" loading="lazy" alt="定时规则设置：Cron、文件夹、预设与启用开关"></a><figcaption>填写执行时间、影片目录和预设，再保存规则（演示数据）。</figcaption></figure>
+        <div class="doc-callout"><span>同一规则不会重叠执行</span><p>上一批任务仍在排队、运行或重试图片时，下一次触发会跳过。没有新文件时无需处理，等待下一次扫描即可。</p></div>
         <p>要暂停规则，编辑后取消启用并保存。删除规则不会删除已生成的任务或已整理文件。避免让多个规则反复扫描同一输入目录；NFO 跳过、大小限制和分类过滤仍以选中的预设为准。</p>
       </section>
 <section id="downloads"><h2>下载器与路径映射：下载完成后自动整理</h2>
@@ -32,13 +32,13 @@
 源路径： /downloads
 目标路径：/video/待整理
 应用读取：/video/待整理/DEMO-001/DEMO-001.mkv</code></pre>
-        <p>映射只转换路径，不会创建挂载或复制文件。需要先把真实目录挂载到 JavSP WEB 容器。使用路径检查入口核对转换结果与可访问性；“下载器已连接”只证明 API 可用，不能证明影片可读。</p>
+        <p>先把下载目录挂载到 JavSP WEB 容器，再填写路径映射。保存后使用路径检查功能，确认程序能找到下载的文件。如果下载器能连接但影片无法读取，优先检查挂载目录和映射路径。</p>
         <h3>限速、做种与删除</h3><p>限速按每个已接管种子单独应用，单位为 KiB/s；分享率、做种分钟和非活跃分钟也可配置。<code>-1</code> 表示该项不限制。开启“达到限制后自动删种（保留文件）”后，已完成种子达到任一有效阈值就会删种，不删除影片文件。默认先关闭自动删种，确认范围后再启用；整理时移动文件会影响原下载路径，仍需做种时先核对硬链接方案。</p>
         <p>下载完成不等于刮削成功。查看自动刮削执行记录，区分规则未命中、路径不可达、任务已创建和刮削失败，再处理对应环节。</p>
       </section>
 <section id="media"><h2>媒体库与 CookieCloud</h2>
         <h3>连接 Emby / Jellyfin</h3><ol><li>在媒体服务器中创建 API 密钥，在“系统设置 → 媒体服务器”选择类型并填写服务地址。</li><li>点击“验证并读取媒体库”，勾选需要管理的媒体库后保存。</li><li>先使用“同步媒体库”核对连通性，再按需开启“刮削任务完成后自动扫描媒体库”，设置自动扫描延迟。</li><li>需要从任务进入播放页面时填写浏览器可访问的“外部播放地址”。内部 API 地址与外部播放地址可不同；影片仍须已被媒体服务器识别入库。</li></ol>
-        <p>媒体服务器也需要挂载整理后的输出目录。同步触发扫描，不会替媒体服务器建立目录挂载；NFO、图片写入成功后若资料未更新，先核对媒体库路径、扫描状态及媒体服务器的元数据读取策略。</p>
+        <p>将整理后的输出目录添加到 Emby / Jellyfin 媒体库；容器部署时也要挂载该目录。若同步后仍看不到影片，检查媒体库路径是否正确、扫描是否完成，以及是否启用了本地 NFO 和图片读取。</p>
         <h3>同步站点登录 Cookie</h3><ol><li>先配置自己的 CookieCloud 服务和浏览器扩展，在浏览器登录所需站点并同步。</li><li>展开“系统设置 → CookieCloud”，填写服务地址、UUID、密码；加密类型先选“自动识别”，不匹配时再选扩展使用的类型。</li><li>点击“测试同步”，成功后启用并保存。任务启动时同步 Cookie，供支持该 Cookie 的站点使用。</li></ol>
         <p>密码留空保留已保存值；勾选清除才会删除。Cookie 过期时需重新登录并同步。测试成功只说明能读取同步数据，站点仍可能因权限、出口或验证要求拒绝访问。</p>
       </section>

@@ -19,48 +19,48 @@
 <aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-ai.html" aria-current="page">AI 助手</a><a class="doc-chapter-link" href="#ai">模型接入与对话</a><a class="doc-chapter-link" href="#ai-search">联网搜索</a><a class="doc-chapter-link" href="#ai-context">上下文与生成</a><a class="doc-chapter-link" href="#ai-skills">提示词与 Skills</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
 <article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 03</p><h1>AI 助手</h1><p class="doc-lede">配置模型和联网搜索，管理对话、上下文、提示词与 Skills，再按需启用 AI 刮削。</p></header>
 <section id="ai">
-        <p class="eyebrow">AI / QUICK START</p><h2>连接模型，开始第一段对话。</h2>
-        <p>管理员进入“系统设置 → AI 接入”。整个卡片与其中的模型、搜索、上下文、提示词和 Skills 都可折叠。若当前版本没有这些设置，请先更新到包含高级 AI 配置的体验版。</p>
-        <ol><li><b>展开模型接入。</b>选择提供商，填写 API 基础地址、模型名称和密钥。模型必须支持工具调用，才能使用任务、预设和爬虫工具。</li><li><b>测试连接。</b>点击“测试连接”验证模型与工具调用。API KEY 留空保留已保存密钥；勾选“清除已保存的 API KEY”才会清除。</li><li><b>启用并保存。</b>勾选“启用 AI 刮削”，点击“保存 AI 配置”。测试不会自动保存。新设置从下一条消息开始生效，运行中的分析沿用启动时参数。</li><li><b>开始对话。</b>进入“AI 刮削”，输入“查看最近失败的刮削任务，按原因归类并给出优先建议”。展开工具记录可核对依据，模型返回思考内容时可展开查看。</li></ol>
+        <h2>连接 AI 模型</h2>
+        <p>AI 助手可以帮你分析失败任务、查找影片资料和调整刮削预设。使用前，请准备模型服务商提供的 API 地址、模型名称和 API KEY，再用管理员账号打开“系统设置 → AI 接入”。</p>
+        <ol><li><b>填写连接信息。</b>选择 LLM 提供商，填写 LLM URL、模型名称和 API KEY。请选用支持“工具调用”的模型，AI 才能读取任务、查询预设和使用爬虫。</li><li><b>测试连接。</b>点击“测试连接”，确认没有连接或工具调用错误。</li><li><b>启用 AI。</b>勾选“启用 AI 刮削”，点击“保存 AI 配置”。</li></ol><p>以后修改配置时，API KEY 留空即可保留原密钥。需要删除密钥时，勾选“清除已保存的 API KEY”后保存。</p>
         <div class="doc-table-wrap"><table><caption>模型接入示例</caption><thead><tr><th>提供商</th><th>LLM URL</th><th>填写说明</th></tr></thead><tbody>
           <tr><td>OpenAI 兼容服务</td><td><code>https://你的服务地址/v1</code></td><td>按服务商说明填写模型 ID 与密钥，不能填写聊天网页地址。</td></tr>
           <tr><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td>填写账号可用且支持工具调用的模型。</td></tr>
           <tr><td>Ollama</td><td><code>http://host.docker.internal:11434/v1</code></td><td>Docker 访问宿主机的示例；Ollama 需监听容器可访问的地址，Linux 需配置 host-gateway。通常无需密钥。</td></tr>
-          <tr><td>Anthropic</td><td><code>https://api.anthropic.com/v1</code></td><td>选择 Anthropic 协议连接原生 Messages 接口。</td></tr>
+          <tr><td>Anthropic</td><td><code>https://api.anthropic.com/v1</code></td><td>选择“Anthropic”，填写服务商提供的模型名称和密钥。</td></tr>
         </tbody></table></div>
         <p>LLM 超时默认 60 秒，可设 10～120 秒。容器中的 <code>127.0.0.1</code> 指向容器自身，外部模型服务需填写容器能访问的地址。</p>
-        <h3>会话与自动刮削</h3><p>历史列表支持搜索、切换、重命名、删除；手机端点击会话列表按钮打开。回复支持逐步显示、复制及停止生成。删除会话不会删除已创建的任务，停止生成不会撤销已确认的操作。</p>
-        <figure class="doc-figure"><a href="assets/guide/ai-settings.webp" target="_blank"><img src="assets/guide/ai-settings.webp" width="1440" height="1200" loading="lazy" alt="AI 接入的模型配置和可折叠高级设置"></a><figcaption>模型、联网搜索、上下文和 Skills 分组配置（演示地址，不是真实服务）。</figcaption></figure>
-        <p>要用于定时或批量任务，还需在“刮削预设 → 爬虫”勾选“启用 AI 刮削”。建议同时勾选“当所有爬虫刮削失败时启用 AI 刮削”，先使用普通爬虫；取消则直接使用 AI。自动 AI 刮削依赖联网搜索，请同时开启搜索开关。</p>
-        <figure class="doc-figure"><a href="assets/guide/ai-chat.webp" target="_blank"><img src="assets/guide/ai-chat.webp" width="1440" height="1050" loading="lazy" alt="AI 会话列表、回复、思考区域和消息输入框"></a><figcaption>对话与会话管理界面；示例回复是固定模拟内容，未调用模型。</figcaption></figure>
+        <figure class="doc-figure"><a href="assets/guide/ai-settings.webp" target="_blank"><img src="assets/guide/ai-settings.webp" width="1440" height="1200" loading="lazy" alt="AI 接入设置：提供商、API 地址、模型名称与密钥"></a><figcaption>填写模型服务商提供的连接信息，测试成功后保存（演示数据）。</figcaption></figure>
+        <h3>开始对话</h3><p>进入“AI 刮削”，点击“新建对话”，输入你要处理的问题。例如：</p><pre class="doc-example"><code>查看最近失败的刮削任务，简要说明原因，并告诉我先处理哪一项。</code></pre><p>回复中的“工具记录”可以查看 AI 查询过的任务和资料。需要继续追问时，在同一会话发送消息；换一个问题时可以新建对话。左侧历史列表可搜索、重命名和删除会话，手机端点击会话列表按钮打开。</p><p>点击“停止生成”可结束当前回复。已经确认执行的操作仍会生效，删除会话也不会删除刮削任务。</p>
+        <figure class="doc-figure"><a href="assets/guide/ai-chat.webp" target="_blank"><img src="assets/guide/ai-chat.webp" width="1440" height="1050" loading="lazy" alt="AI 会话列表、回复、思考区域和消息输入框"></a><figcaption>在输入框描述问题，收到回复后可继续追问（演示数据）。</figcaption></figure>
+        <h3>让刮削任务使用 AI</h3><p>打开“刮削预设 → 爬虫”，勾选“启用 AI 刮削”，并在系统 AI 设置中开启“允许 AI 联网搜索”。</p><ul><li><b>普通爬虫失败后再用 AI：</b>勾选“当所有爬虫刮削失败时启用 AI 刮削”，适合日常使用。</li><li><b>直接使用 AI：</b>取消上述勾选，影片资料将由 AI 搜索和提取。</li></ul><p>保存预设后，使用该预设创建的新任务便会按所选方式刮削。</p>
       </section>
-<section id="ai-search"><h2>联网搜索：选择来源，控制读取量。</h2>
-        <p>“允许 AI 联网搜索”默认开启，控制公开网页搜索工具与 AI 影片资料提取。关闭后仍可分析已有任务、读取预设和使用普通爬虫，但直接 AI 刮削或 AI 兜底会提示搜索未启用。此开关不控制模型服务商自身的内置联网功能。</p>
+<section id="ai-search"><h2>设置联网搜索</h2>
+        <p>AI 查找影片资料需要联网搜索。在“系统设置 → AI 接入 → 联网搜索”勾选“允许 AI 联网搜索”。如果只想分析已有任务或预设，可以关闭此项。</p>
         <h3>Bing RSS 或自建 SearXNG</h3><p><b>Bing RSS</b>无需搜索密钥，使用服务器网络访问 Bing。也可选择 <b>SearXNG</b>，填写自建实例地址，例如 <code>https://search.example.com</code>，并在实例的 <code>search.formats</code> 中启用 <code>json</code>。目前不支持需要额外鉴权请求头的实例。</p>
-        <p>“测试联网搜索”用表单配置搜索 JavSP，不调用 LLM，也不保存配置。无结果与请求失败会分别提示，测试成功后请保存。</p>
+        <p>选好搜索服务后，点击“测试联网搜索”。测试成功后点击“保存 AI 配置”；如果失败，先检查服务器能否访问搜索服务。</p>
         <div class="doc-table-wrap"><table><caption>联网搜索参数</caption><thead><tr><th>设置</th><th>默认 / 范围</th><th>作用</th></tr></thead><tbody>
-          <tr><td>最多搜索结果数</td><td>8 / 1～20</td><td>最多检查并返回的候选结果数量。</td></tr>
-          <tr><td>最多读取网页数</td><td>3 / 1～8</td><td>AI 影片提取最多读取的有效来源页，不能超过搜索结果数。</td></tr>
-          <tr><td>每页最多提取字符数</td><td>16000 / 1000～32000</td><td>清理脚本等内容后的正文长度。增加可保留更多信息，也增加上下文消耗。</td></tr>
+          <tr><td>最多搜索结果数</td><td>8 / 1～20</td><td>找不到所需资料时可适当增加。</td></tr>
+          <tr><td>最多读取网页数</td><td>3 / 1～8</td><td>决定一次查阅多少个资料页面，不能超过搜索结果数。页数越多，通常耗时越长。</td></tr>
+          <tr><td>每页最多提取字符数</td><td>16000 / 1000～32000</td><td>页面资料较长时可增加；经常提示内容过长时可减小。</td></tr>
           <tr><td>搜索与网页请求超时</td><td>15 秒 / 5～60 秒</td><td>搜索和每个来源页请求的等待时间；多页依次处理，总耗时可能更长。</td></tr>
         </tbody></table></div>
-        <div class="doc-note"><b>网络与资料核验</b><span>对话搜索使用服务端网络；自动 AI 刮削沿用当前刮削预设代理。搜索摘要只是线索，影片提取还会读取公开来源页并核对番号、标题和图片地址；无有效来源时不会凭空生成资料。</span></div>
+        <div class="doc-note"><b>搜索失败时</b><span>先检查 JavSP WEB 所在机器的网络。对话搜索使用这台机器的网络；刮削任务中的 AI 搜索使用该任务预设的代理设置。搜索有结果但仍刮削失败时，再检查资料页面是否能打开、是否包含正确的番号和封面。</span></div>
       </section>
-<section id="ai-context"><h2>上下文与生成：按模型容量设置。</h2>
+<section id="ai-context"><h2>调整回答长度与上下文</h2><p>初次使用可先保留默认值。“上下文”是 AI 一次回答能参考的信息总量，包括你的问题、之前的对话和查到的资料。请按模型服务商公布的容量设置上限。</p>
         <div class="doc-table-wrap"><table><caption>上下文与生成参数</caption><thead><tr><th>设置</th><th>默认 / 范围</th><th>如何选择</th></tr></thead><tbody>
-          <tr><td>最长上下文</td><td>65536 / 8192～1048576 Token</td><td>输入、系统提示词、工具定义和预留输出的总预算。不能超过模型实际窗口。</td></tr>
-          <tr><td>最大输出长度</td><td>4096 / 256～65536 Token</td><td>必须小于上下文，并符合模型输出限制。截断时可适当增加或缩小问题范围。</td></tr>
-          <tr><td>最多携带历史消息数</td><td>16 / 2～40</td><td>用户与 AI 消息各算一条，从较新的完整对话开始携带，不删除历史。</td></tr>
+          <tr><td>最长上下文</td><td>65536 / 8192～1048576 Token</td><td>不要超过模型支持的上下文长度。处理较多任务或网页时可能需要更大容量。</td></tr>
+          <tr><td>最大输出长度</td><td>4096 / 256～65536 Token</td><td>限制单次回复的长度。回答经常中途截断时可增加，但必须低于上下文及模型输出上限。</td></tr>
+          <tr><td>最多携带历史消息数</td><td>16 / 2～40</td><td>决定 AI 能参考多少条近期对话，用户提问和 AI 回复各算一条。</td></tr>
           <tr><td>采样温度</td><td>留空 / 0～1</td><td>留空由模型决定，低值偏向稳定。不支持此参数的模型请留空。</td></tr>
-          <tr><td>每次分析最多轮数</td><td>6 / 1～12</td><td>一次提问的模型请求次数，包含使用工具后的总结。</td></tr>
-          <tr><td>每次分析最多工具调用数</td><td>12 / 1～24</td><td>限制一次分析的总工具调用量。增加上限会增加潜在耗时和用量。</td></tr>
+          <tr><td>每次分析最多轮数</td><td>6 / 1～12</td><td>任务分析经常达到轮数上限时可增加；轮数越多，可能耗时越长。</td></tr>
+          <tr><td>每次分析最多工具调用数</td><td>12 / 1～24</td><td>限制 AI 一次提问中查询任务、搜索网页等操作的次数。</td></tr>
         </tbody></table></div>
-        <p>程序按请求内容的 UTF-8 字节数保守估算 Token 用量，并预留输出空间。这不是模型分词器的精确计数，可能提前移除较早对话。系统规则、当前问题和本轮工具调用会保留，不截断工具参数。</p>
-        <p>当前资料本身超限时会提示缩小范围。可先减少网页数或正文长度，再考虑提高上下文。每个会话最多保存 40 条用户/AI 消息，达到上限请新建会话；调整上下文不会扩大历史存储上限。</p>
+        <p>对话较长时，AI 可能不再参考较早的消息。如果它遗漏了之前的要求，可以在新消息中补充重点。</p>
+        <p>出现“内容过长”提示时，先缩小问题范围，例如只分析最近几个失败任务，或减少读取网页数。每个会话最多保存 40 条消息，达到上限后请新建会话。</p>
       </section>
-<section id="ai-skills"><h2>提示词与 Skills：统一回答，补充工作规范。</h2>
-        <p>预设提示词默认要求先给结论、合并相同失败原因、再给处理建议。需要清单、日志或代码时，在对话中要求展开。可编辑后保存，也可点击“恢复默认提示词”再保存。</p>
-        <p>项目 Skills 支持添加、编辑、删除及恢复内置内容，不提供下载。填写带有 <code>name</code> 和 <code>description</code> 的 SKILL.md；例如：</p>
+<section id="ai-skills"><h2>设置回答偏好与 Skills</h2>
+        <p>希望 AI 始终简短回答，或先说明原因再给建议，可以在“系统设置 → AI 接入 → 预设提示词”填写偏好，例如“回答先给结论，最多列三条建议，需要时再展开”。保存后，在下一次提问中生效。想恢复原来的回答方式，点击“恢复默认提示词”后保存。</p>
+        <p>Skills 是供 AI 处理特定任务时参考的操作说明。例如，你可以添加一份“失败任务诊断”说明，让 AI 每次按固定步骤检查。普通使用可保留内置 Skills；需要自定义时，打开“项目 Skills”，点击“添加 Skill”，按下面的格式填写并保存：</p>
         <pre class="doc-example"><code>---
 name: diagnose-library
 description: 分析失败任务，按原因分组并给出可验证的建议
@@ -71,8 +71,8 @@ description: 分析失败任务，按原因分组并给出可验证的建议
 先查看任务详情及其预设，再按失败阶段归类。
 区分已确认原因和需要进一步核实的线索。
 默认只给结论和一项优先建议，按需展开任务明细。</code></pre>
-        <p>提示词和 Skills 不会增加工具权限。对话中整理文件、保存爬虫、修改预设和影片资料仍先生成预览，需要点击“确认执行”。自动刮削由已启用的预设和规则执行，不逐个弹出对话确认。</p>
-        <h3>常见问题</h3><ul><li><b>连接成功但没有调用工具：</b>检查模型是否支持工具调用。</li><li><b>HTTP 401 / 403：</b>核对密钥、账号权限和服务地址。</li><li><b>HTTP 400 或温度错误：</b>先将温度留空，再核对输出上限和服务商支持的参数。</li><li><b>SearXNG 返回 403 或格式错误：</b>确认已启用 JSON，且允许应用服务器访问。</li><li><b>搜索有结果但刮削失败：</b>摘要不等于有效来源，请检查详情页访问、预设代理和必需字段。</li><li><b>没有思考内容：</b>仅模型明确返回思考字段时展示，不会凭空补写。</li></ul>
+        <p><code>name</code> 填写技能名称，<code>description</code> 简要说明用途，正文写具体步骤。保存后可再次编辑，不再需要时可删除；内置内容可通过“恢复内置 Skills”找回。</p><p>AI 提议整理文件、修改预设或保存爬虫时，请先检查操作预览，确认无误后点击“确认执行”。</p>
+        <h3>常见问题</h3><ul><li><b>连接成功但没有调用工具：</b>检查模型是否支持工具调用。</li><li><b>HTTP 401 / 403：</b>核对密钥、账号权限和服务地址。</li><li><b>HTTP 400 或温度错误：</b>先将温度留空，再核对输出上限和服务商支持的参数。</li><li><b>SearXNG 返回 403 或格式错误：</b>确认已启用 JSON，且允许应用服务器访问。</li><li><b>搜索有结果但刮削失败：</b>摘要不等于有效来源，请检查详情页访问、预设代理和必需字段。</li><li><b>没有思考内容：</b>并非所有模型都提供思考过程，没有显示也可以正常阅读回复。</li></ul>
       </section>
 <nav class="doc-pager" aria-label="相邻主题"><a href="guide-scraping.html"><small>上一主题</small>刮削与整理 ←</a><a href="guide-automation.html"><small>下一主题</small>自动化与集成 →</a></nav></article>
 </main>
