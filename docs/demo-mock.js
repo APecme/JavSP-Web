@@ -61,13 +61,17 @@
     }
     return json(existing || items);
   };
+  let demoProfile = { username: 'demo', display_name: '演示用户', avatar_id: '', comment_token: 'demo-identity-for-offline-preview-only-00000000' };
+  const assetFetch = window.fetch?.bind(window);
   window.fetch = async (input, options = {}) => {
     const url = new URL(typeof input === 'string' ? input : input.url, location.origin);
     const path = url.pathname;
     const method = (options.method || 'GET').toUpperCase();
     let body = {};
     try { body = JSON.parse(options.body || '{}'); } catch { return denied(); }
+    if (url.origin === location.origin && path.endsWith('/assets/avatar-catalog.json') && assetFetch) return assetFetch(input, options);
     if (url.origin !== location.origin || !path.startsWith('/api/')) return denied();
+    if (path === '/api/profile') { if (method === 'PUT') demoProfile = { ...demoProfile, display_name: body.display_name, avatar_id: body.avatar_id }; return json(demoProfile); }
     if (path === '/api/auth/me') return json({ username: 'demo', role: 'admin' });
     if (path.startsWith('/api/auth/')) return denied();
     if (path === '/api/runtime') return json({ version: seed.version, app_version: seed.version, docker: true, deployment: 'docker', timezone: 'Asia/Shanghai', ai_enabled: settings.enabled });

@@ -513,6 +513,31 @@ def users(_: dict = Depends(require_admin)) -> list[dict]:
     return list_users()
 
 
+class ProfileBody(BaseModel):
+    display_name: str = Field(min_length=1, max_length=32)
+    avatar_id: str = Field(default="", max_length=32)
+
+
+@app.get("/api/profile")
+def get_profile(response: Response, user: dict = Depends(current_user)) -> dict:
+    from .storage import user_profile
+    response.headers["Cache-Control"] = "no-store"
+    return user_profile(user["username"])
+
+
+@app.put("/api/profile")
+def save_profile(body: ProfileBody, response: Response, user: dict = Depends(current_user)) -> dict:
+    from .storage import user_profile
+    name = body.display_name.strip()
+    if not name or any(ord(c) < 32 for c in name):
+        raise HTTPException(status_code=422, detail="请填写有效的用户名")
+    avatars = json.loads((WEB_DIR / "assets" / "avatar-catalog.json").read_text(encoding="utf-8"))
+    if body.avatar_id and body.avatar_id not in {item["id"] for item in avatars}:
+        raise HTTPException(status_code=422, detail="请从头像库选择头像")
+    response.headers["Cache-Control"] = "no-store"
+    return user_profile(user["username"], {"display_name": name, "avatar_id": body.avatar_id})
+
+
 def _validate_password_change(body: UserBody, required: bool = False) -> None:
     if required and not body.password:
         raise HTTPException(status_code=400, detail="新用户必须设置密码")

@@ -24,7 +24,7 @@ function demo() {
 }
 
 test('demo uses the current application assets and all documentation links resolve', () => {
-  for (const name of ['app.js', 'app.css', 'overrides.css', 'ai.js', 'ai-markdown.js']) {
+  for (const name of ['community.js', 'app.js', 'app.css', 'overrides.css', 'ai.js', 'ai-markdown.js']) {
     assert.equal(read(`docs/assets/${name === 'app.js' ? 'demo-app.js' : name}`), read(`javsp_web/web/assets/${name}`));
   }
   const pages = ['docs.html', ...fs.readdirSync(path.join(root, 'docs')).filter(file => /^guide-.*\.html$/.test(file))];
@@ -146,4 +146,12 @@ test('preset forms, schedules, path mappings and demo exit', async () => {
   events.click({ target: { closest: () => true }, preventDefault() {}, stopImmediatePropagation() { stopped = true; } });
   assert.equal(stopped, true);
   assert.equal(context.location.href, 'index.html');
+});
+
+test('personal profile changes stay in the offline demo', async () => {
+  const { json } = demo();
+  assert.equal((await json('/api/profile')).display_name, '演示用户');
+  const profile = await json('/api/profile', 'PUT', { display_name: '新名字', avatar_id: 'example' });
+  assert.equal(profile.display_name, '新名字');
+  assert.equal((await json('/api/profile')).avatar_id, 'example');
 });

@@ -676,3 +676,47 @@ html[data-initial-view="ai-scrape"] [data-panel="ai-scrape"] { display: block; }
   #ai-workspace > .panel-heading { justify-content: flex-start; gap: 12px; }
 }
 @media (max-width: 640px) { .ai-layout { height: calc(100dvh - 130px); } .ai-composer-actions > span { display: none; } #ai-send, #ai-stop { margin-left: auto; } .ai-empty h2 { font-size: 23px; } }
+/* Personal profile and the bundled avatar library. */
+.account-profile { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid transparent; border-radius: 24px; color: #344054; background: transparent; cursor: pointer; }
+.account-profile:hover { background: #fff; border-color: #e4e7ec; }
+.user-avatar { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
+.avatar-fallback { background: #e8eefc; color: #365cba; font-weight: 700; }
+.profile-dialog { width: min(880px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow: auto; padding: 26px; }
+.profile-dialog h2 { margin: 0; font-size: 22px; }
+.profile-dialog h3 { margin: 0; font-size: 17px; }
+.profile-form { display: grid; grid-template-columns: 108px minmax(0,1fr); gap: 20px; align-items: start; padding: 20px; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 12px; }
+.profile-identity { display: grid; gap: 8px; justify-items: center; text-align: center; }
+.profile-avatar { display: inline-flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 50%; object-fit: cover; font-size: 30px; }
+#profile-name { width: 100%; }
+#profile-message { grid-column: 1 / -1; }
+.avatar-picker { margin: 20px 0; padding: 16px; border: 1px solid #e4e7ec; border-radius: 10px; }
+.avatar-picker summary { font-weight: 600; cursor: pointer; }
+.avatar-picker-tools { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.avatar-picker-tools label { flex: 1; }
+.avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 12px; }
+.avatar-option { display: grid; gap: 7px; justify-items: center; min-width: 0; padding: 10px 5px; border: 2px solid transparent; border-radius: 10px; background: #f8fafc; cursor: pointer; }
+.avatar-option.selected { border-color: #175cd3; background: #eff8ff; }
+.avatar-option span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.picker-avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+.profile-comments { display: grid; gap: 14px; border-top: 1px solid #eaecf0; padding-top: 22px; }
+.profile-comments [hidden] { display: none; }
+.empty-profile { padding: 22px; text-align: center; color: #667085; background: #f8fafc; border-radius: 10px; }
+.comment-item-head { align-items: center; justify-content: start; }
+.comment-item-head time { margin-left: auto; }
+.comment-actions { display: flex; align-items: center; gap: 18px; margin-top: 5px; }
+.comment-like, .comment-profile-link { border: 0; background: transparent; color: #667085; padding: 5px 0; cursor: pointer; font-size: 12px; }
+.comment-like[aria-pressed="true"] { color: #175cd3; font-weight: 600; }
+.comment-like:disabled { opacity: .5; cursor: wait; }
+.task-detail-dialog .comment-form { grid-template-columns: 1fr; }
+.comment-author { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.comment-profile-link { margin-left: auto; color: #175cd3; }
+body:has(#profile-dialog[open]) { overflow: hidden; }
+@media(max-width: 560px) {
+ .profile-dialog { padding: 16px; }
+ .profile-form { grid-template-columns: 1fr; padding: 16px; }
+ .avatar-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+ .profile-comments .comments-heading { flex-wrap: wrap; }
+}
+.verification-dialog { width: min(460px,calc(100vw - 24px)); padding: 18px; }
+.verification-dialog h3 { margin: 0; }
+.verification-dialog iframe { width: 100%; height: 390px; border: 0; display: block; }

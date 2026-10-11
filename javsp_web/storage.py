@@ -144,7 +144,29 @@ def list_users() -> list[dict[str, Any]]:
     ensure_seed_data()
     with _lock:
         users = _read_json(USERS_FILE, [])
-        return [{k: v for k, v in item.items() if k != "password"} for item in users]
+        return [{k: v for k, v in item.items() if k in {"username", "role", "created_at", "display_name", "avatar_id"}} for item in users]
+
+
+def user_profile(username: str, changes: dict | None = None) -> dict:
+    """Keep the comment identity private to its local account across browser sessions."""
+    ensure_seed_data()
+    with _lock:
+        users = _read_json(USERS_FILE, [])
+        user = next((u for u in users if u.get("username") == username), None)
+        if user is None:
+            raise ValueError("用户不存在")
+        changed = False
+        for key, default in (("comment_token", secrets.token_urlsafe(32)),
+                             ("display_name", "匿名用户-" + secrets.token_hex(3).upper()), ("avatar_id", "")):
+            if key not in user:
+                user[key] = default() if callable(default) else default
+                changed = True
+        if changes is not None:
+            user.update({key: changes[key] for key in ("display_name", "avatar_id") if key in changes})
+            changed = True
+        if changed:
+            _write_json(USERS_FILE, users)
+        return {key: user[key] for key in ("username", "display_name", "avatar_id", "comment_token")}
 
 
 def find_user(username: str) -> dict[str, Any] | None:

@@ -15,7 +15,7 @@ function harness() {
   section.querySelector = node;
   const form = { elements: { nickname: node('[name=nickname]'), body: node('body') }, querySelector: node, closest: selector => selector === '#task-comments form' ? form : null };
   const context = vm.createContext({
-    window: {}, document: { addEventListener: (event, fn) => { events[event] = fn; } },
+    window: { JavspCommunity: { configure() {}, headers: () => ({ 'X-User-Token': 'test-user' }), identity: () => ({nickname:'tester',avatar_id:''}), avatar: () => '', verify: async () => 'verified' } }, document: { addEventListener: (event, fn) => { events[event] = fn; } },
     $: selector => selector === '#task-comments' ? section : node(selector),
     escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
     localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
@@ -61,9 +61,10 @@ test('posting is single-flight, preserves failures, omits login credentials and 
   assert.equal(h.requests[1].options.credentials, 'omit'); assert.equal(h.requests[1].options.referrerPolicy, 'no-referrer');
   h.requests[1].resolve({ detail: '请稍后重试' }, 429); await first;
   assert.equal(h.form.elements.body.value, 'hello'); assert.equal(h.node('button[type="submit"]').disabled, false);
-  const second = h.submit(); h.requests[2].resolve({ comment: { status: 'pending' } }, 201); await second;
+  const second = h.submit(); await tick(); h.requests[2].resolve({ comment: { status: 'pending' } }, 201); await second;
   assert.equal(h.form.elements.body.value, ''); assert.match(h.node('.comment-form-message').textContent, /审核/);
-  assert.equal(h.saved.get('javsp-web.comment-nickname'), 'tester');
+  assert.equal(JSON.parse(h.requests[2].options.body).nickname, 'tester');
+  assert.equal(JSON.parse(h.requests[2].options.body).turnstile_token, 'verified');
 });
 test('disabled service or unidentified movie makes no external request', () => {
   const h = harness(); h.api.open('ABC-001', ''); assert.equal(h.section.hidden, true);

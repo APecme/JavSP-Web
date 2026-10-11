@@ -1203,7 +1203,7 @@ function scheduleGitHubStarInvite() {
 async function loadPathTools() {
   try {
     const runtime = await api('/api/runtime');
-    state.runtime = runtime;
+    state.runtime = runtime; window.JavspCommunity.configure(runtime.comments_url);
 
     const tools = $('#path-tools');
     tools.classList.remove('hidden');
@@ -3446,10 +3446,11 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     state.user = await api('/api/auth/me');
     restoreUpdateOverlay();
     $('#current-user').textContent = state.user.username;
+    try { await window.JavspCommunity.init(); } catch (_) { /* Profile failure must not block scraping. */ }
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); $('#ai-scrape-nav').remove(); }
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config', 'ai-scrape'].includes(savedView))) showView(savedView);
     else showView('overview');
-    api('/api/runtime').then((runtime) => { state.runtime = runtime; checkForAppUpdate(runtime); }).catch(console.error);
+    api('/api/runtime').then((runtime) => { state.runtime = runtime; window.JavspCommunity.configure(runtime.comments_url); checkForAppUpdate(runtime); }).catch(console.error);
     scheduleGitHubStarInvite();
   } catch (error) { return; }
   let refreshTimer = null;
@@ -3483,20 +3484,6 @@ window.JavspComments = (() => {
   const target = () => $('#task-comments');
   const esc = (value) => escapeHtml(value ?? '');
   const date = (value) => new Date(Number(value) * 1000).toLocaleString();
-  const nicknameInput = $('#comment-nickname');
-  const savedNickname = () => { try { return localStorage.getItem('javsp-web.comment-nickname') || ''; } catch (_) { return ''; } };
-  const saveNickname = (value) => {
-    try { localStorage.setItem('javsp-web.comment-nickname', value); } catch (_) {}
-    if (nicknameInput) nicknameInput.value = value;
-  };
-  if (nicknameInput) {
-    nicknameInput.value = savedNickname();
-    nicknameInput.addEventListener('change', () => {
-      saveNickname(nicknameInput.value.trim());
-      const input = target()?.querySelector('[name=nickname]');
-      if (input) input.value = nicknameInput.value;
-    });
-  }
   const request = async (active, path, options = {}) => {
     const controller = new AbortController();
     active.requests.add(controller);
@@ -3504,7 +3491,7 @@ window.JavspComments = (() => {
     try {
       const response = await fetch(active.base + path, {
         ...options, credentials: 'omit', referrerPolicy: 'no-referrer', signal: controller.signal,
-        headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
+        headers: { Accept: 'application/json', ...window.JavspCommunity.headers(), ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || '评论服务暂时不可用，请稍后重试。');
@@ -3518,7 +3505,7 @@ window.JavspComments = (() => {
   const render = (active) => {
     const section = target();
     section.querySelector('.comments-list').innerHTML = active.items.length
-      ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head"><strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div><p>${esc(item.body)}</p><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></article>`).join('')
+      ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head">${window.JavspCommunity.avatar(item.avatar_id, item.nickname)}<strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div><p>${esc(item.body)}</p><div class="comment-actions"><button class="comment-like" type="button" data-comment-like="${esc(item.id)}" aria-pressed="${Boolean(item.liked)}">${item.liked ? '已赞' : '点赞'} · ${Number(item.likes) || 0}</button><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></div></article>`).join('')
       : '<p class="muted">还没有评论，欢迎留下第一条。</p>';
     section.querySelector('.comments-status').textContent = active.cursor ? `已显示 ${active.items.length} 条` : `${active.items.length} 条评论`;
     section.querySelector('[data-comment-more]').hidden = !active.cursor;
@@ -3563,13 +3550,13 @@ window.JavspComments = (() => {
     if (!section) return;
     const name = String(identifier || '').trim();
     const base = String(baseUrl || '').replace(/\/+$/, '');
+    window.JavspCommunity.configure(base);
     if (current?.identifier === name && current?.base === base) return;
     close();
     if (!name || !base) return;
     current = { identifier: name, base, items: [], cursor: null, loading: false, requests: new Set() };
     section.hidden = false;
-    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">与其他使用者分享看法，无需注册。评论审核后公开显示。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><label>昵称（可选）<input name="nickname" maxlength="32" placeholder="留空自动生成匿名昵称" autocomplete="off"></label><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
-    section.querySelector('[name=nickname]').value = savedNickname();
+    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">与其他使用者分享看法，无需注册。评论审核后公开显示。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
     load();
   };
   document.addEventListener('submit', async (event) => {
@@ -3583,12 +3570,14 @@ window.JavspComments = (() => {
     const message = form.querySelector('.comment-form-message');
     const body = form.elements.body.value.trim();
     if (!body) { message.textContent = '请先填写评论内容。'; return; }
-    saveNickname(form.elements.nickname.value.trim());
     button.disabled = true;
-    message.textContent = '正在提交…';
+    message.textContent = '请完成安全验证…';
     try {
+      const turnstile_token = await window.JavspCommunity.verify('comment');
+      if (active !== current) return;
+      message.textContent = '正在提交…';
       const data = await request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments`, {
-        method: 'POST', body: JSON.stringify({ nickname: form.elements.nickname.value.trim(), body, website: '' }),
+        method: 'POST', body: JSON.stringify({ ...window.JavspCommunity.identity(), body, website: '', turnstile_token }),
       });
       if (active !== current) return;
       form.elements.body.value = '';
@@ -3600,6 +3589,22 @@ window.JavspComments = (() => {
   document.addEventListener('click', async (event) => {
     if (event.target.closest('#task-comments [data-comment-more]')) { await load(true); return; }
     if (event.target.closest('#task-comments [data-comment-refresh]')) { await load(); return; }
+    const like = event.target.closest('#task-comments [data-comment-like]');
+    if (like && current && !like.disabled) {
+      const active = current;
+      const liked = like.getAttribute('aria-pressed') !== 'true';
+      like.disabled = true;
+      try {
+        const turnstile_token = await window.JavspCommunity.verify('like');
+        if (active !== current) return;
+        const data = await request(active, `/api/comments/${encodeURIComponent(like.dataset.commentLike)}/like`, { method: 'POST', body: JSON.stringify({ liked, turnstile_token }) });
+        if (active !== current) return;
+        like.setAttribute('aria-pressed', String(data.liked));
+        like.textContent = `${data.liked ? '已赞' : '点赞'} · ${data.likes}`;
+      } catch (error) { if (active === current) window.alert(error.message); }
+      finally { like.disabled = false; }
+      return;
+    }
     const button = event.target.closest('#task-comments [data-comment-report]');
     const active = current;
     if (!button || !active || button.disabled) return;
@@ -3608,7 +3613,9 @@ window.JavspComments = (() => {
     if (reason.trim().length > 300) { window.alert('举报原因不能超过 300 字。'); return; }
     button.disabled = true;
     try {
-      await request(active, `/api/comments/${encodeURIComponent(button.dataset.commentReport)}/reports`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
+      const turnstile_token = await window.JavspCommunity.verify('report');
+      if (active !== current) return;
+      await request(active, `/api/comments/${encodeURIComponent(button.dataset.commentReport)}/reports`, { method: 'POST', body: JSON.stringify({ reason: reason.trim(), turnstile_token }) });
       if (active === current) button.textContent = '已举报';
     } catch (error) { button.disabled = false; if (active === current) window.alert(error.message); }
   });

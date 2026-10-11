@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import yaml
@@ -14,8 +15,8 @@ DOCS = ROOT / 'docs'
 
 
 def build():
-    assets = ['app.js', 'app.css', 'overrides.css', 'ai.js', 'ai-markdown.js']
-    inputs = [WEB / 'index.html', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
+    assets = ['community.js', 'app.js', 'app.css', 'overrides.css', 'ai.js', 'ai-markdown.js']
+    inputs = [WEB / 'index.html', WEB / 'assets' / 'avatar-catalog.json', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
               ROOT / 'vendor' / 'JavSP' / 'config.yml', DOCS / 'demo-mock.js', DOCS / 'demo.css',
               Path(__file__), *sorted((ROOT / 'javsp_web' / 'skills').glob('*/SKILL.md'))]
     revision = hashlib.sha256(b''.join(path.read_text(encoding='utf-8').encode('utf-8') for path in inputs)).hexdigest()[:12]
@@ -48,6 +49,8 @@ def build():
     for name in assets:
         destination = 'demo-app.js' if name == 'app.js' else name
         (DOCS / 'assets' / destination).write_bytes((WEB / 'assets' / name).read_bytes())
+    shutil.copytree(WEB / 'assets' / 'avatars', DOCS / 'assets' / 'avatars', dirs_exist_ok=True)
+    shutil.copy2(WEB / 'assets' / 'avatar-catalog.json', DOCS / 'assets' / 'avatar-catalog.json')
     document = (WEB / 'index.html').read_text(encoding='utf-8')
     document = document.replace('/assets/', 'assets/').replace('__ASSET_VERSION__', revision)
     document = document.replace('assets/app.js?', 'assets/demo-app.js?')
