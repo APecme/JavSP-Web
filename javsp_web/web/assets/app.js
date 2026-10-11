@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false };
+const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -925,7 +925,7 @@ function renderOverview() {
   state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => availableIds.has(id)));
   const selectedCount = state.selectedOverviewTasks.size;
   const toolbar = completed.length ? `<div class="overview-cover-toolbar"><label class="check-label"><input id="overview-select-all" type="checkbox"${selectedCount && selectedCount === completed.length ? ' checked' : ''}>选择全部</label><span class="muted">已选择 ${selectedCount} 项</span><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>` : '';
-  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => { const image = task.cover_count ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?thumbnail=true&amp;v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="${escapeHtml(task.name || '')}">` : artworkPlaceholder('overview-cover-placeholder', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载'); return `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover-open" type="button" data-task-detail="${escapeHtml(task.id)}">${image}<figcaption>${escapeHtml(task.name || task.id)}</figcaption></button></figure>`; }).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => { const image = task.cover_count ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?thumbnail=true&amp;v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="${escapeHtml(task.name || '')}">` : artworkPlaceholder('overview-cover-placeholder', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载'); return `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover-open" type="button" data-task-detail="${escapeHtml(task.id)}">${image}<figcaption>${escapeHtml(task.name || task.id)}</figcaption></button></figure>`; }).join('')}</div>` : '<div class="task-list empty">还没有可展示的影片，完成刮削后会出现在这里。</div>';
   if (completed.length) {
     $('#overview-tasks').insertAdjacentHTML('afterbegin', toolbar);
     $('#overview-tasks').querySelectorAll('.overview-cover').forEach((card) => {
@@ -1956,6 +1956,7 @@ async function openTaskDetail(taskId, background = false) {
   if (!taskId || (background && state.detailLoading)) return;
   const summary = state.tasks.find((item) => item.id === taskId) || state.detailTask;
   if (!summary) return;
+  if (state.activeTaskDetail !== taskId) window.JavspComments?.close();
   state.activeTaskDetail = taskId;
   const dialog = $('#task-detail-dialog');
   $('#task-detail-title').textContent = taskDisplayName(summary);
@@ -1978,11 +1979,11 @@ async function openTaskDetail(taskId, background = false) {
     return;
   }
   const metadata = task.progress?.metadata || {};
-  const rows = [['番号', metadata.dvdid], ['标题', metadata.title || taskDisplayName(task)], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name], ['文件路径', task.input_directory || '-'], ['整理路径', task.progress?.output?.save_dir || '-']].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
+  const rows = [['番号', metadata.dvdid], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name], ['文件路径', task.input_directory || '-'], ['整理路径', task.progress?.output?.save_dir || '-']].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
   const actressInput = Array.isArray(metadata.actress) ? metadata.actress.join('\n') : (metadata.actress || '');
-  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="task-metadata-summary"><div class="task-metadata-summary-heading"><h3>影片资料</h3><button class="button secondary" type="button" data-edit-task-metadata>修改</button></div><div class="task-detail-main">${poster}<dl class="task-detail-data">${rows}</dl></div></section>`;
+  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="task-metadata-summary"><div class="task-metadata-summary-heading"><h3>影片资料</h3><button class="button secondary" type="button" data-edit-task-metadata>修改</button></div><div class="task-detail-main">${poster}<div class="film-info"><p class="film-number">${escapeHtml(metadata.dvdid || '影片资料')}</p><h3 class="film-title">${escapeHtml(metadata.title || taskDisplayName(task))}</h3><dl class="task-detail-data">${rows}</dl></div></div></section>`;
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
@@ -1999,9 +2000,11 @@ async function openTaskDetail(taskId, background = false) {
   const taskLog = taskLogMarkup(task, `detail-${task.id}`, 'task-detail-log');
   const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
-  $('#task-detail-title').textContent = taskDisplayName(task);
-  $('#task-detail-subtitle').textContent = task.file_name || task.name || '';
-  patchChildren($('#task-detail-content'), `${metadataEditor}<section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}<section class="detail-fanarts"><h3>剧照 (${task.fanart_count || 0})</h3><div class="detail-fanart-grid">${fanarts}</div></section>`);
+  $('#task-detail-title').textContent = metadata.dvdid || '影片详情';
+  $('#task-detail-subtitle').textContent = metadata.publish_date || '';
+  const identifier = String(metadata.dvdid || '').trim();
+  patchChildren($('#task-detail-content'), `${metadataEditor}<section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section><section class="detail-fanarts"><h3>剧照 <span class="muted">${task.fanart_count || 0}</span></h3><div class="detail-fanart-grid">${fanarts}</div></section>${taskLog}`);
+  window.JavspComments?.open(identifier, state.runtime?.comments_url || '');
 }
 
 function cookiecloudPayload() {
@@ -2109,7 +2112,8 @@ function renderOverview() {
   const allSelected = pageIds.size > 0 && [...pageIds].every((id) => state.selectedOverviewTasks.has(id));
   const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
-  const overviewMarkup = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有已完成的任务</div>';
+  $('#library-count').textContent = `${state.taskTotal || 0} 部影片`;
+  const overviewMarkup = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有可展示的影片，完成刮削后会出现在这里。</div>';
   const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}>下一页</button></div>` : '';
   const overviewContainer = $('#overview-tasks');
   patchChildren(overviewContainer, overviewMarkup + pagination);
@@ -2121,14 +2125,16 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const coverReady = Number(task.cover_count) > 0;
   const total = Number(images.fanart_total) || Number(task.fanart_count) || 0;
   const fanart = Math.min(Number(task.fanart_count) || 0, total || Number(task.fanart_count) || 0);
-  const coverState = coverReady ? '封面已下载' : (images.failed ? '封面下载失败' : '封面未生成');
+  const metadata = task.progress?.metadata || {};
+  const identifier = metadata.dvdid || task.file_name || task.name || '';
+  const actress = Array.isArray(metadata.actress) ? metadata.actress.join(' / ') : (metadata.actress || '');
   const artwork = coverReady
     ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?thumbnail=true&amp;v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
     : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const selected = taskIds.every((id) => state.selectedOverviewTasks.has(id));
   const selector = state.overviewSelectionMode ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
   const feedback = taskIds.some((id) => state.overviewSelectionFeedback.has(id));
-  return `<article class="overview-cover-card${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}">${artwork}<span>${escapeHtml(taskDisplayName(task))}</span>${taskCount > 1 ? `<small>合并 ${taskCount} 条记录</small>` : ''}</button></article>`;
+  return `<article class="overview-cover-card${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="library-artwork">${artwork}${taskCount > 1 ? `<small class="library-record-count">${taskCount} 条记录</small>` : ''}</span><span class="library-id">${escapeHtml(identifier)}</span><span class="library-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small class="library-caption">${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
 }
 
 function artworkPlaceholder(className, label) {
@@ -3443,7 +3449,7 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); $('#ai-scrape-nav').remove(); }
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config', 'ai-scrape'].includes(savedView))) showView(savedView);
     else showView('overview');
-    api('/api/runtime').then(checkForAppUpdate).catch(console.error);
+    api('/api/runtime').then((runtime) => { state.runtime = runtime; checkForAppUpdate(runtime); }).catch(console.error);
     scheduleGitHubStarInvite();
   } catch (error) { return; }
   let refreshTimer = null;
@@ -3472,12 +3478,159 @@ if (downloadPolicyToggle && downloadPolicyContent) {
 
 })();
 
+window.JavspComments = (() => {
+  let current = null;
+  const target = () => $('#task-comments');
+  const esc = (value) => escapeHtml(value ?? '');
+  const date = (value) => new Date(Number(value) * 1000).toLocaleString();
+  const nicknameInput = $('#comment-nickname');
+  const savedNickname = () => { try { return localStorage.getItem('javsp-web.comment-nickname') || ''; } catch (_) { return ''; } };
+  const saveNickname = (value) => {
+    try { localStorage.setItem('javsp-web.comment-nickname', value); } catch (_) {}
+    if (nicknameInput) nicknameInput.value = value;
+  };
+  if (nicknameInput) {
+    nicknameInput.value = savedNickname();
+    nicknameInput.addEventListener('change', () => {
+      saveNickname(nicknameInput.value.trim());
+      const input = target()?.querySelector('[name=nickname]');
+      if (input) input.value = nicknameInput.value;
+    });
+  }
+  const request = async (active, path, options = {}) => {
+    const controller = new AbortController();
+    active.requests.add(controller);
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(active.base + path, {
+        ...options, credentials: 'omit', referrerPolicy: 'no-referrer', signal: controller.signal,
+        headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || '评论服务暂时不可用，请稍后重试。');
+      return data;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('连接超时，请重试。');
+      if (error instanceof TypeError) throw new Error('无法连接评论服务，请检查网络后重试。');
+      throw error;
+    } finally { clearTimeout(timeout); active.requests.delete(controller); }
+  };
+  const render = (active) => {
+    const section = target();
+    section.querySelector('.comments-list').innerHTML = active.items.length
+      ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head"><strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div><p>${esc(item.body)}</p><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></article>`).join('')
+      : '<p class="muted">还没有评论，欢迎留下第一条。</p>';
+    section.querySelector('.comments-status').textContent = active.cursor ? `已显示 ${active.items.length} 条` : `${active.items.length} 条评论`;
+    section.querySelector('[data-comment-more]').hidden = !active.cursor;
+  };
+  const load = async (more = false) => {
+    const active = current;
+    if (!active?.base || active.loading) return;
+    active.loading = true;
+    const section = target();
+    const message = section.querySelector('.comments-load-message');
+    const moreButton = section.querySelector('[data-comment-more]');
+    const refreshButton = section.querySelector('[data-comment-refresh]');
+    message.textContent = '';
+    moreButton.disabled = refreshButton.disabled = true;
+    try {
+      const query = more && active.cursor ? `?before=${encodeURIComponent(active.cursor)}` : '';
+      const data = await request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments${query}`);
+      if (active !== current) return;
+      const items = more ? [...active.items, ...(data.items || [])] : (data.items || []);
+      active.items = [...new Map(items.map(item => [item.id, item])).values()];
+      active.cursor = data.next_cursor || null;
+      render(active);
+    } catch (error) {
+      if (active !== current) return;
+      message.textContent = error.message;
+      if (!active.items.length) section.querySelector('.comments-list').innerHTML = '';
+      section.querySelector('.comments-status').textContent = '读取失败';
+      refreshButton.textContent = '重试';
+    } finally {
+      active.loading = false;
+      moreButton.disabled = refreshButton.disabled = false;
+    }
+  };
+  const close = () => {
+    current?.requests.forEach(controller => controller.abort());
+    current = null;
+    const section = target();
+    if (section) { section.hidden = true; section.innerHTML = ''; }
+  };
+  const open = (identifier, baseUrl) => {
+    const section = target();
+    if (!section) return;
+    const name = String(identifier || '').trim();
+    const base = String(baseUrl || '').replace(/\/+$/, '');
+    if (current?.identifier === name && current?.base === base) return;
+    close();
+    if (!name || !base) return;
+    current = { identifier: name, base, items: [], cursor: null, loading: false, requests: new Set() };
+    section.hidden = false;
+    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">与其他使用者分享看法，无需注册。评论审核后公开显示。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><label>昵称（可选）<input name="nickname" maxlength="32" placeholder="留空自动生成匿名昵称" autocomplete="off"></label><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
+    section.querySelector('[name=nickname]').value = savedNickname();
+    load();
+  };
+  document.addEventListener('submit', async (event) => {
+    const form = event.target.closest('#task-comments form');
+    if (!form) return;
+    event.preventDefault();
+    const active = current;
+    if (!active) return;
+    const button = form.querySelector('button[type="submit"]');
+    if (button.disabled) return;
+    const message = form.querySelector('.comment-form-message');
+    const body = form.elements.body.value.trim();
+    if (!body) { message.textContent = '请先填写评论内容。'; return; }
+    saveNickname(form.elements.nickname.value.trim());
+    button.disabled = true;
+    message.textContent = '正在提交…';
+    try {
+      const data = await request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments`, {
+        method: 'POST', body: JSON.stringify({ nickname: form.elements.nickname.value.trim(), body, website: '' }),
+      });
+      if (active !== current) return;
+      form.elements.body.value = '';
+      message.textContent = data.comment?.status === 'pending' ? '评论已提交，审核后会显示在这里。' : '评论已发布。';
+      if (data.comment?.status !== 'pending') await load();
+    } catch (error) { if (active === current) message.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  document.addEventListener('click', async (event) => {
+    if (event.target.closest('#task-comments [data-comment-more]')) { await load(true); return; }
+    if (event.target.closest('#task-comments [data-comment-refresh]')) { await load(); return; }
+    const button = event.target.closest('#task-comments [data-comment-report]');
+    const active = current;
+    if (!button || !active || button.disabled) return;
+    const reason = window.prompt('请简要说明举报原因（最多 300 字）');
+    if (!reason?.trim()) return;
+    if (reason.trim().length > 300) { window.alert('举报原因不能超过 300 字。'); return; }
+    button.disabled = true;
+    try {
+      await request(active, `/api/comments/${encodeURIComponent(button.dataset.commentReport)}/reports`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
+      if (active === current) button.textContent = '已举报';
+    } catch (error) { button.disabled = false; if (active === current) window.alert(error.message); }
+  });
+  return { open, close };
+})();
+
 function formatLocalDateTime(value) {
   const date = value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '';
 }
 
-$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; state.taskMetadataEditing = false; });
+const privacyMode = $('#privacy-mode');
+if (privacyMode) {
+  privacyMode.checked = state.privacyMode;
+  privacyMode.addEventListener('change', () => {
+    state.privacyMode = privacyMode.checked;
+    document.documentElement.dataset.privacyMode = state.privacyMode ? '1' : '0';
+    try { localStorage.setItem('javsp-web.privacy-mode', state.privacyMode ? '1' : '0'); } catch (_) {}
+  });
+}
+
+$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; state.taskMetadataEditing = false; window.JavspComments?.close(); });
 
 document.addEventListener('pointerdown', (event) => {
   state.taskDetailLogSelecting = Boolean(event.target.closest('#task-detail-content .task-log'));

@@ -95,6 +95,7 @@ RELEASE_LABEL = os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").strip()
 NOVNC_DIR = Path(os.environ.get("JAVSP_NOVNC_DIR", "/usr/share/novnc"))
 GOOGLE_VNC_HOST = os.environ.get("JAVSP_GOOGLE_VNC_HOST", "127.0.0.1")
 GOOGLE_VNC_PORT = int(os.environ.get("JAVSP_GOOGLE_VNC_PORT", "5900"))
+COMMENTS_URL = os.environ.get("JAVSP_COMMENTS_URL", "https://comments.rtioo.com").strip().rstrip("/")
 
 
 def _display_version() -> str:
@@ -314,7 +315,7 @@ class UpdateSettingsBody(BaseModel):
 def runtime(_: dict = Depends(current_user)) -> dict:
     from .ai import settings as ai_settings
     config = ai_settings()
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name(), "ai_enabled": config["enabled"]}
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name(), "ai_enabled": config["enabled"], "comments_url": COMMENTS_URL}
 
 
 @app.get("/api/update")
