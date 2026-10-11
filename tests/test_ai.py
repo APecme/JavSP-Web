@@ -149,9 +149,11 @@ class AITests(unittest.TestCase):
         conversation = self.conversation()
         conversation['turns'] = [{'role': 'user', 'content': 'old'}, {'role': 'assistant', 'content': 'old reply'},
                                  {'role': 'user', 'content': 'new'}]
-        with patch.object(ai, 'complete', return_value=tool_call('list_presets', {})) as complete, patch.object(ai_tools, 'execute', return_value=[]):
+        with patch.object(ai, 'summarize', return_value='旧对话摘要') as summarize, patch.object(ai, 'complete', return_value=tool_call('list_presets', {})) as complete, patch.object(ai_tools, 'execute', return_value=[]):
             ai_router._run(conversation, self.config | {'max_rounds': 1, 'history_messages': 2})
         self.assertEqual(complete.call_count, 1)
+        summarize.assert_called_once()
+        self.assertEqual(conversation['context_summary'], {'through': 2, 'text': '旧对话摘要'})
         self.assertNotIn('old', [message['content'] for message in complete.call_args.args[1]])
         self.assertEqual(conversation['status'], 'failed')
 
@@ -162,6 +164,71 @@ class AITests(unittest.TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(search.call_args.kwargs['config']['search_results'], 4)
         self.assertEqual(ai.settings()['search_results'], 8)
+
+    def test_models_use_unsaved_connection_and_saved_key_without_saving(self):
+        before = ai.settings(True)
+        with patch.object(ai, 'list_models', return_value=['model-a']) as fetch:
+            response = self.client.post('/api/ai/models', json={'base_url': 'https://new.test/v1', 'model': ''})
+        self.assertEqual(response.json(), {'models': ['model-a']})
+        self.assertEqual(fetch.call_args.args[0]['base_url'], 'https://new.test/v1')
+        self.assertEqual(fetch.call_args.args[0]['api_key'], 'private-ai-key')
+        self.assertEqual(ai.settings(True), before)
+        with patch.object(ai, 'list_models', return_value=['model-a']) as fetch:
+            self.client.post('/api/ai/models', json={'api_key': 'temporary-key'})
+        self.assertEqual(fetch.call_args.args[0]['api_key'], 'temporary-key')
+        with patch.object(ai, 'list_models', return_value=['model-a']) as fetch:
+            self.client.post('/api/ai/models', json={'clear_api_key': True})
+        self.assertEqual(fetch.call_args.args[0]['api_key'], '')
+        self.user['role'] = 'operator'
+        with patch.object(ai, 'list_models') as fetch:
+            self.assertEqual(self.client.post('/api/ai/models', json={}).status_code, 403)
+        fetch.assert_not_called()
+
+    def test_summary_is_incremental_preserves_transcript_and_tool_evidence(self):
+        conversation = self.conversation('新问题')
+        old = [{'id': 'u1', 'role': 'user', 'content': '保留预设'},
+               {'id': 'a1', 'role': 'assistant', 'content': '等待确认'}]
+        conversation['turns'] = old + conversation['turns']
+        conversation['steps'] = [{'turn_id': 'a1', 'tool': 'list_presets', 'result': '真实资料', 'status': 'completed'}]
+        with patch.object(ai, 'summarize', return_value='保留预设，未执行') as summarize, patch.object(ai, 'complete', return_value={'role': 'assistant', 'content': '答复'}) as complete:
+            ai_router._run(conversation, self.config | {'history_messages': 2})
+        self.assertEqual(conversation['turns'][:2], old)
+        self.assertEqual(summarize.call_args.args[1]['tools'][0]['result'], '真实资料')
+        self.assertIn('未执行', json.dumps(complete.call_args.args[1], ensure_ascii=False))
+        self.assertFalse(conversation['actions'])
+        conversation['turns'].append({'id': 'u3', 'role': 'user', 'content': '继续'})
+        with patch.object(ai, 'summarize', return_value='增量摘要') as summarize, patch.object(ai, 'complete', return_value={'role': 'assistant', 'content': '继续答复'}):
+            ai_router._run(conversation, self.config | {'history_messages': 2})
+        self.assertEqual(summarize.call_args.args[2], '保留预设，未执行')
+        self.assertEqual(summarize.call_args.args[1]['turns'][0]['content'], '新问题')
+        self.assertEqual(conversation['context_summary']['through'], 4)
+
+    def test_summary_failure_or_stop_keeps_history_and_does_not_execute(self):
+        for stop in (False, True):
+            with self.subTest(stop=stop):
+                conversation = self.conversation('继续')
+                conversation['turns'] = [{'role': 'user', 'content': 'old'}, {'role': 'assistant', 'content': 'reply'}] + conversation['turns']
+                def summarize(*args):
+                    if stop:
+                        ai_router._cancelled.add(conversation['id'])
+                        args[3]()
+                    raise ai.AIError('摘要服务不可用')
+                with patch.object(ai, 'summarize', side_effect=summarize), patch.object(ai, 'complete') as complete, patch.object(ai_tools, 'execute') as execute:
+                    ai_router._run(conversation, self.config | {'history_messages': 2})
+                complete.assert_not_called()
+                execute.assert_not_called()
+                self.assertNotIn('context_summary', conversation)
+                self.assertEqual(conversation['turns'][0]['content'], 'old')
+                self.assertEqual(conversation['status'], 'stopped' if stop else 'failed')
+
+    def test_long_conversation_can_continue_past_old_limit(self):
+        conversation = self.conversation()
+        conversation['turns'] = [{'role': 'user' if i % 2 == 0 else 'assistant', 'content': str(i)} for i in range(40)]
+        conversation['status'] = 'completed'
+        ai_router._save(conversation)
+        with patch.object(ai_router, '_start_analysis'):
+            response = self.client.post('/api/ai/chat', json={'conversation_id': conversation['id'], 'message': '继续'})
+        self.assertEqual(response.status_code, 202)
 
     def test_prompt_defaults_for_legacy_settings_and_round_trip(self):
         storage._write_json(storage.DATA_DIR / 'ai-settings.json', self.config)
@@ -467,16 +534,16 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(post.call_args.kwargs['json']['max_tokens'], 512)
             self.assertEqual(post.call_args.kwargs['json']['temperature'], .2)
 
-    def test_context_trims_complete_old_turns_but_preserves_current_tools(self):
+    def test_context_estimates_tokens_without_silently_deleting_history(self):
         current = tool_call('list_presets', {})
         messages = [{'role': 'system', 'content': 'rules'}, {'role': 'user', 'content': 'old' * 4000},
                     {'role': 'assistant', 'content': 'old answer'}, {'role': 'user', 'content': 'current'}, current,
                     {'role': 'tool', 'tool_call_id': 'call-1', 'content': '[]'}]
         result = ai.fit_context({'context_tokens': 8192, 'max_output_tokens': 512}, messages)
-        self.assertEqual(result, [messages[0], *messages[3:]])
+        self.assertEqual(result, messages)
         self.assertEqual(len(messages), 6)
         with self.assertRaises(ai.AIError):
-            ai.fit_context({'context_tokens': 8192, 'max_output_tokens': 512}, [messages[0], messages[1]])
+            ai.fit_context({'context_tokens': 8192, 'max_output_tokens': 512}, [messages[0], {'role': 'user', 'content': '中文' * 4000}])
 
     def stream_response(self, events):
         response = Mock(status_code=200, headers={'Content-Type': 'text/event-stream; charset=utf-8'})
@@ -485,6 +552,75 @@ class ProviderTests(unittest.TestCase):
         context.__enter__ = Mock(return_value=response)
         context.__exit__ = Mock(return_value=False)
         return context
+
+    def test_model_list_protocols_and_endpoint_normalization(self):
+        for provider, base, endpoint, data in (
+            ('compatible', 'https://llm.test/v1/chat/completions', 'https://llm.test/v1/models', {'data': [{'id': 'z'}, {'id': 'a'}, {'id': 'a'}, {'id': None}]}),
+            ('deepseek', 'https://llm.test', 'https://llm.test/models', {'data': [{'id': 'a'}]}),
+            ('ollama', 'http://localhost:11434', 'http://localhost:11434/api/tags', {'models': [{'name': 'a'}]}),
+            ('ollama', 'http://localhost:11434/v1', 'http://localhost:11434/v1/models', {'data': [{'id': 'a'}]}),
+            ('anthropic', 'https://llm.test/v1/messages', 'https://llm.test/v1/models', {'data': [{'id': 'a'}]}),
+        ):
+            with self.subTest(provider=provider, base=base), patch.object(ai.requests, 'get', return_value=self.response(data)) as get:
+                names = ai.list_models(self.config | {'provider': provider, 'base_url': base, 'model': ''})
+            self.assertEqual(names[0], 'a')
+            self.assertEqual(len(names), len(set(names)))
+            self.assertEqual(get.call_args.args[0], endpoint)
+            self.assertFalse(get.call_args.kwargs['allow_redirects'])
+            headers = get.call_args.kwargs['headers']
+            self.assertEqual(headers.get('x-api-key') if provider == 'anthropic' else headers.get('Authorization'),
+                             self.config['api_key'] if provider == 'anthropic' else 'Bearer ' + self.config['api_key'])
+
+    def test_anthropic_model_pagination(self):
+        pages = [self.response({'data': [{'id': 'a'}], 'has_more': True, 'last_id': 'a'}),
+                 self.response({'data': [{'id': 'b'}], 'has_more': False})]
+        with patch.object(ai.requests, 'get', side_effect=pages) as get:
+            self.assertEqual(ai.list_models(self.config | {'provider': 'anthropic'}), ['a', 'b'])
+        self.assertEqual(get.call_args.kwargs['params'], {'after_id': 'a'})
+
+    def test_model_list_errors_do_not_expose_response_or_credentials(self):
+        for status, data in ((401, {'secret': 'private-key'}), (302, {}), (200, {'data': []}), (200, [])):
+            with self.subTest(status=status, data=data), patch.object(ai.requests, 'get', return_value=self.response(data)):
+                with self.assertRaises(ai.AIError) as error:
+                    ai.list_models(self.config)
+                self.assertNotIn('private-key', str(error.exception))
+        with patch.object(ai.requests, 'get', side_effect=ai.requests.Timeout('private-key')):
+            with self.assertRaises(ai.AIError) as error:
+                ai.list_models(self.config)
+        self.assertNotIn('private-key', str(error.exception))
+
+    def test_summary_chunks_large_input_without_recursive_compression(self):
+        config = self.config | {'context_tokens': 8192, 'max_output_tokens': 512}
+        def respond(settings, messages, **kwargs):
+            ai.fit_context(settings, messages)
+            self.assertNotIn('tools', kwargs)
+            return {'role': 'assistant', 'content': '事实摘要'}
+        with patch.object(ai, '_complete', side_effect=respond) as complete:
+            result = ai.summarize(config, {'html': '网页资料' * 6000}, '已有要求')
+        self.assertGreater(complete.call_count, 1)
+        self.assertEqual(result, '事实摘要')
+        self.assertIn('已有要求', complete.call_args_list[0].args[1][1]['content'])
+        self.assertIn('事实摘要', complete.call_args_list[1].args[1][1]['content'])
+
+    def test_compaction_keeps_user_rules_and_paired_latest_tools(self):
+        first = tool_call('read_webpage', {'url': 'https://example.com'})
+        first['anthropic_content'] = [{'type': 'tool_use', 'id': 'call-1', 'name': 'read_webpage', 'input': {}}]
+        latest = tool_call('list_presets', {}, identifier='call-2')
+        messages = [{'role': 'system', 'content': 'rules'}, {'role': 'user', 'content': '完整的当前需求'}, first,
+                    {'role': 'tool', 'tool_call_id': 'call-1', 'content': '网页' * 5000}, latest,
+                    {'role': 'tool', 'tool_call_id': 'call-2', 'content': '[]'}]
+        with patch.object(ai, 'summarize', return_value='已读取网页'):
+            fitted = ai.compact_context(self.config | {'context_tokens': 8192, 'max_output_tokens': 512}, messages)
+        self.assertEqual(fitted[:2], messages[:2])
+        self.assertEqual(fitted[-2:], messages[-2:])
+        self.assertNotIn('anthropic_content', fitted[2])
+        self.assertEqual(len(messages), 6)
+        converted = ai._anthropic_messages(fitted)
+        self.assertEqual(converted[-1]['content'][0]['tool_use_id'], 'call-2')
+
+    def test_token_estimate_handles_chinese_and_ascii(self):
+        self.assertLess(ai.estimate_tokens('abc' * 1000), 1100)
+        self.assertGreater(ai.estimate_tokens('中文' * 1000), 3900)
 
     def test_stream_reasoning_text_and_split_tool_arguments(self):
         events = [

@@ -78,6 +78,7 @@
       return json(settings);
     }
     if (path === '/api/ai/test' || path === '/api/ai/test-search') return json({ message: '此处为静态演示，未连接模型或搜索服务。请在自己的部署中测试。', tools_supported: false });
+    if (path === '/api/ai/models' && method === 'POST') return json({ models: ['演示模型（固定示例回复）'] });
     if (path === '/api/ai/skills/restore-defaults') { skills = copy(seed.skills); return json(skills); }
     if (path === '/api/ai/skills') {
       if (method === 'PUT') {

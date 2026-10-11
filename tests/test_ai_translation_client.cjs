@@ -176,17 +176,18 @@ function verifyPresets() {
 async function verifySettings() {
   const elements = new Map();
   const element = selector => {
-    if (!elements.has(selector)) elements.set(selector, { value: '', checked: false, textContent: '', reportValidity: () => true, querySelectorAll: () => [] });
+    if (!elements.has(selector)) elements.set(selector, { value: '', checked: false, textContent: '', reportValidity: () => true, querySelectorAll: () => [], replaceChildren(...children) { this.children = children; } });
     return elements.get(selector);
   };
   const requests = [];
   const settings = { enabled: true, provider: 'compatible', base_url: 'https://model.example/v1', model: 'text-model', timeout: 60, search_enabled: false, has_api_key: true };
   const state = {};
   const context = vm.createContext({
-    $: element, state, defaultSystemPrompt: '',
+    $: element, state, defaultSystemPrompt: '', document: { createElement: () => ({}) },
     api: async (url, options) => {
       const payload = JSON.parse(options.body);
       requests.push({ url, payload, status: element('#ai-settings-message').textContent });
+      if (url === '/api/ai/models') return { models: ['model-a', '<model-b>'] };
       return url === '/api/ai/settings' ? { ...settings, ...payload, has_api_key: true } : { message: '连接成功' };
     },
   });
@@ -213,6 +214,24 @@ async function verifySettings() {
   assert.equal(elements.has('#ai-translation-enabled'), false);
   assert.equal('aiTranslationEnabled' in state, false);
   assert.doesNotMatch(ai, /id="ai-translation-enabled"/);
+  await context.fetchModels();
+  assert.equal(requests.at(-1).url, '/api/ai/models');
+  assert.equal(requests.at(-1).payload.api_key, null);
+  assert.equal(element('#ai-model').value, settings.model, 'fetching does not replace the chosen model');
+  assert.equal(element('#ai-model-options').children[1].value, '<model-b>', 'model names are assigned as values, not HTML');
+  assert.equal(element('#ai-fetch-models').disabled, false);
+  context.api = async () => { throw new Error('服务不支持模型列表'); };
+  await context.fetchModels();
+  assert.equal(element('#ai-model').value, settings.model);
+  assert.equal(element('#ai-models-message').textContent, '服务不支持模型列表');
+  assert.equal(element('#ai-fetch-models').disabled, false);
+  let resolve;
+  context.api = () => new Promise(done => { resolve = done; });
+  const fetching = context.fetchModels();
+  element('#ai-base-url').value = 'https://changed.example/v1';
+  resolve({ models: ['stale-model'] });
+  await fetching;
+  assert.equal(element('#ai-model-options').children[0].value, 'model-a', 'stale responses are ignored');
 }
 
 async function verifyRuntimeAvailability() {

@@ -96,6 +96,7 @@ test('settings and skills can be explored without storing credentials', async ()
   const settings = await json('/api/ai/settings');
   assert.equal(settings.model, 'demo-model');
   assert.equal(settings.has_api_key, false);
+  assert.deepEqual((await json('/api/ai/models', 'POST', { base_url: 'https://example.test/v1' })).models, ['演示模型（固定示例回复）']);
   assert.ok(!JSON.stringify(settings).includes('DO-NOT-SAVE'));
   assert.equal((await request('/api/ai/chat', 'POST', { message: 'hello' })).status, 400);
   const count = (await json('/api/ai/skills')).length;

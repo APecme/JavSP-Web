@@ -18,7 +18,7 @@
   const advancedNumbers = [
     ['context_tokens', '最长上下文（Token）', 8192, 1048576, 65536],
     ['max_output_tokens', '最大输出长度（Token）', 256, 65536, 4096],
-    ['history_messages', '最多携带历史消息数', 2, 40, 16],
+    ['history_messages', '保留原文的近期消息数', 2, 40, 16],
     ['max_rounds', '每次分析最多轮数', 1, 12, 6],
     ['max_tool_calls', '每次分析最多工具调用数', 1, 24, 12],
     ['search_results', '最多搜索结果数', 1, 20, 8],
@@ -256,7 +256,7 @@
           row.append(tools);
         }
         if (turn.content) row.append(window.JavspMarkdown.render(turn.content));
-        if (running && (turn.phase !== 'thinking' || !turn.reasoning_content)) row.append(textElement('div', ({ thinking: '正在思考…', answering: '正在回复…', tools: '正在调用工具…' })[turn.phase] || '正在处理…', 'ai-stream-status'));
+        if (running && (turn.phase !== 'thinking' || !turn.reasoning_content)) row.append(textElement('div', ({ thinking: '正在思考…', answering: '正在回复…', tools: '正在调用工具…', compressing: '正在整理上下文…' })[turn.phase] || '正在处理…', 'ai-stream-status'));
         if (turn.status === 'stopped') row.append(textElement('small', '已停止生成', 'muted'));
         if (turn.status === 'failed') row.append(textElement('small', '本次回复中断，已保留收到的内容', 'muted'));
         for (const action of turnActions) row.append(actionCard(action));
@@ -413,7 +413,10 @@
         <label>模型服务商<select id="ai-provider"><option value="compatible">OpenAI 兼容服务</option><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="ollama">Ollama</option><option value="anthropic">Anthropic</option></select></label>
         <label>模型 API 地址<input id="ai-base-url" type="url" maxlength="2048" placeholder="https://api.example.com/v1"></label>
         <small class="muted">填写服务商提供的 API 地址，不是聊天网页地址。</small>
-        <label>模型名称<input id="ai-model" maxlength="200" placeholder="填写服务商提供的模型 ID"></label>
+        <label>模型名称<input id="ai-model" list="ai-model-options" maxlength="200" placeholder="获取后选择，或手动填写模型 ID"></label>
+        <datalist id="ai-model-options"></datalist>
+        <button class="button secondary" id="ai-fetch-models" type="button">获取模型列表</button>
+        <small id="ai-models-message" class="muted" role="status">填写 API 地址和密钥后即可获取，无需先保存。</small>
         <label>API 密钥<input id="ai-key" type="password" autocomplete="new-password" maxlength="4096" placeholder="留空保留已保存的密钥"></label>
         <label class="check-label"><input id="ai-clear-key" type="checkbox">清除已保存的 API 密钥</label>
         <label>请求超时（秒）<input id="ai-timeout" type="number" min="10" max="120" value="60" required></label>
@@ -430,6 +433,7 @@
         <details class="ai-setting-group"><summary>上下文与生成参数</summary><div class="stack">
         ${numberSettings(false)}
         <small class="muted">不确定时保留默认值。上下文和输出长度不要超过模型上限。</small>
+        <small class="muted">对话变长时会自动整理摘要，保留近期原文，完整聊天记录仍可查看。整理摘要会额外调用模型；上下文用量为估算值。</small>
         <label>采样温度<input id="ai-temperature" type="number" min="0" max="1" step="0.1" placeholder="留空使用模型默认值"></label>
         <small class="muted">数值越低，回答越稳定；模型不支持时留空。</small>
         </div></details>
@@ -458,6 +462,13 @@
       await submitSettings(false);
     });
     $('#ai-test').addEventListener('click', () => submitSettings(true));
+    $('#ai-fetch-models').addEventListener('click', fetchModels);
+    for (const id of ['ai-provider', 'ai-base-url', 'ai-key', 'ai-clear-key']) {
+      $('#' + id).addEventListener('input', () => {
+        $('#ai-model-options').replaceChildren();
+        $('#ai-models-message').textContent = '连接信息已更改，可重新获取模型列表。';
+      });
+    }
     $('#ai-test-search').addEventListener('click', () => submitSettings('search'));
     $('#ai-reset-prompt').addEventListener('click', () => {
       $('#ai-system-prompt').value = defaultSystemPrompt;
@@ -537,7 +548,31 @@
     $('#ai-system-prompt').value = settings.system_prompt || defaultSystemPrompt;
     $('#ai-key').value = '';
     $('#ai-clear-key').checked = false;
+    $('#ai-model-options').replaceChildren();
     $('#ai-settings-message').textContent = settings.has_api_key ? '已保存 API 密钥，留空即可保留。' : '尚未保存 API 密钥。';
+  }
+
+  async function fetchModels() {
+    const connection = () => ({ provider: $('#ai-provider').value, base_url: $('#ai-base-url').value.trim(),
+      api_key: $('#ai-key').value || null, clear_api_key: $('#ai-clear-key').checked, timeout: Number($('#ai-timeout').value) });
+    if (!$('#ai-base-url').reportValidity() || !$('#ai-timeout').reportValidity()) return;
+    const payload = connection();
+    const button = $('#ai-fetch-models');
+    const message = $('#ai-models-message');
+    button.disabled = true;
+    message.textContent = '正在获取模型列表…';
+    try {
+      const result = await api('/api/ai/models', { method: 'POST', body: JSON.stringify(payload), timeoutMs: (payload.timeout + 15) * 1000 });
+      if (JSON.stringify(connection()) !== JSON.stringify(payload)) return;
+      $('#ai-model-options').replaceChildren(...result.models.map(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        return option;
+      }));
+      message.textContent = `已获取 ${result.models.length} 个模型，点击模型名称输入框选择，也可手动填写。`;
+    } catch (error) {
+      if (JSON.stringify(connection()) === JSON.stringify(payload)) message.textContent = error.message;
+    } finally { button.disabled = false; }
   }
 
   async function submitSettings(test) {

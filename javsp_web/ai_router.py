@@ -111,6 +111,16 @@ def test_connection(body: ai.AISettings):
         raise HTTPException(400, "AI 参数不兼容，请检查上下文、输出长度和搜索数量") from exc
 
 
+@router.post("/models")
+def get_models(body: ai.AISettings):
+    try:
+        return {"models": ai.list_models(ai.merge_settings(body))}
+    except ai.AIError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, "请检查 AI 连接设置") from exc
+
+
 @router.get("/skills")
 def skills():
     return ai_tools.skill_catalog()
@@ -239,13 +249,6 @@ def _run(conversation, config):
         + (config.get("system_prompt") or ai.DEFAULT_SYSTEM_PROMPT)
     )
     messages = [{"role": "system", "content": system}]
-    history = conversation["turns"][-config.get("history_messages", 16):]
-    while history and history[0]["role"] != "user":
-        history = history[1:]
-    for turn in history:
-        if turn["role"] == "assistant" and not turn.get("content"):
-            continue
-        messages.append({"role": turn["role"], "content": turn["content"]})
     if conversation["actions"]:
         statuses = [{"id": action["id"], "tool": action["tool"], "status": action["status"],
                      "result": action.get("result"), "error": action.get("error")} for action in conversation["actions"][-12:]]
@@ -268,7 +271,48 @@ def _run(conversation, config):
         if identifier in _cancelled:
             raise AnalysisStopped()
 
+    def compressing():
+        check_stopped()
+        if reply["phase"] != "compressing":
+            reply["phase"] = "compressing"
+            with _lock:
+                _save(conversation)
+
     try:
+        definitions = ai_tools.tool_definitions()
+        if not config.get("search_enabled", True):
+            definitions = [tool for tool in definitions if tool["function"]["name"] not in ("ai_lookup", "web_search", "read_webpage")]
+        turns = conversation["turns"][:-1]
+        memory = conversation.get("context_summary", {})
+        start = memory.get("through", 0)
+        summary = memory.get("text", "")
+        if not isinstance(start, int) or not 0 <= start < len(turns):
+            start, summary = 0, ""
+        budget = config.get("context_tokens", 65536) - config.get("max_output_tokens", 4096)
+
+        def history_messages():
+            result = list(messages)
+            if summary:
+                result.append({"role": "system", "content": ai.SUMMARY_NOTICE + summary})
+            result.extend({"role": turn["role"], "content": turn["content"]} for turn in turns[start:]
+                          if turn.get("content"))
+            return result
+
+        while (len(turns) - start > config.get("history_messages", 16)
+               or ai.context_size(history_messages(), definitions) > budget * .85):
+            end = next((i for i in range(start + 1, len(turns)) if turns[i]["role"] == "user"), None)
+            if end is None:
+                break
+            compressing()
+            turn_ids = {turn.get("id") for turn in turns[start:end] if turn.get("id")}
+            evidence = [step for step in conversation.get("steps", []) if step.get("turn_id") in turn_ids]
+            summary = ai.summarize(config, {"turns": turns[start:end], "tools": evidence}, summary, check_stopped)
+            check_stopped()
+            start = end
+            conversation["context_summary"] = {"through": start, "text": summary}
+            with _lock:
+                _save(conversation)
+        messages = history_messages()
         for _ in range(max_rounds):
             check_stopped()
             content_prefix = reply["content"] + ("\n\n" if reply["content"] else "")
@@ -295,9 +339,9 @@ def _run(conversation, config):
                         _save(conversation)
                     last_saved = time.monotonic()
 
-            definitions = ai_tools.tool_definitions()
-            if not config.get("search_enabled", True):
-                definitions = [tool for tool in definitions if tool["function"]["name"] not in ("ai_lookup", "web_search", "read_webpage")]
+            messages = ai.compact_context(config, messages, definitions, compressing)
+            check_stopped()
+            reply["phase"] = "thinking"
             message = ai.complete(config, messages, definitions, on_update=progress)
             progress(message["content"], message.get("reasoning_content", ""), final=True)
             messages.append(message)
@@ -383,7 +427,7 @@ def chat(body: ChatBody, user: dict = Depends(require_admin)):
         }
         if conversation["status"] == "running":
             raise HTTPException(409, "当前对话仍在处理中")
-        if len(conversation["turns"]) >= 40 or len(conversation["actions"]) >= 30:
+        if len(conversation["turns"]) >= 2000 or len(conversation["actions"]) >= 1000:
             raise HTTPException(400, "当前对话已达到长度上限，请新建对话")
         message = ai.redact(body.message.strip(), config.get("api_key") or "")
         conversation.setdefault("title", message[:40])
