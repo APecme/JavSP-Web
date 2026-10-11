@@ -58,6 +58,52 @@ class WebPageTests(unittest.TestCase):
             ai_web.read_webpage('https://example.com')
         self.fetch.assert_called_once()
 
+    def test_short_cookie_values_preserve_identifiers_urls_and_html_numbers(self):
+        self.sync.return_value = {'example.com': {'layout': '0', 'mobile': '1', 'size': '8',
+                                                'language': 'zh', 'session': 'private-login-value'}}
+        url = 'https://example.com/search.php?keyword=FC2-PPV-4802229&f_fid=2&sch_area=0&pwuser=wwg101'
+        detail = 'https://example.com/htm_data/2510/2/71034617.html'
+        body = '''<html><title>Search 101</title><body><table width="100%" cellpadding="0">
+        <tr><td><a href="/htm_data/2510/2/71034617.html">FC2-PPV-4802229 wwg101</a>
+        <img src="/images/4802229/01.jpg"><span>2025-10-25 10:05</span></td></tr></table>
+        <p>session=private-login-value</p></body></html>'''
+        self.fetch.return_value = (200, '', body.encode(), 'utf-8')
+        result = ai_web.read_webpage(url)
+        self.assertEqual(result['url'], url)
+        self.assertEqual(result['links'][0]['url'], detail)
+        self.assertEqual(result['links'][0]['text'], 'FC2-PPV-4802229 wwg101')
+        self.assertEqual(result['images'], ['https://example.com/images/4802229/01.jpg'])
+        self.assertIn('width="100%" cellpadding="0"', result['html'])
+        self.assertIn('2025-10-25 10:05', result['text'])
+        self.assertNotIn('private-login-value', json.dumps(result))
+        ai_web.read_webpage(result['links'][0]['url'])
+        self.assertEqual(self.fetch.call_args.args[0], detail)
+
+    def test_short_credentials_masked_by_field_and_long_credentials_by_value(self):
+        from urllib.parse import quote
+        import html
+        secret = 'private<&/login-value'
+        content = ('FC2-PPV-4802229 wwg101 session=1 sid=abc cookie=0 '
+                   'https://example.com/page?token=xyz&item=101 ' + secret + ' '
+                   + html.escape(secret, quote=True) + ' ' + quote(secret, safe=''))
+        cleaned = ai_web._redact_page_text(content, {'0', '1', '8', 'abc', secret})
+        self.assertIn('FC2-PPV-4802229 wwg101', cleaned)
+        self.assertIn('item=101', cleaned)
+        for field in ('session', 'sid', 'cookie', 'token'):
+            self.assertIn(field + '=[已隐藏]', cleaned)
+        for form in (secret, html.escape(secret, quote=True), quote(secret, safe='')):
+            self.assertNotIn(form, cleaned)
+
+    def test_short_server_cookie_does_not_corrupt_followup_page(self):
+        def page(*args):
+            ai_web._session.get().private_values.update({'0', '1', '8', 'renewed-private-value'})
+            return (200, '', b'<a href="/post/4802229">FC2-PPV-4802229</a><p>renewed-private-value</p>', 'utf-8')
+        self.fetch.side_effect = page
+        result = ai_web.read_webpage('https://example.com/search')
+        self.assertEqual(result['links'][0]['url'], 'https://example.com/post/4802229')
+        self.assertIn('FC2-PPV-4802229', result['html'])
+        self.assertNotIn('renewed-private-value', json.dumps(result))
+
     def test_disabled_network_and_invalid_addresses_do_not_sync_or_fetch(self):
         with patch.object(ai, 'settings', return_value={'enabled': True, 'search_enabled': False}):
             with self.assertRaisesRegex(ai.AIError, '联网搜索'):

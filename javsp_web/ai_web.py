@@ -24,6 +24,23 @@ CRAWLER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.
 _session = ContextVar('ai_web_session', default=None)
 
 
+def _redact_page_text(value, secrets):
+    # Small cookie values are often preferences (0/1, page size, language).
+    # They cannot be distinguished from ordinary text by their value alone.
+    # Strip credential fields regardless of length, and only match sufficiently
+    # long values globally. Never substitute individual digits throughout HTML.
+    value = re.sub(
+        r'''(?i)((?<![\w-])(?:[\w-]*(?:session|auth|token|password|passwd|secret|cookie|csrf|api[_-]?key)[\w-]*|sid)\s*['"]?\s*[:=]\s*['"]?)[^\s'"&<>;,]+''',
+        r'\1[已隐藏]', value)
+    forms = {form for secret in secrets if len(secret) >= 8
+             for form in (secret, html.escape(secret, quote=True), quote(secret, safe=''))}
+    if forms:
+        # One pass avoids replacements changing the input of later replacements.
+        value = re.sub('|'.join(re.escape(form) for form in sorted(forms, key=len, reverse=True)),
+                       lambda _: '[已隐藏]', value)
+    return ai.redact(value)
+
+
 def _resolve(url):
     try:
         parsed = urlsplit(url)
@@ -242,10 +259,7 @@ def read_webpage(url, *, offset=0, selector='', use_cookiecloud=True):
         if isinstance(value, list):
             return [clean(item) for item in value]
         if isinstance(value, str):
-            for secret in sorted(secrets, key=len, reverse=True):
-                for form in (secret, html.escape(secret, quote=True), quote(secret, safe='')):
-                    value = value.replace(form, '[已隐藏]')
-            return ai.redact(value)
+            return _redact_page_text(value, secrets)
         return value
 
     markup = clean(markup)
