@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
+const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -892,13 +892,6 @@ function renderTasks() {
   window.requestAnimationFrame(restoreLogScroll);
 }
 
-function renderOverview() {
-  $('#metric-total').textContent = state.tasks.length;
-  $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
-  const latest = state.tasks[0];
-  $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  $('#overview-tasks').innerHTML = state.tasks.length ? state.tasks.slice(0, 5).map(taskCard).join('') : '<div class="task-list empty">还没有任务记录</div>';
-}
 
 function overviewTaskCard(task) {
   const failed = task.status === 'failed' || task.status === 'cancelled';
@@ -907,36 +900,7 @@ function overviewTaskCard(task) {
   return `<article class="overview-task-card"><div class="overview-task-head"><div><strong>${escapeHtml(task.name || task.id)}</strong><div class="task-meta"><span>${escapeHtml(task.preset_name || '默认配置')}</span><span>${new Date(task.created_at).toLocaleString()}</span></div></div><span class="badge ${task.status}">${task.status === 'succeeded' ? '已完成' : (failed ? '失败' : (task.status === 'running' ? '运行中' : '排队中'))}</span></div><div class="cover-wall ${failed ? 'failure' : ''}">${covers}</div></article>`;
 }
 
-function renderOverview() {
-  $('#metric-total').textContent = state.tasks.length;
-  $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
-  const latest = state.tasks[0];
-  $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  $('#overview-tasks').innerHTML = state.tasks.length ? state.tasks.slice(0, 5).map(overviewTaskCard).join('') : '<div class="task-list empty">还没有任务记录</div>';
-}
 
-function renderOverview() {
-  $('#metric-total').textContent = state.tasks.length;
-  $('#metric-running').textContent = state.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length;
-  const latest = state.tasks[0];
-  $('#metric-result').textContent = latest ? ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中' }[latest.status] || latest.status) : '-';
-  const completed = state.tasks.filter((task) => ['succeeded', 'failed', 'cancelled'].includes(task.status) && ((task.cover_count || task.fanart_count) || (task.progress?.image_sources?.cover_urls?.length || task.progress?.image_sources?.preview_pics?.length))).slice(0, 24);
-  const availableIds = new Set(completed.map((task) => task.id));
-  state.selectedOverviewTasks = new Set([...state.selectedOverviewTasks].filter((id) => availableIds.has(id)));
-  const selectedCount = state.selectedOverviewTasks.size;
-  const toolbar = completed.length ? `<div class="overview-cover-toolbar"><label class="check-label"><input id="overview-select-all" type="checkbox"${selectedCount && selectedCount === completed.length ? ' checked' : ''}>选择全部</label><span class="muted">已选择 ${selectedCount} 项</span><button id="overview-delete-selected" class="button danger" type="button"${selectedCount ? '' : ' disabled'}>删除所选记录</button></div>` : '';
-  $('#overview-tasks').innerHTML = completed.length ? `<div class="overview-cover-wall">${completed.map((task) => { const image = task.cover_count ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?thumbnail=true&amp;v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="${escapeHtml(task.name || '')}">` : artworkPlaceholder('overview-cover-placeholder', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载'); return `<figure class="overview-cover"><button class="overview-cover-delete" type="button" data-delete-task="${escapeHtml(task.id)}" title="删除任务记录" aria-label="删除任务记录">删除</button><button class="overview-cover-open" type="button" data-task-detail="${escapeHtml(task.id)}">${image}<figcaption>${escapeHtml(task.name || task.id)}</figcaption></button></figure>`; }).join('')}</div>` : '<div class="task-list empty">还没有可展示的影片，完成刮削后会出现在这里。</div>';
-  if (completed.length) {
-    $('#overview-tasks').insertAdjacentHTML('afterbegin', toolbar);
-    $('#overview-tasks').querySelectorAll('.overview-cover').forEach((card) => {
-      const task = completed.find((item) => card.querySelector(`img[src*="/api/tasks/${encodeURIComponent(item.id)}/cover/"]`));
-      if (!task) return;
-      const selected = state.selectedOverviewTasks.has(task.id);
-      card.classList.toggle('selected', selected);
-      card.insertAdjacentHTML('afterbegin', `<label class="overview-cover-select"><input type="checkbox" data-overview-select="${escapeHtml(task.id)}"${selected ? ' checked' : ''} aria-label="选择封面"></label>`);
-    });
-  }
-}
 
 function taskPageRequest() {
   const view = document.querySelector('.view.active')?.dataset.panel;
@@ -948,6 +912,7 @@ function taskPageRequest() {
   params.set('limit', size); params.set('offset', page * size);
   if (view === 'overview') {
     params.set('sort', state.overviewSort.key); params.set('direction', state.overviewSort.direction);
+    if (state.overviewQuery) params.set('query', state.overviewQuery);
   } else {
     const controls = { query: 'query', field: 'field', status: 'status', size_min: 'size-min', size_max: 'size-max' };
     Object.entries(controls).forEach(([key, id]) => { const value = $(`#task-filter-${id}`)?.value; if (value) params.set(key, value); });
@@ -1576,6 +1541,9 @@ $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-task-page]'); if (button && !button.disabled) { state.taskPage = Math.max(0, Number(button.dataset.taskPage) || 0); loadTasks(); } });
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) { event.stopPropagation(); deleteTaskInDialog(button.dataset.deleteTask); } });
+$('#library-search-form')?.addEventListener('submit', (event) => { event.preventDefault(); state.overviewQuery = $('#library-search').value.trim(); state.overviewPage = 1; state.tasksSignature = ''; loadTasks(); });
+$('#library-search-form')?.addEventListener('reset', () => { state.overviewQuery = ''; state.overviewPage = 1; state.tasksSignature = ''; loadTasks(); });
+document.addEventListener('click', event => { const button = event.target.closest('[data-detail-section]'); if (button) document.getElementById(button.dataset.detailSection)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); });
 document.addEventListener('change', (event) => {
   if (event.target.id === 'overview-sort-key' || event.target.id === 'overview-sort-direction') {
     state.overviewSort = { key: $('#overview-sort-key').value, direction: $('#overview-sort-direction').value };
@@ -1974,16 +1942,18 @@ async function openTaskDetail(taskId, background = false) {
   } finally { if (detailRequestId === state.detailRequestId) state.detailLoading = false; }
   if (state.activeTaskDetail !== taskId || !dialog.open || detailRequestId !== state.detailRequestId || (background && (state.taskMetadataEditing || state.taskDetailLogSelecting || hasTaskDetailLogSelection()))) return;
   state.detailTask = task;
+  document.querySelector('.film-navigation').hidden = task.task_type === 'scan';
+  document.querySelector('[data-detail-section="task-comments"]').hidden = !task.progress?.metadata?.dvdid || !state.runtime?.comments_url;
   if (task.task_type === 'scan') {
     $('#task-detail-content').innerHTML = '<p role="status">' + escapeHtml(task.scan?.message || '') + '</p><p class="muted">扫描完成后，影片任务会出现在任务队列中。停止扫描仅停止继续创建任务。</p><pre class="task-log">' + escapeHtml((task.log_tail || []).join('\n')) + '</pre>';
     return;
   }
   const metadata = task.progress?.metadata || {};
-  const rows = [['番号', metadata.dvdid], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date], ['文件名', task.file_name || task.name], ['文件路径', task.input_directory || '-'], ['整理路径', task.progress?.output?.save_dir || '-']].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
+  const rows = [['番号', metadata.dvdid], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date]].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
   const actressInput = Array.isArray(metadata.actress) ? metadata.actress.join('\n') : (metadata.actress || '');
-  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="task-metadata-summary"><div class="task-metadata-summary-heading"><h3>影片资料</h3><button class="button secondary" type="button" data-edit-task-metadata>修改</button></div><div class="task-detail-main">${poster}<div class="film-info"><p class="film-number">${escapeHtml(metadata.dvdid || '影片资料')}</p><h3 class="film-title">${escapeHtml(metadata.title || taskDisplayName(task))}</h3><dl class="task-detail-data">${rows}</dl></div></div></section>`;
+  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="task-metadata-summary film-hero"><div class="task-detail-main">${poster}<div class="film-info"><div class="film-heading-row"><p class="film-number">${escapeHtml(metadata.dvdid || '影片资料')}</p><button class="button secondary" type="button" data-edit-task-metadata>编辑资料</button></div><h3 class="film-title">${escapeHtml(metadata.title || taskDisplayName(task))}</h3><dl class="task-detail-data">${rows}</dl></div></div></section>`;
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
@@ -1996,14 +1966,14 @@ async function openTaskDetail(taskId, background = false) {
     : '<p class="muted">暂无剧照</p>';
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
-  const taskLogLines = (task.log_tail || []).join('\n');
+  const fileInfo = [['文件名', task.file_name || task.name], ['原始路径', task.input_directory], ['整理路径', task.progress?.output?.save_dir]].map(([name,value]) => `<div class="detail-data-row"><dt>${name}</dt><dd>${escapeHtml(value || '—')}</dd></div>`).join('');
   const taskLog = taskLogMarkup(task, `detail-${task.id}`, 'task-detail-log');
   const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = metadata.dvdid || '影片详情';
   $('#task-detail-subtitle').textContent = metadata.publish_date || '';
   const identifier = String(metadata.dvdid || '').trim();
-  patchChildren($('#task-detail-content'), `${metadataEditor}<section class="detail-images"><div><h3>下载图片</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section><section class="detail-fanarts"><h3>剧照 <span class="muted">${task.fanart_count || 0}</span></h3><div class="detail-fanart-grid">${fanarts}</div></section>${taskLog}`);
+  patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><div><p class="library-eyebrow">画面预览</p><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
   window.JavspComments?.open(identifier, state.runtime?.comments_url || '');
 }
 
@@ -2112,8 +2082,8 @@ function renderOverview() {
   const allSelected = pageIds.size > 0 && [...pageIds].every((id) => state.selectedOverviewTasks.has(id));
   const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
-  $('#library-count').textContent = `${state.taskTotal || 0} 部影片`;
-  const overviewMarkup = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : '<div class="task-list empty">还没有可展示的影片，完成刮削后会出现在这里。</div>';
+  $('#library-count').textContent = `${state.taskTotal || 0}`;
+  const overviewMarkup = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : `<div class="library-empty"><span aria-hidden="true">▤</span><h3>${state.overviewQuery ? '没有找到符合条件的影片' : '收藏从第一部影片开始'}</h3><p>${state.overviewQuery ? '试试其他番号、片名或女优名字。' : '添加刮削任务，完成后就能在这里浏览封面和影片资料。'}</p>${state.overviewQuery ? '' : '<button class="button primary" data-go="scrape">添加影片</button>'}</div>`;
   const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}>下一页</button></div>` : '';
   const overviewContainer = $('#overview-tasks');
   patchChildren(overviewContainer, overviewMarkup + pagination);
@@ -2134,7 +2104,7 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const selected = taskIds.every((id) => state.selectedOverviewTasks.has(id));
   const selector = state.overviewSelectionMode ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
   const feedback = taskIds.some((id) => state.overviewSelectionFeedback.has(id));
-  return `<article class="overview-cover-card${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="library-artwork">${artwork}${taskCount > 1 ? `<small class="library-record-count">${taskCount} 条记录</small>` : ''}</span><span class="library-id">${escapeHtml(identifier)}</span><span class="library-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small class="library-caption">${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
+  return `<article class="overview-cover-card${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="library-artwork">${artwork}<span class="library-open-hint" aria-hidden="true">查看影片 ↗</span>${metadata.publish_date ? `<span class="library-year">${escapeHtml(String(metadata.publish_date).slice(0,4))}</span>` : ''}${taskCount > 1 ? `<small class="library-record-count">${taskCount} 条记录</small>` : ''}</span><span class="library-id">${escapeHtml(identifier)}</span><span class="library-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small class="library-caption">${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
 }
 
 function artworkPlaceholder(className, label) {
@@ -3556,7 +3526,7 @@ window.JavspComments = (() => {
     if (!name || !base) return;
     current = { identifier: name, base, items: [], cursor: null, loading: false, requests: new Set() };
     section.hidden = false;
-    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">与其他使用者分享看法，无需注册。评论审核后公开显示。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
+    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
     load();
   };
   document.addEventListener('submit', async (event) => {

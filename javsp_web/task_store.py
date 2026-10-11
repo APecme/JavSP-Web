@@ -246,11 +246,14 @@ def page(limit=50, offset=0, view='all', query='', field='all', status='', size_
                 PARTITION BY group_key ORDER BY (status='succeeded') DESC,created_at DESC,id) AS rank
                 FROM tasks WHERE status IN ('succeeded','failed','cancelled') AND
                 (json_extract(summary,'$.cover_count')>0 OR json_extract(summary,'$.fanart_count')>0 OR json_extract(summary,'$.has_artwork_sources')=1)) """
-            total = db.execute(cte + 'SELECT count(*) FROM eligible WHERE rank=1').fetchone()[0]
+            # Filter the displayed representative after grouping so searches and
+            # pagination keep the complete set of task IDs for each film.
+            library_where = ' WHERE rank=1' + (' AND ' + ' AND '.join(conditions) if conditions else '')
+            total = db.execute(cte + 'SELECT count(*) FROM eligible' + library_where, params).fetchone()[0]
             order = "coalesce(json_extract(summary,'$.progress.metadata.publish_date'),'')" if sort == 'publish_date' else 'created_at'
             order += ' ASC' if direction == 'asc' else ' DESC'
             offset = min(offset, max(0, ((total - 1) // limit) * limit))
-            rows = db.execute(cte + f'SELECT summary,task_ids FROM eligible WHERE rank=1 ORDER BY {order},id LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+            rows = db.execute(cte + f'SELECT summary,task_ids FROM eligible{library_where} ORDER BY {order},id LIMIT ? OFFSET ?', [*params, limit, offset]).fetchall()
             items = []
             for row in rows:
                 item = json.loads(row['summary'])

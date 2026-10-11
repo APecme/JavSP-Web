@@ -124,6 +124,20 @@ class TaskStoreTests(unittest.TestCase):
             load.assert_called_once_with({'one'})
         self.assertEqual(tasks.get_task('two')['title'], 'two')
 
+    def test_library_search_filters_before_pagination_without_losing_group_members(self):
+        records = [self.item(str(i), image_sources={'cover_urls': ['https://example.test/cover']}) for i in range(30)]
+        for record in records[25:28]:
+            record['image_output'] = {'save_dir': '/shared', 'fanart_file': '/shared/fanart.jpg'}
+            record['metadata_override'] = {'title': 'Quiet Garden', 'actress': ['Alice'], 'dvdid': 'XYZ-987'}
+        storage.save_tasks(records)
+        for query in ('quiet garden', 'ALICE', 'XYZ-987'):
+            result = tasks.list_task_summaries(10, 0, view='overview', query=query)
+            self.assertEqual(result['total'], 1)
+            self.assertEqual(len(result['items']), 1)
+            self.assertEqual(set(result['items'][0]['task_ids']), {'25', '26', '27'})
+            self.assertEqual(result['metrics']['total'], 30)
+        self.assertEqual(tasks.list_task_summaries(10, 0, view='overview', query='absent')['total'], 0)
+
     def test_cover_lookup_never_loads_history_or_logs_for_new_records(self):
         from PIL import Image
         path = self.folder / 'poster.jpg'
