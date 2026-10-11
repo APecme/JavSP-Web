@@ -26,7 +26,7 @@ from PIL import Image, ImageOps
 
 from .storage import CUSTOM_CRAWLERS_DIR, DATA_DIR, IS_FROZEN, VENDOR_DIR, delete_task_record, get_cookiecloud_settings, get_disabled_built_in_crawlers, get_preset, get_task_record, load_task_page, load_tasks, read_config, save_tasks, upsert_task
 from .config_validation import load_base_config, validate_config_data
-from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
+from .cookiecloud import CookieCloudError, cookiecloud_summary, get_synced_cookies
 from .timeutils import now_iso
 from .task_logs import build_log_entries, log_text, readable_error
 
@@ -1148,7 +1148,7 @@ def _run_task(task: dict) -> None:
     settings = get_cookiecloud_settings(include_password=True)
     if settings.get("enabled"):
         try:
-            cookies = fetch_cookiecloud(settings)
+            cookies = get_synced_cookies(settings)
             _TASK_COOKIECLOUD_DIR.mkdir(parents=True, exist_ok=True)
             cookiecloud_file = _TASK_COOKIECLOUD_DIR / f"{task['id']}.json"
             cookiecloud_file.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")
@@ -1322,7 +1322,7 @@ def _image_cookiecloud_cookies(url: str) -> dict[str, str]:
     if not host:
         return {}
     try:
-        synced = fetch_cookiecloud(settings)
+        synced = get_synced_cookies(settings)
     except CookieCloudError:
         return {}
     result: dict[str, str] = {}
@@ -1751,7 +1751,7 @@ def _search_google_cover(task: dict) -> None:
         settings = get_cookiecloud_settings(include_password=True)
         if settings.get("enabled"):
             try:
-                cookies = fetch_cookiecloud(settings)
+                cookies = get_synced_cookies(settings)
                 _TASK_COOKIECLOUD_DIR.mkdir(parents=True, exist_ok=True)
                 cookiecloud_file = _TASK_COOKIECLOUD_DIR / f"{task_id}-cover-{uuid.uuid4().hex}.json"
                 cookiecloud_file.write_text(json.dumps(cookies, ensure_ascii=False), encoding="utf-8")

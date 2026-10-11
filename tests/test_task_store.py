@@ -298,6 +298,42 @@ class TaskStoreTests(unittest.TestCase):
                 self.assertEqual(response.json()['activation']['target'], '1.1.40')
             self.assertFalse(client.get('/api/update').json()['settings']['experience_program'])
 
+    def test_cookiecloud_interval_manual_sync_and_shared_snapshot(self):
+        from javsp_web import cookiecloud
+        self.enterContext(patch.object(cookiecloud, '_snapshot', {}))
+        client = self.client()
+        body = {'enabled': True, 'server_url': 'https://cloud.test', 'uuid': 'test', 'password': 'private-password',
+                'sync_interval_minutes': 12}
+        response = client.put('/api/cookiecloud', json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['sync_interval_minutes'], 12)
+        self.assertNotIn('private-password', response.text)
+        self.assertEqual(client.get('/api/cookiecloud').json()['sync_interval_minutes'], 12)
+        for invalid in (0, 1441):
+            self.assertEqual(client.put('/api/cookiecloud', json=body | {'sync_interval_minutes': invalid}).status_code, 422)
+        with patch.object(cookiecloud, 'fetch_cookiecloud', return_value={'example.com': {'session': 'private-value'}}) as fetch:
+            result = client.post('/api/cookiecloud/sync')
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertTrue(result.json()['sync']['last_sync_at'])
+            self.assertNotIn('private-value', result.text)
+            self.assertEqual(tasks._image_cookiecloud_cookies('https://example.com/cover.jpg'), {'session': 'private-value'})
+            fetch.assert_called_once()
+        client.put('/api/cookiecloud', json=body | {'enabled': False})
+        self.assertEqual(client.post('/api/cookiecloud/sync').status_code, 400)
+        self.assertFalse(client.get('/api/cookiecloud').json()['sync']['next_sync_at'])
+
+    def test_cookiecloud_connection_test_does_not_change_active_snapshot(self):
+        from javsp_web import cookiecloud
+        self.enterContext(patch.object(cookiecloud, '_snapshot', {}))
+        client = self.client()
+        body = {'enabled': True, 'server_url': 'https://cloud.test', 'uuid': 'test', 'password': 'private-password'}
+        client.put('/api/cookiecloud', json=body)
+        with patch.object(self.server, 'fetch_cookiecloud', return_value={'example.com': {'session': 'test-only'}}):
+            result = client.post('/api/cookiecloud/test', json=body | {'uuid': 'unsaved'})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(client.get('/api/cookiecloud').json()['uuid'], 'test')
+        self.assertFalse(cookiecloud.sync_status()['last_sync_at'])
+
     def test_api_page_etag_thumbnail_and_version(self):
         client = self.client()
         from PIL import Image

@@ -28,7 +28,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from . import __version__
 from .auth import SESSION_COOKIE, create_session, current_user, remove_session, require_admin
 from .config_validation import load_base_config, validate_config_data, yaml_error_message
-from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
+from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud, get_synced_cookies, sync_status, start_scheduler as start_cookiecloud_scheduler
 from .storage import (
     CUSTOM_CRAWLERS_DIR,
     delete_auto_scrape_schedule_run,
@@ -84,6 +84,7 @@ ensure_seed_data()
 recover_interrupted_tasks()
 start_artwork_path_repair()
 updater.start_scheduler()
+start_cookiecloud_scheduler()
 app = FastAPI(title="JavSP WEB", version=__version__)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 from .ai_router import router as ai_router
@@ -177,6 +178,7 @@ class CookieCloudBody(BaseModel):
     crypto_type: Literal["auto", "legacy", "aes-128-cbc-fixed"] = "auto"
     password: str | None = Field(default=None, max_length=2048)
     clear_password: bool = False
+    sync_interval_minutes: int = Field(default=30, ge=1, le=1440)
 
 
 class CustomCrawlerBody(BaseModel):
@@ -917,7 +919,7 @@ def get_config(_: dict = Depends(current_user)) -> dict:
 
 @app.get("/api/cookiecloud")
 def get_cookiecloud(_: dict = Depends(require_admin)) -> dict:
-    return get_cookiecloud_settings()
+    return {**get_cookiecloud_settings(), 'sync': sync_status()}
 
 
 @app.put("/api/cookiecloud")
@@ -928,7 +930,8 @@ def update_cookiecloud(body: CookieCloudBody, _: dict = Depends(require_admin)) 
         raise HTTPException(status_code=400, detail="启用 CookieCloud 时不能清除密码")
     if body.enabled and not (body.password or get_cookiecloud_settings(include_password=True).get("password")):
         raise HTTPException(status_code=400, detail="启用 CookieCloud 前请填写密码")
-    return save_cookiecloud_settings(body.model_dump(exclude_none=True))
+    saved = save_cookiecloud_settings(body.model_dump(exclude_none=True))
+    return {**saved, 'sync': sync_status()}
 
 
 @app.post("/api/cookiecloud/test")
@@ -942,6 +945,17 @@ def test_cookiecloud(body: CookieCloudBody, _: dict = Depends(require_admin)) ->
     except CookieCloudError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, **cookiecloud_summary(cookies)}
+
+
+@app.post("/api/cookiecloud/sync")
+def sync_cookiecloud(_: dict = Depends(require_admin)) -> dict:
+    if not get_cookiecloud_settings()['enabled']:
+        raise HTTPException(400, '请先保存并启用 CookieCloud')
+    try:
+        get_synced_cookies(force=True)
+    except CookieCloudError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {'ok': True, 'sync': sync_status()}
 
 
 @app.get("/api/crawler-config")
@@ -1049,7 +1063,7 @@ def test_crawler(body: CrawlerTestBody, _: dict = Depends(require_admin)) -> dic
         settings = get_cookiecloud_settings(include_password=True)
         if settings.get("enabled"):
             try:
-                cookies = fetch_cookiecloud(settings)
+                cookies = get_synced_cookies(settings)
                 with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as cookie_file:
                     json.dump(cookies, cookie_file, ensure_ascii=False)
                     cookiecloud_path = cookie_file.name

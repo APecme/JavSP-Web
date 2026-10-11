@@ -2012,7 +2012,28 @@ function cookiecloudPayload() {
     crypto_type: $('#cookiecloud-crypto-type').value,
     password: $('#cookiecloud-password').value,
     clear_password: $('#cookiecloud-clear-password').checked,
+    sync_interval_minutes: Number($('#cookiecloud-sync-interval').value || 30),
   };
+}
+
+let cookiecloudStatusTimer = null;
+
+function renderCookieCloudStatus(settings) {
+  const sync = settings.sync || {};
+  const last = sync.last_sync_at ? formatLocalDateTime(sync.last_sync_at) : '尚未同步';
+  const next = !settings.enabled ? '已停用' : sync.next_sync_at ? formatLocalDateTime(sync.next_sync_at) : '等待同步';
+  const counts = sync.last_sync_at ? `（${sync.domains} 个站点，${sync.cookies} 条 Cookie）` : '';
+  $('#cookiecloud-sync-status').textContent = `最近同步：${last}${counts}；下次：${next}${sync.last_error ? '；' + sync.last_error : ''}`;
+  $('#sync-cookiecloud').disabled = !settings.enabled;
+}
+
+function scheduleCookieCloudStatus() {
+  window.clearTimeout(cookiecloudStatusTimer);
+  cookiecloudStatusTimer = window.setTimeout(async () => {
+    if (!document.querySelector('[data-panel="settings"].active')) return;
+    try { renderCookieCloudStatus(await api('/api/cookiecloud')); } catch (_) { }
+    scheduleCookieCloudStatus();
+  }, 15000);
 }
 
 async function loadCookieCloud() {
@@ -2025,6 +2046,9 @@ async function loadCookieCloud() {
     $('#cookiecloud-crypto-type').value = settings.crypto_type || 'auto';
     $('#cookiecloud-password').value = '';
     $('#cookiecloud-clear-password').checked = false;
+    $('#cookiecloud-sync-interval').value = settings.sync_interval_minutes || 30;
+    renderCookieCloudStatus(settings);
+    scheduleCookieCloudStatus();
     message.textContent = settings.has_password ? '已保存密码' : '';
   } catch (error) { message.textContent = error.message; }
 }
@@ -3179,6 +3203,7 @@ $('#cookiecloud-form').addEventListener('submit', async (event) => {
     $('#cookiecloud-password').value = '';
     $('#cookiecloud-clear-password').checked = false;
     message.textContent = saved.has_password ? 'CookieCloud 配置已保存' : 'CookieCloud 配置已保存；尚未设置密码';
+    renderCookieCloudStatus(saved);
   } catch (error) { message.textContent = error.message; }
 });
 $('#test-cookiecloud').addEventListener('click', async () => {
@@ -3186,12 +3211,28 @@ $('#test-cookiecloud').addEventListener('click', async () => {
   const message = $('#cookiecloud-message');
   const original = button.textContent;
   button.disabled = true;
-  button.textContent = '正在同步';
+  button.textContent = '正在测试';
   try {
     const result = await api('/api/cookiecloud/test', { method: 'POST', body: JSON.stringify(cookiecloudPayload()) });
-    message.textContent = `同步成功：${result.domains} 个站点，${result.cookies} 条 Cookie`;
+    message.textContent = `连接成功：${result.domains} 个站点，${result.cookies} 条 Cookie。测试不会保存配置；保存后可立即同步。`;
   } catch (error) { message.textContent = error.message; }
   finally { button.disabled = false; button.textContent = original; }
+});
+$('#sync-cookiecloud').addEventListener('click', async () => {
+  const button = $('#sync-cookiecloud');
+  const message = $('#cookiecloud-message');
+  button.disabled = true;
+  message.textContent = '正在按已保存的配置同步…';
+  try {
+    const result = await api('/api/cookiecloud/sync', { method: 'POST' });
+    renderCookieCloudStatus({ enabled: true, sync: result.sync });
+    message.textContent = '同步完成，爬虫和 AI 将使用这次同步的登录信息。';
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    try { renderCookieCloudStatus(await api('/api/cookiecloud')); } catch (_) { }
+  }
 });
 $('#download-management-form').addEventListener('submit', async (event) => {
   event.preventDefault();

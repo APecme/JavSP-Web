@@ -117,6 +117,34 @@ class AITests(unittest.TestCase):
         execute.assert_not_called()
         self.assertEqual(conversation['steps'][0]['status'], 'failed')
 
+    def test_followup_includes_real_previous_tool_evidence(self):
+        conversation = self.conversation('上次网页读取结果是什么？')
+        conversation['steps'] = [{'id': 'previous-call', 'turn_id': 'previous-turn', 'tool': 'read_webpage',
+                                  'status': 'completed', 'result': '{"access_status":"login_or_permission_required"}'}]
+        with patch.object(ai, 'complete', return_value={'role': 'assistant', 'content': '上次页面提示需要登录'}) as complete:
+            ai_router._run(conversation, self.config)
+        messages = complete.call_args.args[1]
+        evidence = next(item['content'] for item in messages if 'previous-call' in str(item['content']))
+        self.assertIn('login_or_permission_required', evidence)
+        self.assertIn('本轮再次调用', evidence)
+
+    def test_webpage_calls_within_one_turn_share_session_and_close_afterwards(self):
+        from javsp_web import ai_web
+        conversation = self.conversation('读取搜索页和详情页')
+        replies = [tool_call('read_webpage', {'url': 'https://example.com/search'}),
+                   tool_call('read_webpage', {'url': 'https://example.com/thread'}, identifier='call-2'),
+                   {'role': 'assistant', 'content': '已读取'}]
+        sessions = []
+        def read(**kwargs):
+            sessions.append(ai_web._session.get())
+            return {'html': '<p>result</p>'}
+        with patch.object(ai, 'complete', side_effect=replies), patch.object(ai_web, 'read_webpage', side_effect=read):
+            ai_router._run(conversation, self.config)
+        self.assertEqual(len(sessions), 2)
+        self.assertIsNotNone(sessions[0])
+        self.assertIs(sessions[0], sessions[1])
+        self.assertIsNone(ai_web._session.get())
+
     def test_configured_round_limit_and_history_count(self):
         conversation = self.conversation()
         conversation['turns'] = [{'role': 'user', 'content': 'old'}, {'role': 'assistant', 'content': 'old reply'},

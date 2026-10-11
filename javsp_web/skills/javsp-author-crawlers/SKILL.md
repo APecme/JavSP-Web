@@ -9,6 +9,8 @@ description: 为 JavSP WEB 制作或修复 Python 自定义爬虫。用户要求
 
 返回的 `html` 保留页面结构；`truncated` 为真时，用 `next_offset` 继续读取相同 URL 和 selector，或根据已读取的结构用 XPath 选择正文。不要根据截断片段断言字段不存在。联网搜索关闭时不能读取网页，应说明需要在 AI 接入中开启联网搜索。不能臆造 DOM 选择器。现有爬虫先用 `get_crawler` 阅读原代码，保留搜索、认证及其余站点规则。
 
+网页读取和爬虫测试共用最近一次 CookieCloud 同步结果。同步间隔和“立即同步”在系统设置中；不要在爬虫测试已成功时仅凭另一页面拒绝访问，就要求反复同步。`access_status=login_or_permission_required` 表示页面要求登录或权限，不能区分 Cookie 过期、板块权限与请求差异。同一次对话处理中的网页读取保留站点续发的 Cookie；不会提交浏览器验证表单。核对历史工具记录，只在实际重新调用后声称已重试。
+
 ## 接口约定
 
 ```python

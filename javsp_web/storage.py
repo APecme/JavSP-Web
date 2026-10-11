@@ -573,11 +573,16 @@ def get_cookiecloud_settings(include_password: bool = False) -> dict[str, Any]:
         saved = _read_json(COOKIECLOUD_FILE, {})
         saved = saved if isinstance(saved, dict) else {}
         password = str(saved.get("password") or "")
+        try:
+            interval = max(1, min(1440, int(saved.get("sync_interval_minutes", 30))))
+        except (ValueError, TypeError):
+            interval = 30
         result = {
             "enabled": bool(saved.get("enabled")),
             "server_url": str(saved.get("server_url") or ""),
             "uuid": str(saved.get("uuid") or ""),
             "crypto_type": str(saved.get("crypto_type") or "auto"),
+            "sync_interval_minutes": interval,
             "has_password": bool(password),
             "updated_at": str(saved.get("updated_at") or ""),
         }
@@ -599,6 +604,7 @@ def save_cookiecloud_settings(settings: dict[str, Any]) -> dict[str, Any]:
             "server_url": str(settings.get("server_url") or "").strip().rstrip("/"),
             "uuid": str(settings.get("uuid") or "").strip(),
             "crypto_type": str(settings.get("crypto_type") or existing.get("crypto_type") or "auto"),
+            "sync_interval_minutes": max(1, min(1440, int(settings.get("sync_interval_minutes", existing.get("sync_interval_minutes", 30))))),
             "password": password,
             "updated_at": now_iso(),
         }

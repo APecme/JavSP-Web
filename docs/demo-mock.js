@@ -30,7 +30,7 @@
   let downloadSettings = { takeover_enabled: false, auto_scrape_enabled: false, auto_scrape_rules: [], ratio_limit: -1, seeding_time_limit: -1, inactive_seeding_time_limit: -1, download_limit_kib: -1, upload_limit_kib: -1 };
   const downloaders = [{ id: 'demo-downloader', name: 'qBittorrent 示例', url: 'http://qbittorrent.example:8080', username: 'demo', password_set: false }];
   const mediaServers = [{ id: 'demo-media', name: 'Emby 示例', type: 'emby', url: 'http://emby.example:8096', external_url: '', api_key_set: false, auto_scan: false, auto_scan_delay: 30, libraries: [] }];
-  let cookiecloud = { enabled: false, url: '', uuid: '', has_password: false };
+  let cookiecloud = { enabled: false, server_url: '', uuid: '', has_password: false, sync_interval_minutes: 30, sync: {} };
   const update = { current: seed.version, channel: 'bata', settings: { experience_program: true, check_enabled: false, auto_update: false, check_interval_hours: 24 }, result: {}, job: {}, capability: { supported: false, reason: '静态示例不检查或安装软件。正式部署请在此管理更新。' } };
   const crawlerNames = [...new Set(Object.values(seed.config.crawler.selection).flat())];
   const crawlerInfo = name => ({ name, kind: 'builtin', editable: false, source: '此示例展示爬虫入口，不包含可执行爬虫代码。' });
@@ -166,7 +166,7 @@
     if (path === '/api/auto-scrape-schedules') return saveCollection(schedules, path, body, method);
     if (path.startsWith('/api/downloaders')) { if (path.endsWith('/test')) return denied(); return saveCollection(downloaders, path, body, method); }
     if (path.startsWith('/api/media-servers')) { if (path.endsWith('/sync') || path.endsWith('/libraries')) return denied(); return saveCollection(mediaServers, path, body, method); }
-    if (path === '/api/cookiecloud/test') return denied();
+    if (path === '/api/cookiecloud/test' || path === '/api/cookiecloud/sync') return denied();
     if (path === '/api/cookiecloud') { if (method === 'PUT') { const { password, ...safe } = body; cookiecloud = { ...cookiecloud, ...safe, has_password: false }; } return json(cookiecloud); }
     if (path === '/api/users' && method === 'GET') return json([{ username: 'demo', role: 'admin', created_at: now() }]);
     return denied();
