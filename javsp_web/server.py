@@ -27,7 +27,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from . import __version__
 from .auth import SESSION_COOKIE, create_session, current_user, remove_session, require_admin
-from .config_validation import load_base_config, validate_config_data
+from .config_validation import load_base_config, validate_config_data, yaml_error_message
 from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud
 from .storage import (
     CUSTOM_CRAWLERS_DIR,
@@ -311,7 +311,8 @@ class UpdateSettingsBody(BaseModel):
 @app.get("/api/runtime")
 def runtime(_: dict = Depends(current_user)) -> dict:
     from .ai import settings as ai_settings
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name(), "ai_enabled": ai_settings()["enabled"]}
+    config = ai_settings()
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name(), "ai_enabled": config["enabled"]}
 
 
 @app.get("/api/update")
@@ -559,9 +560,9 @@ def convert_preset(body: PresetConvertBody, _: dict = Depends(current_user)) -> 
         try:
             parsed = yaml.safe_load(body.content) or {}
         except yaml.YAMLError as exc:
-            raise HTTPException(status_code=400, detail=f"YAML 格式错误: {exc}") from exc
+            raise HTTPException(status_code=400, detail=yaml_error_message(exc)) from exc
         if not isinstance(parsed, dict):
-            raise HTTPException(status_code=400, detail="YAML 根节点必须是对象")
+            raise HTTPException(status_code=400, detail="配置文件最外层应按“配置项: 内容”填写，不能是列表或一段普通文字")
         try:
             validate_config_data(_deep_merge(base, parsed))
         except ValueError as exc:
@@ -583,9 +584,9 @@ def _prepare_preset(body: PresetBody) -> dict:
         try:
             parsed = yaml.safe_load(body.content)
         except yaml.YAMLError as exc:
-            raise HTTPException(status_code=400, detail=f"YAML 格式错误: {exc}") from exc
+            raise HTTPException(status_code=400, detail=yaml_error_message(exc)) from exc
         if not isinstance(parsed, dict):
-            raise HTTPException(status_code=400, detail="YAML 根节点必须是对象")
+            raise HTTPException(status_code=400, detail="配置文件最外层应按“配置项: 内容”填写，不能是列表或一段普通文字")
         form = {}
     else:
         form = _normalize_form(body.form, base)
@@ -700,9 +701,9 @@ def _normalize_form(form: dict, base: dict | None = None) -> dict:
             try:
                 value = yaml.safe_load(value) or {}
             except yaml.YAMLError as exc:
-                raise HTTPException(status_code=400, detail=f"分类 {section} 的 YAML 格式错误: {exc}") from exc
+                raise HTTPException(status_code=400, detail=yaml_error_message(exc, section)) from exc
         if not isinstance(value, dict):
-            raise HTTPException(status_code=400, detail=f"分类 {section} 的根节点必须是对象")
+            raise HTTPException(status_code=400, detail=f"分类 {section} 应按“配置项: 内容”填写，不能是列表或一段普通文字")
         value = _drop_empty_strings(value) or {}
         normalized[section] = _coerce_like(value, base.get(section, {}))
     media_types = normalized.get("scanner", {}).get("media_types")
@@ -910,7 +911,7 @@ def get_config(_: dict = Depends(current_user)) -> dict:
     try:
         parsed = yaml.safe_load(content) or {}
     except yaml.YAMLError as exc:
-        parsed = {"_error": str(exc)}
+        parsed = {"_error": yaml_error_message(exc)}
     return {"content": content, "parsed": parsed}
 
 
@@ -1094,9 +1095,9 @@ def update_config(body: ConfigBody, _: dict = Depends(require_admin)) -> dict:
     try:
         parsed = yaml.safe_load(body.content)
     except yaml.YAMLError as exc:
-        raise HTTPException(status_code=400, detail=f"YAML 格式错误: {exc}") from exc
+        raise HTTPException(status_code=400, detail=yaml_error_message(exc)) from exc
     if not isinstance(parsed, dict):
-        raise HTTPException(status_code=400, detail="YAML 根节点必须是对象")
+        raise HTTPException(status_code=400, detail="配置文件最外层应按“配置项: 内容”填写，不能是列表或一段普通文字")
     try:
         validate_config_data(_deep_merge(_base_config(), parsed))
     except ValueError as exc:

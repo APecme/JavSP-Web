@@ -77,7 +77,7 @@ def test_connection(settings: dict) -> dict:
         version = _request(opener, f"{base_url}/api/v2/app/version", headers).decode("utf-8", errors="replace").strip()
     except QbittorrentError as exc:
         if "HTTP 403" in str(exc):
-            raise QbittorrentError("登录后会话未被 qBittorrent 接受。请确认反向代理保留 SID Cookie，并将服务地址填写为 Web UI 根地址。") from exc
+            raise QbittorrentError("qBittorrent 未接受登录。请确认填写的是网页管理地址；如使用反向代理，请确保代理保留登录 Cookie（SID）。") from exc
         raise
     return {"version": version}
 

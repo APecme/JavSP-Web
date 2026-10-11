@@ -45,7 +45,7 @@ def download_archive(commit, destination):
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 size += len(chunk)
                 if size > MAX_ARCHIVE:
-                    raise ValueError('应用包超过大小限制')
+                    raise ValueError('更新文件超过大小限制')
                 output.write(chunk)
 
 
@@ -63,25 +63,25 @@ def extract_verified(archive, destination, expected):
             if item.is_dir():
                 continue
             if len(parts) < 2 or any(part in ('', '.', '..') for part in parts) or '\\' in item.filename or item.filename.startswith('/'):
-                raise ValueError('应用包中存在不安全路径')
+                raise ValueError('更新文件中存在不安全路径')
             path = PurePosixPath(*parts[1:])
             if not allowed(path):
                 continue
             name = path.as_posix()
             if name in seen or name not in expected or stat.S_ISLNK(item.external_attr >> 16):
-                raise ValueError('应用包文件与 Git 提交不符')
+                raise ValueError('更新文件与 Git 提交不符')
             if item.file_size > MAX_EXTRACTED - total:
-                raise ValueError('应用包解压大小超过限制')
+                raise ValueError('更新文件解压大小超过限制')
             content = package.read(item)
             total += len(content)
             if git_blob_sha(content) != expected[name]:
-                raise ValueError(f'应用包校验失败：{name}')
+                raise ValueError(f'更新文件校验失败：{name}')
             target = destination.joinpath(*path.parts)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
             seen.add(name)
     if not REQUIRED.issubset(seen):
-        raise ValueError('应用包缺少必需文件')
+        raise ValueError('更新文件缺少必需内容')
 
 
 def stage(info):
@@ -120,6 +120,7 @@ def install(info):
     app_supervisor.save_state({
         'current': info['target'], 'commit': info['commit'], 'previous': current.get('current'),
         'previous_commit': current.get('commit', ''), 'pending': True,
+        'base_image': app_supervisor.image_identity(),
     })
 
 
@@ -128,10 +129,10 @@ def schedule(info, record, write_job):
         previous = app_supervisor.read_state()
         switched = False
         try:
-            write_job(dict(record, status='downloading', message='正在下载并校验应用包'))
+            write_job(dict(record, status='downloading', message='正在下载并校验更新文件'))
             install(info)
             switched = True
-            write_job(dict(record, status='restarting', message='应用包已就绪，正在重启服务'))
+            write_job(dict(record, status='restarting', message='更新文件已就绪，正在重新启动服务'))
             time.sleep(2)
             os._exit(app_supervisor.RESTART_CODE)
         except Exception as exc:

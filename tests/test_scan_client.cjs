@@ -38,7 +38,7 @@ async function main() {
     assert.equal(requests[0].body.input_directory, 'X:/mounted-folder');
     assert.equal(requests[0].body.input_files, undefined);
     assert.equal(node('#input-directory').value, '');
-    assert.match(node('#task-message').textContent, /后台扫描/);
+    assert.match(node('#task-message').textContent, /扫描任务已创建/);
     assert.equal(node('#task-form button[type="submit"]').disabled, false);
   }
   {

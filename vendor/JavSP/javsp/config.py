@@ -3,7 +3,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from enum import Enum
 from typing import Dict, List, Literal, TypeAlias, Union
 from confz import BaseConfig, CLArgSource, EnvSource, FileSource
-from pydantic import ByteSize, Field, NonNegativeInt, PositiveInt, model_validator
+from pydantic import ByteSize, Field, NonNegativeInt, PositiveInt, field_validator, model_validator
 from pydantic_extra_types.pendulum_dt import Duration
 from pydantic_core import Url
 from pathlib import Path
@@ -279,8 +279,18 @@ class TranslateField(BaseConfig):
     plot: bool
 
 class Translator(BaseConfig):
+    ai_enabled: bool = False
     engine: TranslateEngine = Field(..., discriminator='name')
     fields: TranslateField
+
+    @field_validator('engine', mode='wrap')
+    @classmethod
+    def selected_engine(cls, value, handler, info):
+        # Presets retain the saved engine, but AI mode neither validates nor
+        # instantiates it. Switching back validates those settings normally.
+        if info.data.get('ai_enabled', False):
+            return None
+        return handler(value)
 
 class Other(BaseConfig):
     interactive: bool

@@ -191,6 +191,8 @@ summarizer:
 
 ################################
 translator:
+  # 使用 WEB AI 接入配置翻译；需在系统设置中启用 AI 刮削，优先于下方翻译引擎
+  ai_enabled: false
   # 翻译引擎，可选: google, bing, baidu, claude(haiku), openai （Google可以直接免费使用。留空表示禁用翻译功能）
   # 进阶功能的文档 https://github.com/Yuukiy/JavSP/wiki/Translation-%7C-%E7%BF%BB%E8%AF%91
   engine: null

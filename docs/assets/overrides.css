@@ -1,4 +1,10 @@
 /* Late-loaded UI refinements for task filtering and liquid progress surfaces. */
+.translator-engine-control select:disabled,
+.translator-engine-control input:disabled {
+  background: #f2f4f7;
+  color: #667085;
+  cursor: not-allowed;
+}
 html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-view="scrape"] .app-shell [data-panel="scrape"],html[data-initial-view="auto-scrape"] .app-shell [data-panel="auto-scrape"],html[data-initial-view="downloads"] .app-shell [data-panel="downloads"],html[data-initial-view="presets"] .app-shell [data-panel="presets"],html[data-initial-view="settings"] .app-shell [data-panel="settings"],html[data-initial-view="overview"] .app-shell [data-panel="overview"]{display:block}
 .wave-progress::before {
   width: 220%;

@@ -23,6 +23,16 @@ logger = logging.getLogger(__name__)
 
 def translate_movie_info(info: MovieInfo):
     """根据配置翻译影片信息"""
+    translator = Cfg().translator
+    if getattr(translator, 'ai_enabled', False):
+        from javsp_web import ai, ai_translate
+        try:
+            ai_translate.translate_movie(info, translator.fields)
+        except ai.AIError as exc:
+            raise ValueError(f'AI 翻译失败：{exc}') from exc
+        return True
+    if translator.engine is None:
+        return True
     # 翻译标题
     if info.title and Cfg().translator.fields.title and info.ori_title is None:
         result = translate(info.title, Cfg().translator.engine, info.actress)

@@ -15,16 +15,16 @@ const REQUIRED_MOVIE_FIELDS = [
   ['publisher', '\u53d1\u884c\u5546'], ['publish_date', '\u53d1\u884c\u65e5\u671f'], ['preview_pics', '\u5267\u7167'], ['preview_video', '\u9884\u544a\u7247'],
 ];
 const FORM_TABS = [
-  { id: 'scanner', section: 'scanner', label: '扫描器', description: '负责识别影片文件、过滤目录和设置扫描规则。' },
-  { id: 'media-types', section: 'scanner', prefixes: ['media_types'], label: '影片分类', description: '为当前预设填写影片分类规则；支持 YAML 或 JSON。' },
+  { id: 'scanner', section: 'scanner', label: '扫描器', description: '选择要扫描的文件，跳过不需要的目录。' },
+  { id: 'media-types', section: 'scanner', prefixes: ['media_types'], label: '影片分类', description: '按文件名识别影片类型。' },
   { id: 'network', section: 'network', label: '网络', description: '设置代理、重试次数和网络请求超时。' },
-  { id: 'crawler', section: 'crawler', label: '爬虫', description: '选择此预设实际使用的数据来源和爬虫顺序。' },
+  { id: 'crawler', section: 'crawler', label: '爬虫', description: '选择资料来源，调整查询顺序。' },
   { id: 'folder', section: 'summarizer', prefixes: ['move_files', 'path', 'title'], label: '文件夹整理', description: '设置输出目录、文件名、路径长度和文件移动规则。' },
-  { id: 'defaults', section: 'summarizer', prefixes: ['default'], label: '替代文本', description: '设置影片信息字段缺失时使用的替代文本。' },
+  { id: 'defaults', section: 'summarizer', prefixes: ['default'], label: '替代文本', description: '没有查到的资料，用什么文字代替。' },
   { id: 'images', section: 'summarizer', prefixes: ['cover', 'fanart', 'extra_fanarts'], label: '图片', description: '设置封面、横版封面、裁剪和剧照下载规则。' },
-  { id: 'custom', section: 'summarizer', prefixes: ['nfo', 'censor_options_representation'], label: '自定义', description: '设置 NFO 文件名、标题模板、分类、标签和码状态文本。' },
-  { id: 'translator', section: 'translator', label: '翻译器', description: '设置翻译引擎和需要翻译的字段。' },
-  { id: 'other', section: 'other', label: '其他', description: '设置交互、更新检查等通用行为。' },
+  { id: 'custom', section: 'summarizer', prefixes: ['nfo', 'censor_options_representation'], label: '自定义', description: '设置媒体库中的影片名称、分类和标签。' },
+  { id: 'translator', section: 'translator', label: '翻译器', description: '选择翻译方式和内容。' },
+  { id: 'other', section: 'other', label: '其他', description: 'JavSP 命令行选项。' },
 ];
 const NAMING_RULE_VARIABLES = [
   ['num', '番号'], ['title', '标题'], ['rawtitle', '原始标题'], ['actress', '女优'], ['score', '评分'],
@@ -36,93 +36,93 @@ const TRANSLATOR_ENGINES = {
 };
 const FIELD_LABELS = {
   'scanner.ignored_id_pattern': '番号识别忽略规则', 'scanner.input_directory': '扫描目录', 'scanner.filename_extensions': '影片文件扩展名', 'scanner.ignored_folder_name_pattern': '忽略目录规则', 'scanner.minimum_size': '最小匹配文件大小', 'scanner.only_match_media_types': '仅扫描匹配影片分类', 'scanner.skip_nfo_dir': '跳过已有 NFO 的目录', 'scanner.manual': '手动确认扫描结果',
-  'network.proxy_server': '代理服务器地址', 'network.proxy_free': '免代理站点地址', 'network.proxy_free.avsox': 'Avsox 免代理地址', 'network.proxy_free.javbus': 'JavBus 免代理地址', 'network.proxy_free.javdb': 'JavDB 免代理地址', 'network.proxy_free.javlib': 'JavLib 免代理地址', 'network.retry': '网络重试次数', 'network.timeout': '网络请求超时',
-  'crawler.selection.normal': '普通影片爬虫列表', 'crawler.selection.fc2': 'FC2 影片爬虫列表', 'crawler.selection.cid': 'CID 影片爬虫列表', 'crawler.selection.getchu': 'Getchu 影片爬虫列表', 'crawler.selection.gyutto': 'Gyutto 影片爬虫列表', 'crawler.required_keys': '抓取成功必需字段', 'crawler.hardworking': '深度抓取', 'crawler.respect_site_avid': '使用网站返回的番号', 'crawler.fc2fan_local_path': 'FC2Fan 本地镜像目录', 'crawler.sleep_after_scraping': '每部影片刮削后等待时间', 'crawler.use_javdb_cover': 'JavDB 封面使用策略', 'crawler.normalize_actress_name': '统一女优艺名',
-  'summarizer.move_files': '移动文件到整理目录', 'summarizer.path.output_folder_pattern': '整理输出目录模板', 'summarizer.path.basename_pattern': '影片相关文件名模板', 'summarizer.path.length_maximum': '最大文件路径长度', 'summarizer.path.length_by_byte': '按字节计算路径长度', 'summarizer.path.max_actress_count': '路径中最多包含的女优数', 'summarizer.path.hard_link': '使用硬链接整理文件', 'summarizer.title.remove_trailing_actor_name': '移除标题末尾女优名', 'summarizer.default.title': '未知标题替代文本', 'summarizer.default.actress': '未知女优替代文本', 'summarizer.default.series': '未知系列替代文本', 'summarizer.default.director': '未知导演替代文本', 'summarizer.default.producer': '未知制作商替代文本', 'summarizer.default.publisher': '未知发行商替代文本', 'summarizer.nfo.basename_pattern': 'NFO 文件名', 'summarizer.nfo.title_pattern': 'NFO 影片标题模板', 'summarizer.nfo.custom_genres_fields': '自定义分类字段', 'summarizer.nfo.custom_tags_fields': '自定义标签字段', 'summarizer.censor_options_representation': '码状态显示文本', 'summarizer.cover.basename_pattern': '封面文件名', 'summarizer.cover.highres': '优先下载高清封面', 'summarizer.cover.add_label': '在封面添加水印标签', 'summarizer.cover.crop.on_id_pattern': '启用封面裁剪的番号规则', 'summarizer.cover.crop.engine': '封面裁剪识别引擎', 'summarizer.fanart.basename_pattern': '横版封面文件名', 'summarizer.extra_fanarts.enabled': '下载剧照', 'summarizer.extra_fanarts.scrap_interval': '剧照请求间隔',
-  'translator.engine': '翻译引擎配置', 'translator.fields.title': '翻译标题', 'translator.fields.plot': '翻译剧情简介', 'translator.engine.name': '翻译引擎名称', 'translator.engine.app_id': '翻译服务应用 ID', 'translator.engine.api_key': '翻译服务 API 密钥', 'translator.engine.url': 'OpenAI 兼容接口地址', 'translator.engine.model': '翻译模型名称',
+  'network.proxy_server': '代理服务器地址', 'network.proxy_free': '网站备用地址', 'network.proxy_free.avsox': 'Avsox 免代理地址', 'network.proxy_free.javbus': 'JavBus 免代理地址', 'network.proxy_free.javdb': 'JavDB 免代理地址', 'network.proxy_free.javlib': 'JavLib 免代理地址', 'network.retry': '网络重试次数', 'network.timeout': '网络请求超时',
+  'crawler.selection.normal': '普通影片爬虫列表', 'crawler.selection.fc2': 'FC2 影片爬虫列表', 'crawler.selection.cid': 'CID 影片爬虫列表', 'crawler.selection.getchu': 'Getchu 影片爬虫列表', 'crawler.selection.gyutto': 'Gyutto 影片爬虫列表', 'crawler.required_keys': '必须取得的资料', 'crawler.hardworking': '深度抓取', 'crawler.respect_site_avid': '使用网站返回的番号', 'crawler.fc2fan_local_path': 'FC2Fan 本地镜像目录', 'crawler.sleep_after_scraping': '每部影片刮削后等待时间', 'crawler.use_javdb_cover': 'JavDB 封面优先级', 'crawler.normalize_actress_name': '统一女优艺名',
+  'summarizer.move_files': '移动文件到整理目录', 'summarizer.path.output_folder_pattern': '整理输出目录模板', 'summarizer.path.basename_pattern': '影片文件名', 'summarizer.path.length_maximum': '最大文件路径长度', 'summarizer.path.length_by_byte': '按字节计算路径长度', 'summarizer.path.max_actress_count': '路径中最多包含的女优数', 'summarizer.path.hard_link': '使用硬链接整理文件', 'summarizer.title.remove_trailing_actor_name': '移除标题末尾女优名', 'summarizer.default.title': '标题为空时显示', 'summarizer.default.actress': '演员为空时显示', 'summarizer.default.series': '系列为空时显示', 'summarizer.default.director': '导演为空时显示', 'summarizer.default.producer': '制作商为空时显示', 'summarizer.default.publisher': '发行商为空时显示', 'summarizer.nfo.basename_pattern': 'NFO 文件名', 'summarizer.nfo.title_pattern': 'NFO 影片标题模板', 'summarizer.nfo.custom_genres_fields': '自定义分类字段', 'summarizer.nfo.custom_tags_fields': '自定义标签字段', 'summarizer.censor_options_representation': '有码 / 无码显示文字', 'summarizer.cover.basename_pattern': '封面文件名', 'summarizer.cover.highres': '优先下载高清封面', 'summarizer.cover.add_label': '在封面添加水印标签', 'summarizer.cover.crop.on_id_pattern': '启用封面裁剪的番号规则', 'summarizer.cover.crop.engine': '封面裁剪识别引擎', 'summarizer.fanart.basename_pattern': '横版封面文件名', 'summarizer.extra_fanarts.enabled': '下载剧照', 'summarizer.extra_fanarts.scrap_interval': '剧照请求间隔',
+  'translator.engine': '翻译引擎', 'translator.fields.title': '翻译标题', 'translator.fields.plot': '翻译剧情简介', 'translator.engine.name': '翻译引擎名称', 'translator.engine.app_id': '翻译服务应用 ID', 'translator.engine.api_key': '翻译服务 API 密钥', 'translator.engine.url': 'OpenAI 兼容接口地址', 'translator.engine.model': '翻译模型名称',
   'other.interactive': '终端交互模式', 'other.check_update': '检查 JavSP 更新', 'other.auto_update': '自动下载新版本',
   ignored_id_pattern: '忽略番号规则', input_directory: '输入目录', filename_extensions: '文件扩展名', ignored_folder_name_pattern: '忽略目录规则', minimum_size: '最小文件大小', skip_nfo_dir: '跳过 NFO 目录', manual: '手动确认',
   proxy_server: '代理服务器', proxy_free: '免代理站点', retry: '重试次数', timeout: '请求超时',
   selection: '爬虫选择', required_keys: '必需字段', hardworking: '深度抓取', respect_site_avid: '尊重站点番号', fc2fan_local_path: 'FC2 本地页面目录', sleep_after_scraping: '刮削后等待', use_javdb_cover: '使用 JavDB 封面', normalize_actress_name: '统一演员名称',
   move_files: '移动文件', path: '路径规则', output_folder_pattern: '输出目录模板', basename_pattern: '文件名模板', length_maximum: '路径最大长度', length_by_byte: '按字节计算长度', max_actress_count: '最多演员数量', hard_link: '使用硬链接',
-  remove_trailing_actor_name: '移除标题末尾演员名', default: '缺省值', nfo: 'NFO 文件', title_pattern: '标题模板', custom_genres_fields: '自定义类型字段', custom_tags_fields: '自定义标签字段', censor_options_representation: '码状态显示文本', cover: '封面', highres: '高清封面', add_label: '添加封面标签', crop: '封面裁剪', on_id_pattern: '裁剪番号规则', fanart: '横版封面', extra_fanarts: '剧照', scrap_interval: '剧照请求间隔',
+  remove_trailing_actor_name: '移除标题末尾演员名', default: '缺省值', nfo: 'NFO 文件', title_pattern: '标题模板', custom_genres_fields: '自定义类型字段', custom_tags_fields: '自定义标签字段', censor_options_representation: '有码 / 无码显示文字', cover: '封面', highres: '高清封面', add_label: '添加封面标签', crop: '封面裁剪', on_id_pattern: '裁剪番号规则', fanart: '横版封面', extra_fanarts: '剧照', scrap_interval: '剧照请求间隔',
   engine: '翻译引擎', fields: '翻译字段', title: '标题', plot: '剧情简介',
   interactive: '交互模式', check_update: '检查更新', auto_update: '自动更新',
 };
-FIELD_LABELS['summarizer.cover.google_search_fallback'] = 'Google 搜索封面兜底';
+FIELD_LABELS['summarizer.cover.google_search_fallback'] = '封面缺失时使用 Google 搜索';
 FIELD_LABELS['scanner.media_types'] = '影片分类';
 
 FIELD_LABELS['scanner.strm_ignore_minimum_size'] = 'STRM 忽略最小文件大小';
 FIELD_LABELS['scanner.only_match_media_types'] = '仅扫描匹配影片分类';
 
 const FIELD_NOTES = {
-  input_directory: '手动刮削时会由任务路径覆盖。',
-  ignored_id_pattern: '输入后点击加号添加；每个标签是一条正则表达式。',
-  filename_extensions: '输入后点击加号添加；每个标签是一个文件扩展名。',
-  ignored_folder_name_pattern: '输入后点击加号添加；每个标签是一条目录过滤正则。',
-  proxy_server: '留空或输入 null 表示不使用代理。',
-  proxy_free: '站点地址对象，可按 YAML 格式填写。',
-  selection: '按影片类型选择爬虫列表，可直接输入 YAML 对象。',
-  required_keys: '勾选影片成功抓取时必须取得的字段。',
-  engine: '引擎配置可输入 null 或 YAML 对象。',
-  path: '路径相关配置对象，可按 YAML 格式填写。',
-  nfo: 'NFO 文件生成配置对象。',
-  cover: '封面和裁剪配置对象。',
-  crop: '封面裁剪配置对象。',
-  extra_fanarts: '剧照下载配置对象。',
-  fields: '需要翻译的字段开关。',
+  input_directory: '手动刮削使用创建任务时选择的路径。',
+  ignored_id_pattern: '每条规则单独添加，支持正则表达式。',
+  filename_extensions: '例如 .mp4、.mkv，逐个添加。',
+  ignored_folder_name_pattern: '每条规则单独添加，支持正则表达式。',
+  proxy_server: '留空不使用代理。',
+  proxy_free: '按“网站名: 地址”填写。',
+  selection: '',
+  required_keys: '',
+  engine: '',
+  path: '',
+  nfo: '',
+  cover: '',
+  crop: '',
+  extra_fanarts: '',
+  fields: '',
 };
-FIELD_NOTES.media_types = '填写 YAML 或 JSON 数组；保存时会校验分类 ID、识别方式、兜底分类和对应的爬虫分组。保存后，爬虫标签页会按新分类生成分组。';
+FIELD_NOTES.media_types = '支持 YAML 或 JSON。保存后，可在“爬虫”页为各分类选择资料来源。';
 const FIELD_DESCRIPTIONS = {
-  'scanner.strm_ignore_minimum_size': '开启后，小于最小文件大小的 .strm 文本文件仍会参与番号识别和刮削；其他视频文件不受影响。',
-  'scanner.only_match_media_types': '开启后，文件名未命中影片分类规则的文件会被跳过，适合过滤同一目录中的广告和其他无关视频。',
-  'summarizer.cover.google_search_fallback': '启用后，封面下载失败时仅使用 Google 图片搜索查找候选封面，并使用预设中的代理。',
-  'scanner.ignored_id_pattern': '推测番号前会忽略文件名中匹配的字符串；除非熟悉正则表达式，否则不要修改。',
-  'scanner.input_directory': '要整理的影片目录。手动刮削任务会临时覆盖此值。',
-  'scanner.filename_extensions': '这些扩展名的文件会被当作影片扫描。',
-  'scanner.ignored_folder_name_pattern': '扫描影片文件时会忽略名称匹配规则的目录。',
-  'scanner.minimum_size': '匹配番号时会忽略小于此大小的文件，格式遵循 Pydantic ByteSize。',
-  'network.proxy_server': '支持 http、socks5 和 socks5h；填 null 表示禁用代理。',
-  'network.proxy_free': '各站点的免代理地址；地址失效时 JavSP 会自动尝试获取新地址。',
+  'scanner.strm_ignore_minimum_size': 'STRM 文件通常很小。开启后，扫描它们时不检查文件大小。',
+  'scanner.only_match_media_types': '跳过无法识别分类的文件，可用于过滤广告视频。',
+  'summarizer.cover.google_search_fallback': '下载不到封面时，使用 Google 图片搜索。',
+  'scanner.ignored_id_pattern': '识别番号前，先去掉文件名中的这些内容。',
+  'scanner.input_directory': '要整理的影片目录。',
+  'scanner.filename_extensions': '只扫描这些格式的视频。',
+  'scanner.ignored_folder_name_pattern': '跳过名称符合规则的文件夹。',
+  'scanner.minimum_size': '小于此大小的视频会被跳过。请带上单位，例如 200MB 或 1GB。',
+  'network.proxy_server': '支持 HTTP、SOCKS5 和 SOCKS5H 代理。',
+  'network.proxy_free': '网站打不开时，可在这里更换地址。',
   'network.retry': '网络问题导致抓取失败时的重试次数。',
-  'network.timeout': '网络请求超时时间，使用 ISO 8601 时长，例如 PT10S。',
-  'crawler.selection': '汇总数据时会按列表从前到后的顺序使用爬虫。',
-  'crawler.required_keys': '爬虫至少取得这些字段时，影片才视为抓取成功。',
-  'crawler.hardworking': '会尝试抓取更准确、丰富的信息，但会略微增加部分站点耗时。',
-  'crawler.respect_site_avid': '启用后会使用网页上的番号，并修正番号大小写等格式。',
+  'network.timeout': '单次请求最多等待多久，例如 PT10S 表示 10 秒，PT1M 表示 1 分钟。',
+  'crawler.selection': '同一项资料有多个来源时，优先使用排在前面的来源。',
+  'crawler.required_keys': '缺少任何一项，任务都会报错。',
+  'crawler.hardworking': '尝试获取更多资料，部分网站会增加请求次数。',
+  'crawler.respect_site_avid': '以网站上的番号为准，包括大小写。',
   'crawler.fc2fan_local_path': 'FC2Fan 已关站；如有镜像，目录内应包含类似 FC2-12345.html 的文件。',
-  'crawler.sleep_after_scraping': '每刮削一部影片后的等待时长；设为 PT0S 可禁用。',
-  'crawler.use_javdb_cover': '可选 fallback、yes、no；fallback 会优先使用其他站点封面以避免水印。',
-  'crawler.normalize_actress_name': '启用后会尝试把同一女优的多个艺名统一为一个名称。',
-  'summarizer.move_files': '启用后会移动相关文件到新目录；关闭时会在原文件同级位置保存刮削数据。',
-  'summarizer.path.output_folder_pattern': '影片、封面等文件的输出目录，可使用 JavSP 命名规则变量。',
-  'summarizer.path.basename_pattern': '影片、封面、NFO 等相关文件的基础名称模板。',
-  'summarizer.path.length_maximum': '生成路径过长时，JavSP 会据此自动截短标题。',
-  'summarizer.path.length_by_byte': '决定路径长度按字符数还是字节数计算。',
-  'summarizer.path.max_actress_count': '路径变量 {actress} 中最多保留的女优人数。',
-  'summarizer.path.hard_link': '硬链接可节省空间，但并非所有文件系统支持。',
-  'summarizer.nfo.basename_pattern': '生成的 NFO 文件名。',
-  'summarizer.nfo.title_pattern': '媒体管理工具中显示的影片标题模板。',
-  'summarizer.nfo.custom_genres_fields': '要写入自定义分类的字段；空列表表示不添加。',
-  'summarizer.nfo.custom_tags_fields': '要写入自定义标签的字段；空列表表示不添加。',
-  'summarizer.censor_options_representation': '依次设置已知无码、已知有码和未知码状态时 {censor} 的文本。',
+  'crawler.sleep_after_scraping': '每部影片处理完成后的等待时间。例如 PT5S 表示等 5 秒，PT0S 表示不等待。',
+  'crawler.use_javdb_cover': '填写 fallback：优先使用其他站点封面；yes：优先使用 JavDB 封面；no：不使用 JavDB 封面。',
+  'crawler.normalize_actress_name': '将同一演员的不同艺名合并为一个名字。',
+  'summarizer.move_files': '关闭后，资料和图片保存在视频所在文件夹。',
+  'summarizer.path.output_folder_pattern': '例如：#整理完成/{actress}/{num}。',
+  'summarizer.path.basename_pattern': '例如：{num} 或 {num} {title}。',
+  'summarizer.path.length_maximum': '路径超长时，会缩短标题。',
+  'summarizer.path.length_by_byte': '开启后，一个中文字符按多个字节计算。',
+  'summarizer.path.max_actress_count': '{actress} 中最多保留几位演员的名字。',
+  'summarizer.path.hard_link': '保留原视频，通过硬链接整理。源文件和输出目录必须在同一文件系统。',
+  'summarizer.nfo.basename_pattern': '不需要填写 .nfo 后缀。',
+  'summarizer.nfo.title_pattern': 'Emby、Jellyfin 等媒体库中显示的标题。',
+  'summarizer.nfo.custom_genres_fields': '把选中的资料写入媒体库分类。',
+  'summarizer.nfo.custom_tags_fields': '把选中的资料写入媒体库标签。',
+  'summarizer.censor_options_representation': '依次填写“无码”“有码”“未知”对应的文字。',
   'summarizer.cover.basename_pattern': '封面文件名，不包含扩展名，可使用标题等变量。',
-  'summarizer.cover.highres': '高清封面约为 8 至 10 MiB，网络较慢时会降低整理速度。',
+  'summarizer.cover.highres': '高清图片通常更大，下载时间也更长。',
   'summarizer.cover.add_label': '在封面图上添加水印标签，例如字幕。',
   'summarizer.cover.crop.on_id_pattern': '只有番号匹配这些规则时才使用图像识别裁剪封面。',
-  'summarizer.cover.crop.engine': '图像识别引擎配置；填 null 表示禁用图像裁剪。',
+  'summarizer.cover.crop.engine': '填写识别服务配置；留空不使用图像识别。',
   'summarizer.fanart.basename_pattern': '横版封面文件名，不包含扩展名，可使用标题等变量。',
-  'summarizer.extra_fanarts.enabled': '是否下载剧照。',
+  'summarizer.extra_fanarts.enabled': '',
   'summarizer.extra_fanarts.scrap_interval': '两次剧照抓取请求之间的等待时长。',
-  'translator.engine': '可选 google、bing、baidu、claude、openai；填 null 表示禁用翻译。',
-  'other.interactive': '是否通过 stdin/stdout 进行交互。',
+  'translator.engine': '',
+  'other.interactive': '在命令行运行 JavSP 时，是否等待键盘输入确认。网页任务无需开启。',
   'other.check_update': '允许时会显示新版本提示和新版功能。',
   'other.auto_update': '允许检查到新版本后自动下载。',
-  manual: '是否使用交互式方式确认扫描结果。',
+  manual: '命令行扫描后，先确认文件列表。',
   minimum_size: '小于此大小的文件不会参与匹配。',
-  skip_nfo_dir: '扫描时跳过已经整理好的 NFO 目录。',
+  skip_nfo_dir: '文件夹中已有 NFO 时跳过。',
   retry: '网络请求失败时的重试次数。',
-  timeout: '网络请求超时时间，使用 ISO 8601 时长。',
+  timeout: '单次请求最多等待多久，例如 PT10S 表示 10 秒。',
   hardworking: '启用更完整的抓取流程，可能增加耗时。',
   respect_site_avid: '优先使用网站返回的番号。',
   sleep_after_scraping: '每部影片完成后等待的时间。',
@@ -132,12 +132,12 @@ const FIELD_DESCRIPTIONS = {
   length_maximum: '生成路径允许的最大长度。',
   highres: '是否尽量下载高清封面。',
   add_label: '是否在封面上添加标签。',
-  enabled: '是否启用此项功能。',
+  enabled: '',
   interactive: '是否在终端中启用交互。',
   check_update: '是否检查 JavSP 更新。',
   auto_update: '是否自动下载新版本。',
-  'translator.fields.title': '是否翻译标题字段。',
-  'translator.fields.plot': '是否翻译剧情简介字段。',
+  'translator.fields.title': '',
+  'translator.fields.plot': '',
 };
 
 function cloneValue(value) {
@@ -163,13 +163,14 @@ function fieldDescription(path, value) {
   const parts = path.split('.');
   while (parts.length) {
     const description = FIELD_DESCRIPTIONS[parts.join('.')];
-    if (description) return description;
+    if (description !== undefined) return description;
     parts.pop();
   }
   return FIELD_DESCRIPTIONS[key] || '';
 }
 
 function fieldNote(path, value) {
+  if (path === 'translator.engine') return '';
   const key = path.split('.').pop();
   return FIELD_NOTES[key] || '';
 }
@@ -324,12 +325,19 @@ function namingRuleHelp(targetPath) {
 function translatorEngineControl(value) {
   const engine = value && typeof value === 'object' ? value : {};
   const name = engine.name || '';
-  const options = [['', '不启用翻译'], ['google', 'Google 翻译'], ['bing', '必应翻译'], ['baidu', '百度翻译'], ['claude', 'Claude'], ['openai', 'OpenAI 兼容接口']]
+  const disabled = state.formValues?.translator?.ai_enabled === true ? ' disabled' : '';
+  const options = [['', '不翻译'], ['google', 'Google 翻译'], ['bing', '必应翻译'], ['baidu', '百度翻译'], ['claude', 'Claude'], ['openai', 'OpenAI 兼容接口']]
     .map(([key, label]) => `<option value="${key}"${name === key ? ' selected' : ''}>${label}</option>`).join('');
   const labels = { app_id: '应用 ID', api_key: 'API 密钥', url: '接口地址', model: '模型名称' };
   const placeholders = { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' };
-  const fields = (TRANSLATOR_ENGINES[name] || []).map((key) => `<label class="translator-engine-field">${labels[key]}<input class="config-field-input" data-config-path="translator.engine.${key}" value="${escapeHtml(engine[key] || '')}"${placeholders[key] ? ` placeholder="${placeholders[key]}"` : ''}${key === 'api_key' ? ' type="password" autocomplete="off"' : ''}></label>`).join('');
-  return `<div class="translator-engine-control"><select class="config-field-input" data-translator-engine>${options}</select>${fields ? `<div class="translator-engine-fields">${fields}</div>` : ''}</div>`;
+  const fields = (TRANSLATOR_ENGINES[name] || []).map((key) => `<label class="translator-engine-field">${labels[key]}<input class="config-field-input" data-config-path="translator.engine.${key}" value="${escapeHtml(engine[key] || '')}"${disabled}${placeholders[key] ? ` placeholder="${placeholders[key]}"` : ''}${key === 'api_key' ? ' type="password" autocomplete="off"' : ''}></label>`).join('');
+  return `<div class="translator-engine-control"><select aria-label="翻译引擎" class="config-field-input" data-translator-engine${disabled}>${options}</select>${fields ? `<div class="translator-engine-fields">${fields}</div>` : ''}${disabled ? '<small class="config-description">已停用，当前使用 AI 翻译。</small>' : ''}</div>`;
+}
+
+function translatorAiControl(enabled) {
+  const available = state.aiEnabled === true;
+  const availability = available ? '' : `<small class="form-error">${enabled ? 'AI 刮削已关闭。请在系统设置中开启，或取消 AI 翻译。' : '请先在系统设置中启用 AI 刮削。'}</small>`;
+  return `<label class="config-field config-field-wide"><span class="check-label"><input type="checkbox" class="config-field-input" data-config-path="translator.ai_enabled"${enabled ? ' checked' : ''}${available || enabled ? '' : ' disabled'}>启用 AI 翻译</span><small class="config-description">使用系统设置中的 AI 模型翻译为简体中文，不使用上方翻译引擎。</small>${availability}</label>`;
 }
 
 function pathMatchesTab(path, prefixes) {
@@ -342,12 +350,10 @@ function renderPresetNavigation() {
   const panels = $('.preset-tab-panels');
   if (!tabs || !panels) return;
   const intro = $('.preset-editor-heading .muted');
-  if (intro) intro.textContent = '窗口表单按 config.yml 的配置分类组织；每项都有说明和备注。也可以直接使用完整 config.yml。';
+  if (intro) intro.textContent = '选择下方分类进行设置。';
   tabs.innerHTML = FORM_TABS.map((tab, index) => `<button class="preset-tab${index === 0 ? ' active' : ''}" type="button" data-preset-tab="${tab.id}">${tab.label}</button>`).join('');
   panels.innerHTML = FORM_TABS.map((tab, index) => {
-    const description = tab.id === 'media-types'
-      ? tab.description
-      : `对应 config.yml 的 ${tab.section}${tab.prefixes ? `.${tab.prefixes.join('、')}` : ''}，${tab.description}`;
+    const description = tab.description;
     return `<section class="preset-tab-panel${index === 0 ? ' active' : ''}" data-preset-panel="${tab.id}"><div class="tab-intro"><strong>${tab.label}</strong><span>${description}</span></div><div id="preset-fields-${tab.id}" class="config-fields"></div></section>`;
   }).join('');
 }
@@ -361,6 +367,7 @@ function renderConfigFields() {
     const walk = (value, path) => {
       if (!pathMatchesTab(path, tab.prefixes)) return;
       if (tab.section === 'crawler' && ['ai_enabled', 'ai_fallback_only'].includes(path) && !state.aiEnabled) return;
+      if (tab.section === 'translator' && path === 'ai_enabled') return;
       if (tab.section === 'scanner' && (path === 'input_directory' || (tab.id === 'scanner' && path === 'media_types'))) return;
       if (tab.section === 'translator' && path === 'engine') {
         paths.push([path, value]);
@@ -372,16 +379,16 @@ function renderConfigFields() {
     };
     walk(values, '');
     container.innerHTML = paths.map(([path, value]) => {
-      const complex = Array.isArray(value) || (value && typeof value === 'object');
+      const complex = Array.isArray(value) || (value && typeof value === 'object') || (tab.section === 'scanner' && path === 'media_types');
       const boolean = typeof value === 'boolean';
       const sourcePath = `${tab.section}.${path}`;
       if (sourcePath === 'crawler.ai_enabled' || sourcePath === 'crawler.ai_fallback_only') {
-        const label = path === 'ai_enabled' ? '启用 AI 刮削' : '当所有爬虫刮削失败时启用 AI 刮削';
-        const help = path === 'ai_enabled' ? '使用系统设置中的 LLM 获取影片资料。' : '勾选时先运行爬虫，全部失败或缺少必需字段时再由 AI 补充；取消勾选则直接使用 AI。';
+        const label = path === 'ai_enabled' ? '启用 AI 刮削' : '仅在爬虫失败时使用 AI';
+        const help = path === 'ai_enabled' ? '使用系统设置中接入的 AI 模型查找影片资料。' : '取消后直接使用 AI，不查询普通爬虫。';
         return `<label class="config-field"><span class="check-label"><input type="checkbox" class="config-field-input" data-config-path="${sourcePath}"${value ? ' checked' : ''}>${label}</span><small class="config-description">${help}</small></label>`;
       }
       const placeholder = sourcePath === 'network.proxy_server' ? 'http://127.0.0.1:7890 或 socks5://127.0.0.1:7890' : '';
-      const inputValue = value === null || value === undefined ? '' : (sourcePath === 'scanner.media_types' ? JSON.stringify(value, null, 2) : displayFieldValue(value));
+      const inputValue = value === null || value === undefined ? '' : (sourcePath === 'scanner.media_types' && typeof value !== 'string' ? JSON.stringify(value, null, 2) : displayFieldValue(value));
       const control = sourcePath === 'crawler.selection' ? crawlerConfigMarkup(value) : (sourcePath === 'translator.engine' ? translatorEngineControl(value) : (boolean ? `<select class="config-field-input" data-config-path="${sourcePath}"><option value="true"${value ? ' selected' : ''}>是</option><option value="false"${value ? '' : ' selected'}>否</option></select>` : (complex ? `<textarea class="config-field-input" data-config-path="${sourcePath}" spellcheck="false">${escapeHtml(inputValue)}</textarea>` : `<input class="config-field-input" data-config-path="${sourcePath}" value="${escapeHtml(inputValue)}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ''}>`)));
       const description = fieldDescription(sourcePath, value);
       const note = fieldNote(sourcePath, value);
@@ -389,8 +396,8 @@ function renderConfigFields() {
         ? `<button class="button secondary config-directory-picker" type="button" data-select-output-directory="${sourcePath}">选择路径</button>`
         : '';
       const ruleControl = isNamingRulePath(sourcePath) ? `<div class="naming-rule-control">${control}${outputDirectoryPicker}${namingRuleHelp(sourcePath)}</div>` : control;
-      const heading = `<span class="config-field-name">${escapeHtml(fieldLabel(sourcePath))} <small>(${escapeHtml(sourcePath)})</small></span>`;
-      const help = `${description ? `<small class="config-description">说明：${escapeHtml(description)}</small>` : ''}${note ? `<em>备注：${escapeHtml(note)}</em>` : ''}`;
+      const heading = `<span class="config-field-name" title="${escapeHtml(sourcePath)}">${escapeHtml(fieldLabel(sourcePath))}</span>`;
+      const help = `${description ? `<small class="config-description">${escapeHtml(description)}</small>` : ''}${note ? `<em>${escapeHtml(note)}</em>` : ''}`;
       if (sourcePath === 'network.proxy_server') {
         return `<div class="config-field proxy-test-field">${heading}${ruleControl}${help}<div class="form-actions"><button class="button secondary" type="button" id="test-preset-proxy">测试连通性</button><span id="preset-proxy-test-message" class="form-message"></span></div><div id="preset-proxy-test-result" class="proxy-test-result hidden"></div></div>`;
       }
@@ -399,9 +406,12 @@ function renderConfigFields() {
       const fieldTag = complex ? 'div' : 'label';
       const wideField = sourcePath === 'scanner.media_types' ? ' config-field-wide' : '';
       return `<${fieldTag} class="config-field${wideField}">${heading}${ruleControl}${help}</${fieldTag}>`;
-    }).join('') || '<p class="muted">此分类暂无可编辑项。</p>';
+    }).join('') || '<p class="muted">暂无设置项。</p>';
+    if (tab.id === 'translator') {
+      container.insertAdjacentHTML('beforeend', translatorAiControl(values.ai_enabled === true));
+    }
     if (tab.id === 'scanner') {
-      container.insertAdjacentHTML('beforeend', `<label class="config-field web-config-field"><span class="config-field-name">多线程刮削 <small>(JavSP WEB)</small></span><input id="preset-task-concurrency" type="number" min="1" max="32" value="${Math.max(1, Math.min(32, Number(state.taskConcurrency) || 1))}"><small class="config-description">手动刮削目录内有多个影片时，同时运行的任务数量；超出的任务会保留在队列中等待。</small></label>`);
+      container.insertAdjacentHTML('beforeend', `<label class="config-field web-config-field"><span class="config-field-name">多线程刮削 <small>(JavSP WEB)</small></span><input id="preset-task-concurrency" type="number" min="1" max="32" value="${Math.max(1, Math.min(32, Number(state.taskConcurrency) || 1))}"><small class="config-description">同时处理的影片数量，其余任务排队等待。</small></label>`);
     }
   });
   hydrateCollectionControls();
@@ -413,8 +423,24 @@ function readConfigFields() {
   const values = cloneValue(state.formValues || {});
   document.querySelectorAll('.config-field-input').forEach((control) => {
     if (!control.dataset.configPath) return;
-    const [section, ...path] = control.dataset.configPath.split('.');
-    setPathValue(values, `${section}.${path.join('.')}`, control.type === 'checkbox' ? control.checked : control.value);
+    if (control.disabled) return;
+    const path = control.dataset.configPath;
+    const previous = pathValue(state.formValues || {}, path);
+    let value = control.type === 'checkbox' ? control.checked : control.value;
+    // Keep the form's types across local re-renders (for example, switching a
+    // translation engine). Leave YAML and invalid input for server validation.
+    if (control.type !== 'checkbox') {
+      if (typeof previous === 'boolean' && ['true', 'false'].includes(value)) value = value === 'true';
+      else if (typeof previous === 'number' && value.trim() && Number.isFinite(Number(value))) value = Number(value);
+      else if (previous === null && ['', 'null', '~'].includes(value.trim())) value = null;
+      else if (previous && typeof previous === 'object') {
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed) === Array.isArray(previous)) value = parsed;
+        } catch (_) { /* YAML text is normalized by the server. */ }
+      }
+    }
+    setPathValue(values, path, value);
   });
   document.querySelectorAll('.config-array[data-config-path]').forEach((control) => {
     const items = [...control.querySelectorAll('[data-array-value]')]
@@ -552,7 +578,7 @@ async function api(path, options = {}) {
       return data;
     } catch (error) {
       state.pollFailed = true;
-      if (error.name === 'AbortError') throw new Error('请求超时，请稍后重试');
+      if (error.name === 'AbortError') throw new Error(method === 'GET' ? '请求超时，请稍后重试' : '暂未收到处理结果。请先刷新列表确认是否已完成，再决定是否重新提交。');
       throw error;
     } finally { window.clearTimeout(timer); }
   })();
@@ -597,12 +623,16 @@ async function uploadTaskCover(taskId, file) {
 function formatApiError(detail, status) {
   if (typeof detail === 'string' && detail.trim()) return detail;
   if (Array.isArray(detail)) {
-    const labels = { name: '名称', type: '类型', url: '服务地址', external_url: '外部播放地址', api_key: 'API 密钥', libraries: '管理的媒体库' };
+    const labels = { name: '名称', type: '类型', url: '服务地址', external_url: '外部播放地址', api_key: 'API 密钥', libraries: '管理的媒体库', username: '用户名', password: '密码', password_confirm: '确认密码', model: '模型名称', base_url: '模型 API 地址', timeout: '请求超时', context_tokens: '最长上下文', max_output_tokens: '最大输出长度', check_interval_hours: '检查间隔', input_directory: '待处理路径', preset_id: '刮削预设', cron: '运行时间', port: '端口', source: 'Skill 内容' };
     const messages = detail.map((item) => {
       if (!item || typeof item !== 'object') return String(item || '');
       const field = Array.isArray(item.loc) ? item.loc.filter((part) => part !== 'body').at(-1) : '';
       const label = labels[field] || field || '输入内容';
-      const message = String(item.msg || '格式不正确').replace(/^Field required$/i, '不能为空').replace(/^Input should be a valid URL.*$/i, '必须是有效的网址');
+      const common = { missing: '不能为空', string_type: '请填写文字', int_type: '请填写整数', int_parsing: '请填写整数', float_type: '请填写数字', float_parsing: '请填写数字', bool_type: '请选择是否启用', bool_parsing: '请选择是否启用', list_type: '请按列表格式填写', dict_type: '请按配置项和内容填写', url_parsing: '请填写完整网址，例如 https://example.com', extra_forbidden: '不支持此设置，请刷新页面后重试' };
+      const limits = { greater_than_equal: ['不能小于', 'ge'], greater_than: ['必须大于', 'gt'], less_than_equal: ['不能大于', 'le'], less_than: ['必须小于', 'lt'], string_too_short: ['字符数不能少于', 'min_length'], string_too_long: ['字符数不能超过', 'max_length'] };
+      const limit = limits[item.type];
+      const original = String(item.msg || '').replace(/^Value error, /, '');
+      const message = common[item.type] || (limit && Number.isFinite(item.ctx?.[limit[1]]) ? `${limit[0]} ${item.ctx[limit[1]]}` : /[\u3400-\u9fff]/.test(original) ? original : '格式不正确，请检查填写的内容');
       return `${label}${message.startsWith('不') || message.startsWith('必') ? '' : '：'}${message}`;
     }).filter(Boolean);
     if (messages.length) return messages.join('；');
@@ -760,7 +790,7 @@ function crawlerTooltip(status, detail) {
       info.dvdid && `番号：${info.dvdid}`,
       info.title && `标题：${info.title}`,
       info.url && `来源：${info.url}`,
-    ].filter(Boolean).join('\n') || '爬虫已完成，未返回可展示的字段。';
+    ].filter(Boolean).join('\n') || '查询结束，未取得影片资料。';
   }
   if (info.reason) return `原因：${info.reason}`;
   if (status.startsWith('重试')) return `正在重试${info.attempt ? `（${info.attempt}/${info.total || '?'}）` : ''}`;
@@ -989,12 +1019,12 @@ async function checkForAppUpdate(runtime) {
   const currentVersion = normalizeVersion(runtime.app_version || displayVersion);
   tag.textContent = `v${normalizeVersion(displayVersion)}`;
   tag.dataset.updateStatus = 'checking';
-  tag.title = '正在检查 GitHub Releases 更新';
+  tag.title = '正在检查新版本';
   try {
     const update = await api('/api/update');
     const result = update.result || {};
     const latestVersion = result.target || '';
-    const comparison = result.available ? -1 : (latestVersion ? compareReleaseVersions(currentVersion, latestVersion) : null);
+    const comparison = result.error ? null : result.available ? -1 : result.checked_at ? 0 : (latestVersion ? compareReleaseVersions(currentVersion, latestVersion) : null);
     if (comparison !== null && comparison < 0) {
       tag.dataset.updateStatus = 'available';
       tag.textContent = `v${normalizeVersion(displayVersion)} 可更新`;
@@ -1005,11 +1035,11 @@ async function checkForAppUpdate(runtime) {
       tag.title = `已是最新版本 ${latestVersion || displayVersion}`;
     } else {
       tag.dataset.updateStatus = 'unknown';
-      tag.title = '当前部署版本无法与 GitHub Release 标签比较';
+      tag.title = '暂时无法确认是否有更新，请到系统设置中重新检查。';
     }
   } catch (_) {
     tag.dataset.updateStatus = 'unknown';
-    tag.title = '暂时无法检查 GitHub Releases 更新';
+    tag.title = '暂时无法检查更新，请稍后重试。';
   }
 }
 
@@ -1076,7 +1106,7 @@ function watchUpdateJob(record) {
   updateOverlayJobId = record.id;
   updateOverlayStartedAt = record.startedAt || Date.now();
   try { sessionStorage.setItem(UPDATE_OVERLAY_KEY, JSON.stringify({ id: record.id, startedAt: updateOverlayStartedAt })); } catch (_) { }
-  showUpdateOverlay('正在下载并校验应用包…');
+  showUpdateOverlay('正在下载并校验更新…');
   window.clearTimeout(updateOverlayTimer);
   updateOverlayTimer = window.setTimeout(pollUpdateOverlay, 500);
 }
@@ -1093,13 +1123,17 @@ function renderUpdateStatus(payload, syncSettings = true) {
   const settings = payload.settings || {};
   const result = payload.result || {};
   const capability = payload.capability || {};
-  const beta = Boolean(settings.experience_program || payload.channel === 'bata' || result.channel === 'bata');
+  const beta = payload.channel ? payload.channel === 'bata' : Boolean(settings.experience_program);
   if (syncSettings) {
-    $('#update-channel-badge').textContent = beta ? '体验版 bata' : '正式版 latest';
+    $('#update-channel-badge').textContent = beta ? '体验版' : '正式版';
     $('#update-check-enabled').checked = settings.check_enabled !== false;
     $('#update-auto-update').checked = Boolean(settings.auto_update);
     $('#update-experience').checked = Boolean(settings.experience_program);
-    $('#update-experience').disabled = String(payload.current || '').startsWith('bata.');
+    const runningBeta = normalizeVersion(payload.current).startsWith('bata.');
+    $('#update-experience').disabled = runningBeta;
+    if ($('#update-channel-help')) $('#update-channel-help').textContent = runningBeta
+      ? '当前正在使用体验版。返回正式版需要将 Docker 镜像改为 latest，再拉取镜像并重新创建容器；保留原有数据目录。'
+      : '体验版可能不稳定。勾选并保存后，将立即安装。';
     $('#update-interval').value = settings.check_interval_hours || 24;
   }
   const job = payload.job || {};
@@ -1131,7 +1165,7 @@ async function checkUpdateNow() {
 
 async function applyUpdateNow() {
   const message = $('#update-settings-message');
-  showUpdateOverlay('正在提交更新请求…');
+  showUpdateOverlay('正在准备更新…');
   try {
     const result = await api('/api/update/apply', { method: 'POST' });
     message.textContent = result.status === 'scheduled' ? '更新已开始，服务会短暂重启' : (result.message || '当前已是最新版本');
@@ -1154,7 +1188,7 @@ function scheduleGitHubStarInvite() {
       return;
     }
     if (document.querySelector('.github-star-invite')) return;
-    document.body.insertAdjacentHTML('beforeend', '<aside class="github-star-invite" role="status"><button class="icon-button github-star-invite-close" type="button" data-close-github-star-invite title="关闭提示" aria-label="关闭提示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button><strong>喜欢 JavSP WEB 吗？</strong><p>欢迎前往 GitHub 点亮一颗 Star，帮助项目持续改进。</p><div class="github-star-invite-actions"><button class="button secondary" type="button" data-disable-github-star-invite>不再提示</button><a class="button primary" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noopener noreferrer">前往 GitHub</a></div></aside>');
+    document.body.insertAdjacentHTML('beforeend', '<aside class="github-star-invite" role="status"><button class="icon-button github-star-invite-close" type="button" data-close-github-star-invite title="关闭提示" aria-label="关闭提示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button><strong>喜欢 JavSP WEB 吗？</strong><p>如果用得顺手，欢迎在 GitHub 点个 Star。</p><div class="github-star-invite-actions"><button class="button secondary" type="button" data-disable-github-star-invite>不再提示</button><a class="button primary" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noopener noreferrer">前往 GitHub</a></div></aside>');
     document.querySelector('[data-close-github-star-invite]')?.addEventListener('click', () => {
       document.querySelector('.github-star-invite')?.remove();
     });
@@ -1335,7 +1369,7 @@ async function copyTaskLog(button) {
 }
 
 function renderPresetList() {
-  $('#preset-list').innerHTML = state.presets.map((preset) => `<button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '窗口表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>`).join('');
+  $('#preset-list').innerHTML = state.presets.map((preset) => `<button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '可视化表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>`).join('');
   document.querySelectorAll('[data-preset]').forEach((button) => button.addEventListener('click', () => editPreset(button.dataset.preset)));
   $('#task-preset').innerHTML = state.presets.map((preset) => `<option value="${preset.id}">${escapeHtml(preset.name)}</option>`).join('');
 }
@@ -1349,7 +1383,7 @@ async function deletePresetFromList(id) {
 }
 
 function renderPresetList() {
-  $('#preset-list').innerHTML = state.presets.map((preset) => `<div class="preset-list-row"><button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '窗口表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>${preset.id === 'default' ? '' : `<button class="icon-button preset-delete" type="button" data-delete-preset="${preset.id}">删除</button>`}</div>`).join('');
+  $('#preset-list').innerHTML = state.presets.map((preset) => `<div class="preset-list-row"><button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '可视化表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>${preset.id === 'default' ? '' : `<button class="icon-button preset-delete" type="button" data-delete-preset="${preset.id}">删除</button>`}</div>`).join('');
   document.querySelectorAll('[data-preset]').forEach((button) => button.addEventListener('click', () => editPreset(button.dataset.preset)));
   document.querySelectorAll('[data-delete-preset]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); deletePresetFromList(button.dataset.deletePreset); }));
   $('#task-preset').innerHTML = state.presets.map((preset) => `<option value="${preset.id}">${escapeHtml(preset.name)}</option>`).join('');
@@ -1521,12 +1555,12 @@ async function submitManualTask(event) {
   const selection = state.manualInputFiles;
   if (selection?.length && payload.input_directory === selection[0]) payload.input_files = [...selection];
   if (button) button.disabled = true;
-  message.textContent = '正在提交后台扫描请求…';
+  message.textContent = '正在提交扫描…';
   try {
     const result = await api('/api/tasks', { method: 'POST', body: JSON.stringify(payload) });
     message.textContent = result.scan
-      ? '已创建后台扫描任务 ' + (result.tasks?.[0]?.id || '') + '，请在任务队列查看扫描进度。'
-      : (result.count > 1 ? '已创建 ' + result.count + ' 个影片任务' : '任务 ' + (result.tasks?.[0]?.id || '') + ' 已启动');
+      ? '扫描任务已创建，请在任务队列查看进度。'
+      : (result.count > 1 ? result.count + ' 个影片任务已加入队列' : '任务已加入队列，请在任务列表查看进度。');
     if ($('#input-directory').value === payload.input_directory && state.manualInputFiles === selection) {
       $('#input-directory').value = '';
       clearManualFileSelection();
@@ -1697,10 +1731,12 @@ document.addEventListener('click', async (event) => {
 });
 document.addEventListener('change', (event) => {
   const select = event.target.closest('[data-translator-engine]');
-  if (!select) return;
+  const aiToggle = event.target.closest('[data-config-path="translator.ai_enabled"]');
+  if ((!select && !aiToggle) || (select || aiToggle).disabled) return;
+  if (select && state.formValues?.translator?.ai_enabled) return;
   state.formValues = readConfigFields();
   state.formValues.translator ||= {};
-  state.formValues.translator.engine = select.value ? { name: select.value } : null;
+  if (select) state.formValues.translator.engine = select.value ? { name: select.value } : null;
   renderConfigFields();
 });
 $('#task-delete-form').addEventListener('submit', async (event) => {
@@ -2006,7 +2042,7 @@ async function refreshConfiguredMediaLibraries() {
   }
   const results = await Promise.allSettled(servers.map((server) => api(`/api/media-servers/${encodeURIComponent(server.id)}/sync`, { method: 'POST' })));
   const failed = results.filter((result) => result.status === 'rejected').length;
-  showToast(failed ? `${servers.length - failed} 个媒体库已开始刷新，${failed} 个失败` : '媒体库扫描已启动', failed ? 'error' : 'success');
+  showToast(failed ? `已向 ${servers.length - failed} 台媒体服务器发送刷新请求，${failed} 台失败` : `已向 ${servers.length} 台媒体服务器发送刷新请求`, failed ? 'error' : 'success');
 }
 
 function requestMetadataRefresh() {
@@ -2573,14 +2609,14 @@ function ensurePathMappingsUi() {
   const settingsPanel = document.querySelector('[data-panel="settings"]');
   if (!settingsPanel || $('#path-mapping-panel')) return;
   const anchor = $('#media-server-panel');
-  const markup = '<div id="path-mapping-panel" class="panel narrow"><div class="panel-heading"><div><h2>路径映射</h2><p class="muted">将 qBittorrent 的保存路径转换为 JavSP WEB 当前环境可访问的路径，用于下载完成后自动刮削。</p></div><button class="button secondary" id="add-path-mapping" type="button">添加映射</button></div><form id="path-mappings-form" class="stack"><div id="path-mapping-list" class="path-mapping-list"></div><div class="form-actions"><button class="button primary" type="submit">保存路径映射</button><span id="path-mapping-message" class="muted"></span></div></form></div>';
+  const markup = '<div id="path-mapping-panel" class="panel narrow"><div class="panel-heading"><div><h2>路径映射</h2><p class="muted">下载器和本程序看到的文件路径不同时，在这里设置对应关系。</p></div><button class="button secondary" id="add-path-mapping" type="button">添加映射</button></div><form id="path-mappings-form" class="stack"><div id="path-mapping-list" class="path-mapping-list"></div><div class="form-actions"><button class="button primary" type="submit">保存路径映射</button><span id="path-mapping-message" class="muted"></span></div></form></div>';
   if (anchor) anchor.insertAdjacentHTML('afterend', markup); else settingsPanel.insertAdjacentHTML('afterbegin', markup);
 }
 
 function renderPathMappings() {
   const target = $('#path-mapping-list');
   if (!target) return;
-  target.innerHTML = state.pathMappings.length ? state.pathMappings.map((mapping) => `<div class="path-mapping-row" data-path-mapping="${escapeHtml(mapping.id || '')}"><label>qB 保存路径<input data-path-source value="${escapeHtml(mapping.source_path || '')}" placeholder="例如：/downloads"></label><label>JavSP WEB 路径<input data-path-target value="${escapeHtml(mapping.target_path || '')}" placeholder="例如：/video"></label><button class="icon-button" type="button" data-remove-path-mapping title="移除映射">删除</button></div>`).join('') : '<p class="muted">还没有路径映射。容器部署时通常需要添加 qB 下载目录到容器挂载目录的映射。</p>';
+  target.innerHTML = state.pathMappings.length ? state.pathMappings.map((mapping) => `<div class="path-mapping-row" data-path-mapping="${escapeHtml(mapping.id || '')}"><label>qB 保存路径<input data-path-source value="${escapeHtml(mapping.source_path || '')}" placeholder="例如：/downloads"></label><label>JavSP WEB 路径<input data-path-target value="${escapeHtml(mapping.target_path || '')}" placeholder="例如：/video"></label><button class="icon-button" type="button" data-remove-path-mapping title="移除映射">删除</button></div>`).join('') : '<p class="muted">尚未添加。两边路径相同时不需要设置。</p>';
 }
 
 async function loadPathMappings() {
@@ -2592,7 +2628,7 @@ function ensureMediaSettingsUi() {
   const settingsPanel = document.querySelector('[data-panel="settings"]');
   if (!settingsPanel) return;
   if (!$('#media-server-panel')) {
-    settingsPanel.insertAdjacentHTML('afterbegin', '<div id="media-server-panel" class="panel narrow"><div class="panel-heading"><div><h2>媒体服务器</h2><p class="muted">连接 Emby 或 Jellyfin，可手动同步媒体库，并在刮削完成后自动扫描。</p></div><button class="button primary" id="add-media-server" type="button">添加媒体服务器</button></div><div id="media-server-list" class="media-server-list"></div></div>');
+    settingsPanel.insertAdjacentHTML('afterbegin', '<div id="media-server-panel" class="panel narrow"><div class="panel-heading"><div><h2>媒体服务器</h2><p class="muted">连接 Emby 或 Jellyfin，按需开启整理后刷新媒体库。</p></div><button class="button primary" id="add-media-server" type="button">添加媒体服务器</button></div><div id="media-server-list" class="media-server-list"></div></div>');
   }
   if (!$('#media-server-dialog')) {
     document.body.insertAdjacentHTML('beforeend', '<dialog id="media-server-dialog" class="app-dialog"><form method="dialog" id="media-server-form" class="dialog-form"><div class="dialog-heading"><h2 id="media-server-dialog-title">添加媒体服务器</h2><button class="dialog-close" type="button" data-dialog-close>关闭</button></div><input id="media-server-id" type="hidden"><div class="dialog-content"><label>名称<input id="media-server-name" maxlength="80" required></label><label>类型<select id="media-server-type"><option value="emby">Emby</option><option value="jellyfin">Jellyfin</option></select></label><label>服务地址<input id="media-server-url" type="url" placeholder="http://127.0.0.1:8096" required></label><label>外部播放地址<input id="media-server-external-url" type="url" placeholder="https://media.example.com"></label><label>API 密钥<input id="media-server-api-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"></label><label class="check-label"><input id="media-server-auto-scan" type="checkbox">刮削任务完成后自动扫描媒体库</label></div><span id="media-server-message" class="form-error dialog-message"></span><div class="dialog-actions"><button class="button secondary" id="sync-media-server" type="button">同步媒体库</button><button class="button danger" id="delete-media-server" type="button">删除</button><button class="button secondary" type="button" data-dialog-close>取消</button><button class="button primary" value="default">保存</button></div></form></dialog>');
@@ -3165,7 +3201,7 @@ $('#download-management-form').addEventListener('submit', async (event) => {
     const saved = await api('/api/downloads/settings', { method: 'PUT', body: JSON.stringify(payload) });
     state.autoScrapeRules = normalizeAutoScrapeRules(saved);
     renderAutoScrapeRules(state.autoScrapeRules);
-    message.textContent = saved.limit_apply_errors?.length ? `策略已保存；限速应用失败：${saved.limit_apply_errors.join('；')}` : `策略已保存，已立即应用到 ${saved.limit_applied_count || 0} 个已接管任务`;
+    message.textContent = saved.limit_apply_errors?.length ? `策略已保存；部分任务的限速设置未能更新：${saved.limit_apply_errors.join('；')}` : `策略已保存，已为 ${saved.limit_applied_count || 0} 个任务更新上传和下载限速`;
     await loadDownloads();
   } catch (error) { message.textContent = error.message; }
 });
@@ -3264,7 +3300,7 @@ $('#update-settings-form')?.addEventListener('submit', async (event) => {
     if (settings.activation_error) {
       message.textContent = `已加入体验计划，但自动安装失败：${settings.activation_error}`;
     } else if (settings.activation) {
-      message.textContent = settings.activation.status === 'scheduled' ? '已加入体验计划，正在下载并安装 bata 应用包' : '已加入体验计划，当前已是最新版本';
+      message.textContent = settings.activation.status === 'scheduled' ? '已加入体验计划，正在下载并安装体验版' : '已加入体验计划，当前已是最新版本';
       if (settings.activation.status === 'scheduled') watchUpdateJob(settings.activation);
     } else {
       message.textContent = '更新设置已保存';

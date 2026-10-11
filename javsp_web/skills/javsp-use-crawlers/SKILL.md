@@ -19,4 +19,4 @@ description: 在 JavSP WEB 中选择、测试已有爬虫并核实抓取资料�
 - `GET /api/crawler-config/{name}` 返回源代码及类型。
 - `POST /api/crawler-config/test`，请求 `{"name":"javbus","input_value":"FNS-262"}`。
 
-爬虫测试和配置修改需要管理员。认证方式见刮削 Skill；不要把 Cookie、代理密码、API KEY 或完整未脱敏配置交给 LLM。
+爬虫测试和配置修改需要管理员。认证方式见刮削 Skill；不要把 Cookie、代理密码、API 密钥或完整未脱敏配置交给模型。

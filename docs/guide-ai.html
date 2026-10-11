@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="配置模型和联网搜索，管理对话、上下文、提示词与 Skills，再按需启用 AI 刮削。">
+  <meta name="description" content="配置模型和联网搜索，管理对话、上下文、提示词与 Skills，再按需启用 AI 刮削与翻译。">
   <meta name="theme-color" content="#0b1020">
   <title>AI 助手 | JavSP WEB 教程</title>
   <link rel="icon" href="assets/javsp-logo.png" type="image/png">
@@ -16,26 +16,32 @@
 <body class="docs-page">
   <header class="site-header"><a class="brand" href="index.html" aria-label="JavSP WEB 首页"><img src="assets/javsp-logo.png" alt=""><span>JavSP <b>WEB</b></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button><nav id="site-nav" class="site-nav" aria-label="主导航"><a href="index.html">首页</a><a class="is-current" href="docs.html">文档</a><a href="demo.html">示例站点</a><a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav></header>
   <main class="docs-shell page-width">
-<aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-ai.html" aria-current="page">AI 助手</a><a class="doc-chapter-link" href="#ai">模型接入与对话</a><a class="doc-chapter-link" href="#ai-search">联网搜索</a><a class="doc-chapter-link" href="#ai-context">上下文与生成</a><a class="doc-chapter-link" href="#ai-skills">提示词与 Skills</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
-<article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 03</p><h1>AI 助手</h1><p class="doc-lede">配置模型和联网搜索，管理对话、上下文、提示词与 Skills，再按需启用 AI 刮削。</p></header>
+<aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-ai.html" aria-current="page">AI 助手</a><a class="doc-chapter-link" href="#ai">模型接入与对话</a><a class="doc-chapter-link" href="#ai-translation">AI 翻译</a><a class="doc-chapter-link" href="#ai-search">联网搜索</a><a class="doc-chapter-link" href="#ai-context">上下文与生成</a><a class="doc-chapter-link" href="#ai-skills">提示词与 Skills</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
+<article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 03</p><h1>AI 助手</h1><p class="doc-lede">配置模型和联网搜索，管理对话、上下文、提示词与 Skills，再按需启用 AI 刮削与翻译。</p></header>
 <section id="ai">
         <h2>连接 AI 模型</h2>
-        <p>AI 助手可以帮你分析失败任务、查找影片资料和调整刮削预设。使用前，请准备模型服务商提供的 API 地址、模型名称和 API KEY，再用管理员账号打开“系统设置 → AI 接入”。</p>
-        <ol><li><b>填写连接信息。</b>选择 LLM 提供商，填写 LLM URL、模型名称和 API KEY。请选用支持“工具调用”的模型，AI 才能读取任务、查询预设和使用爬虫。</li><li><b>测试连接。</b>点击“测试连接”，确认没有连接或工具调用错误。</li><li><b>启用 AI。</b>勾选“启用 AI 刮削”，点击“保存 AI 配置”。</li></ol><p>以后修改配置时，API KEY 留空即可保留原密钥。需要删除密钥时，勾选“清除已保存的 API KEY”后保存。</p>
-        <div class="doc-table-wrap"><table><caption>模型接入示例</caption><thead><tr><th>提供商</th><th>LLM URL</th><th>填写说明</th></tr></thead><tbody>
+        <p>AI 助手可以帮你分析失败任务、查找影片资料和调整刮削预设。使用前，请准备模型服务商提供的 API 地址、模型名称和 API 密钥，再用管理员账号打开“系统设置 → AI 接入”。</p>
+        <ol><li><b>填写连接信息。</b>选择模型服务商，填写模型 API 地址、模型名称和 API 密钥。对话助手读取任务、查询预设和使用爬虫需要模型支持工具调用。</li><li><b>开启 AI。</b>勾选“启用 AI 刮削”。这是 AI 功能的总开关，开启后可使用对话，并在各预设中选择 AI 刮削或 AI 翻译。</li><li><b>测试并保存。</b>点击“测试连接”，确认模型可用后点击“保存 AI 配置”。测试成功不会自动保存设置。</li></ol><p>以后修改配置时，API 密钥留空即可保留原值。需要删除时，勾选“清除已保存的 API 密钥”后保存。</p>
+        <div class="doc-table-wrap"><table><caption>模型接入示例</caption><thead><tr><th>模型服务商</th><th>模型 API 地址</th><th>填写说明</th></tr></thead><tbody>
           <tr><td>OpenAI 兼容服务</td><td><code>https://你的服务地址/v1</code></td><td>按服务商说明填写模型 ID 与密钥，不能填写聊天网页地址。</td></tr>
-          <tr><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td>填写账号可用且支持工具调用的模型。</td></tr>
+          <tr><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td>填写账号可用的模型；使用对话助手时需支持工具调用。</td></tr>
           <tr><td>Ollama</td><td><code>http://host.docker.internal:11434/v1</code></td><td>Docker 访问宿主机的示例；Ollama 需监听容器可访问的地址，Linux 需配置 host-gateway。通常无需密钥。</td></tr>
           <tr><td>Anthropic</td><td><code>https://api.anthropic.com/v1</code></td><td>选择“Anthropic”，填写服务商提供的模型名称和密钥。</td></tr>
         </tbody></table></div>
-        <p>LLM 超时默认 60 秒，可设 10～120 秒。容器中的 <code>127.0.0.1</code> 指向容器自身，外部模型服务需填写容器能访问的地址。</p>
-        <figure class="doc-figure"><a href="assets/guide/ai-settings.webp" target="_blank"><img src="assets/guide/ai-settings.webp" width="1440" height="1200" loading="lazy" alt="AI 接入设置：提供商、API 地址、模型名称与密钥"></a><figcaption>填写模型服务商提供的连接信息，测试成功后保存（演示数据）。</figcaption></figure>
+        <p>模型请求超时默认 60 秒，可设 10～120 秒。容器中的 <code>127.0.0.1</code> 指向容器自身，外部模型服务需填写容器能访问的地址。</p>
+        <figure class="doc-figure"><a href="assets/guide/ai-settings.webp" target="_blank"><img src="assets/guide/ai-settings.webp" width="1265" height="1260" loading="lazy" alt="AI 接入设置：启用 AI 刮削，填写模型服务商、API 地址、模型名称与密钥"></a><figcaption>填写模型连接信息，打开“启用 AI 刮削”并保存。图中地址仅为示例。</figcaption></figure>
         <h3>开始对话</h3><p>进入“AI 刮削”，点击“新建对话”，输入你要处理的问题。例如：</p><pre class="doc-example"><code>查看最近失败的刮削任务，简要说明原因，并告诉我先处理哪一项。</code></pre><p>回复中的“工具记录”可以查看 AI 查询过的任务和资料。需要继续追问时，在同一会话发送消息；换一个问题时可以新建对话。左侧历史列表可搜索、重命名和删除会话，手机端点击会话列表按钮打开。</p><p>点击“停止生成”可结束当前回复。已经确认执行的操作仍会生效，删除会话也不会删除刮削任务。</p>
         <figure class="doc-figure"><a href="assets/guide/ai-chat.webp" target="_blank"><img src="assets/guide/ai-chat.webp" width="1440" height="1050" loading="lazy" alt="AI 会话列表、回复、思考区域和消息输入框"></a><figcaption>在输入框描述问题，收到回复后可继续追问（演示数据）。</figcaption></figure>
-        <h3>让刮削任务使用 AI</h3><p>打开“刮削预设 → 爬虫”，勾选“启用 AI 刮削”，并在系统 AI 设置中开启“允许 AI 联网搜索”。</p><ul><li><b>普通爬虫失败后再用 AI：</b>勾选“当所有爬虫刮削失败时启用 AI 刮削”，适合日常使用。</li><li><b>直接使用 AI：</b>取消上述勾选，影片资料将由 AI 搜索和提取。</li></ul><p>保存预设后，使用该预设创建的新任务便会按所选方式刮削。</p>
+        <h3>让刮削任务使用 AI</h3><p>打开“刮削预设 → 爬虫”，勾选“启用 AI 刮削”，并在系统 AI 设置中开启“允许 AI 联网搜索”。</p><ul><li><b>普通爬虫失败后再用 AI：</b>勾选“仅在爬虫失败时使用 AI”，适合日常使用。</li><li><b>直接使用 AI：</b>取消上述勾选，影片资料将由 AI 搜索和提取。</li></ul><p>保存预设后，使用该预设创建的新任务便会按所选方式刮削。</p>
+      </section>
+<section id="ai-translation"><h2>翻译已经抓取的标题和简介</h2>
+        <ol><li>先按上方步骤连接模型，并在系统 AI 设置中打开“启用 AI 刮削”总开关。</li><li>进入指定的“刮削预设 → 翻译器”，选择要翻译的标题、剧情简介，再勾选“启用 AI 翻译”并保存预设。</li><li>使用该预设创建新任务。程序会将选中的资料翻译为简体中文，再按已有规则生成 NFO 和整理文件。</li></ol>
+        <p>AI 翻译与翻译引擎二选一。勾选 AI 翻译后，其他引擎和密钥输入框会停用；取消勾选后才重新使用所选引擎。AI 翻译使用系统设置中的模型，不需要联网搜索。系统 AI 关闭或翻译失败时，任务会报错，不会自动换用其他引擎。</p>
+        <figure class="doc-figure"><a href="assets/guide/ai-translation-preset.webp" target="_blank"><img src="assets/guide/ai-translation-preset.webp" width="1265" height="953" loading="lazy" alt="刮削预设：AI 翻译已开启，其他翻译引擎已停用"></a><figcaption>勾选 AI 翻译后，上方引擎变灰。取消勾选后可重新使用。</figcaption></figure>
+        <p>内置 <code>javsp-translate</code> Skill 提供翻译规则，可在“项目 Skills”查看或修改；删除后需恢复才能继续使用 AI 翻译。对话的“预设提示词”不改变自动翻译格式。原文及相关演员名、番号会发送给所配置的模型服务。</p>
       </section>
 <section id="ai-search"><h2>设置联网搜索</h2>
-        <p>AI 查找影片资料需要联网搜索。在“系统设置 → AI 接入 → 联网搜索”勾选“允许 AI 联网搜索”。如果只想分析已有任务或预设，可以关闭此项。</p>
+        <p>AI 查找影片资料需要联网搜索。在“系统设置 → AI 接入 → 联网搜索”勾选“允许 AI 联网搜索”。如果只想分析已有任务、预设或使用 AI 翻译，可以关闭此项。</p>
         <h3>Bing RSS 或自建 SearXNG</h3><p><b>Bing RSS</b>无需搜索密钥，使用服务器网络访问 Bing。也可选择 <b>SearXNG</b>，填写自建实例地址，例如 <code>https://search.example.com</code>，并在实例的 <code>search.formats</code> 中启用 <code>json</code>。目前不支持需要额外鉴权请求头的实例。</p>
         <p>选好搜索服务后，点击“测试联网搜索”。测试成功后点击“保存 AI 配置”；如果失败，先检查服务器能否访问搜索服务。</p>
         <div class="doc-table-wrap"><table><caption>联网搜索参数</caption><thead><tr><th>设置</th><th>默认 / 范围</th><th>作用</th></tr></thead><tbody>
@@ -71,8 +77,8 @@ description: 分析失败任务，按原因分组并给出可验证的建议
 先查看任务详情及其预设，再按失败阶段归类。
 区分已确认原因和需要进一步核实的线索。
 默认只给结论和一项优先建议，按需展开任务明细。</code></pre>
-        <p><code>name</code> 填写技能名称，<code>description</code> 简要说明用途，正文写具体步骤。保存后可再次编辑，不再需要时可删除；内置内容可通过“恢复内置 Skills”找回。</p><p>AI 提议整理文件、修改预设或保存爬虫时，请先检查操作预览，确认无误后点击“确认执行”。</p>
-        <h3>常见问题</h3><ul><li><b>连接成功但没有调用工具：</b>检查模型是否支持工具调用。</li><li><b>HTTP 401 / 403：</b>核对密钥、账号权限和服务地址。</li><li><b>HTTP 400 或温度错误：</b>先将温度留空，再核对输出上限和服务商支持的参数。</li><li><b>SearXNG 返回 403 或格式错误：</b>确认已启用 JSON，且允许应用服务器访问。</li><li><b>搜索有结果但刮削失败：</b>摘要不等于有效来源，请检查详情页访问、预设代理和必需字段。</li><li><b>没有思考内容：</b>并非所有模型都提供思考过程，没有显示也可以正常阅读回复。</li></ul>
+        <p><code>name</code> 填写技能名称，<code>description</code> 简要说明用途，正文写具体步骤。保存后可再次编辑，不再需要时可删除；“恢复已移除的内置 Skills”会重新启用被移除的技能，并保留你已保存的修改；它不会把自定义内容重置成出厂版本。</p><p>AI 提议整理文件、修改预设或保存爬虫时，请先检查操作预览，确认无误后点击“确认执行”。</p>
+        <h3>常见问题</h3><ul><li><b>连接成功但没有调用工具：</b>检查模型是否支持工具调用。</li><li><b>HTTP 401 / 403：</b>核对密钥、账号权限和服务地址。</li><li><b>HTTP 400 或温度错误：</b>先将温度留空，再核对输出上限和服务商支持的参数。</li><li><b>SearXNG 返回 403 或格式错误：</b>确认已启用 JSON，且允许应用服务器访问。</li><li><b>搜索有结果但刮削失败：</b>摘要不等于有效来源，请检查详情页访问、预设代理和必需字段。</li><li><b>没有思考内容：</b>并非所有模型都提供思考过程，没有显示也不影响阅读回复。</li></ul>
       </section>
 <nav class="doc-pager" aria-label="相邻主题"><a href="guide-scraping.html"><small>上一主题</small>刮削与整理 ←</a><a href="guide-automation.html"><small>下一主题</small>自动化与集成 →</a></nav></article>
 </main>

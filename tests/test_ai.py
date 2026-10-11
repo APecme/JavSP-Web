@@ -219,7 +219,8 @@ class AITests(unittest.TestCase):
         self.assertNotIn("private-ai-key", json.dumps(result))
 
     def test_skills_catalog_and_path_validation(self):
-        self.assertEqual(len(self.client.get("/api/ai/skills").json()), 5)
+        names = {item['name'] for item in self.client.get("/api/ai/skills").json()}
+        self.assertTrue({'javsp-scrape', 'javsp-translate', 'javsp-settings'}.issubset(names))
         with self.assertRaises(ValueError):
             ai_tools.validate_arguments("read_skill", {"name": "../../config"})
 
@@ -307,10 +308,12 @@ class AITests(unittest.TestCase):
         self.assertEqual(result['turns'][0]['id'], 'legacy-0')
 
     def test_skills_add_edit_delete_and_restore_persist(self):
+        original_names = {item['name'] for item in self.client.get('/api/ai/skills').json()}
+        self.assertIn('javsp-translate', original_names)
         source = '---\nname: local-rule\ndescription: Test rule\n---\n\nKeep verified metadata.\n'
         self.assertEqual(self.client.put('/api/ai/skills', json={'source': source}).status_code, 200)
         self.assertEqual(self.client.get('/api/ai/skills/local-rule').json()['source'], source)
-        self.assertEqual(len(self.client.get('/api/ai/skills').json()), 6)
+        self.assertEqual({item['name'] for item in self.client.get('/api/ai/skills').json()}, original_names | {'local-rule'})
         edited = source.replace('Keep verified metadata.', 'Preserve existing fields.')
         self.client.put('/api/ai/skills', json={'source': edited})
         self.assertIn('Preserve existing', ai_tools.execute('read_skill', {'name': 'local-rule'})['instructions'])

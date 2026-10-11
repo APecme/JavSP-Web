@@ -19,14 +19,14 @@
 <aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-automation.html" aria-current="page">自动化与集成</a><a class="doc-chapter-link" href="#automation">定时自动刮削</a><a class="doc-chapter-link" href="#downloads">下载器与路径映射</a><a class="doc-chapter-link" href="#media">媒体库与 CookieCloud</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
 <article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 04</p><h1>自动化与集成</h1><p class="doc-lede">设置定时整理、下载完成后自动刮削，以及 Emby / Jellyfin 媒体库同步。</p></header>
 <section id="automation"><h2>定时自动刮削：固定时间扫描文件夹</h2>
-        <ol><li>先在“手动刮削”验证目标目录与预设，确认输出正确。</li><li>进入“自动刮削 → 添加定时规则”，填写名称、Cron 时间、服务端文件夹路径并选择预设。</li><li>勾选“启用此规则”后保存，检查规则显示的“下次执行”。时间按应用时区计算，推荐部署时设为 <code>Asia/Shanghai</code>。</li><li>到执行时间后，查看“最近结果”和执行记录，再到任务队列查看生成的影片任务。重启程序后无需重新添加规则。</li></ol>
+        <ol><li>先在“手动刮削”验证目标目录与预设，确认输出正确。</li><li>进入“自动刮削 → 添加定时规则”，填写名称、Cron 时间、服务端文件夹路径并选择预设。</li><li>勾选“启用此规则”后保存，检查规则显示的“下次执行”。时间按应用时区计算，默认是 <code>Asia/Shanghai</code>；部署时可按所在地调整。</li><li>到执行时间后，查看“最近结果”和执行记录，再到任务队列查看生成的影片任务。重启程序后无需重新添加规则。</li></ol>
         <div class="doc-table-wrap"><table><thead><tr><th>五段 Cron（分 时 日 月 周）</th><th>执行时间</th></tr></thead><tbody><tr><td><code>0 2 * * *</code></td><td>每天 02:00</td></tr><tr><td><code>0 */6 * * *</code></td><td>每天 00:00、06:00、12:00、18:00</td></tr><tr><td><code>30 3 * * 1</code></td><td>每周一 03:30</td></tr></tbody></table></div>
         <figure class="doc-figure"><a href="assets/guide/automation.webp" target="_blank"><img src="assets/guide/automation.webp" width="1440" height="1050" loading="lazy" alt="定时规则设置：Cron、文件夹、预设与启用开关"></a><figcaption>填写执行时间、影片目录和预设，再保存规则（演示数据）。</figcaption></figure>
         <div class="doc-callout"><span>同一规则不会重叠执行</span><p>上一批任务仍在排队、运行或重试图片时，下一次触发会跳过。没有新文件时无需处理，等待下一次扫描即可。</p></div>
         <p>要暂停规则，编辑后取消启用并保存。删除规则不会删除已生成的任务或已整理文件。避免让多个规则反复扫描同一输入目录；NFO 跳过、大小限制和分类过滤仍以选中的预设为准。</p>
       </section>
 <section id="downloads"><h2>下载器与路径映射：下载完成后自动整理</h2>
-        <h3>连接 qBittorrent</h3><ol><li>在 qBittorrent 中开启 Web UI，设置账号密码，确认 JavSP WEB 服务端可以访问。</li><li>进入“系统设置 → 下载器”，添加名称、Web UI 地址、账号和密码，测试连接后保存。Docker 中不能用 <code>localhost</code> 指代另一个容器。</li><li>在“下载管理”选择下载器，查看连接状态和种子。需要接管时设置标签、分类范围，再保存管理设置；留空意味着扩大匹配范围。</li><li>在“自动刮削”配置下载完成规则，填写匹配标签、分类和刮削预设。先用一个已完成的测试下载核对执行记录。</li></ol>
+        <h3>连接 qBittorrent</h3><ol><li>在 qBittorrent 中开启 Web UI，设置账号密码，确认 JavSP WEB 服务端可以访问。</li><li>进入“系统设置 → 下载器”，添加名称、Web UI 地址、账号和密码，测试连接后保存。Docker 中不能用 <code>localhost</code> 指代另一个容器。</li><li>在“下载管理”选择下载器，查看连接状态和种子。需要管理做种或限速时设置接管的标签、分类范围；这两项都留空会匹配全部下载。</li><li>在“自动刮削”配置下载完成规则，填写匹配标签、分类和刮削预设。先用一个已完成的测试下载核对执行记录。</li></ol>
         <h3>把下载器路径转换为应用能访问的路径</h3><p>两个容器可能看到同一份文件的不同路径。在“系统设置 → 路径映射”填写下载器上报的源路径与 JavSP WEB 的目标路径：</p>
         <pre class="doc-example"><code>下载器： /downloads/DEMO-001/DEMO-001.mkv
 源路径： /downloads

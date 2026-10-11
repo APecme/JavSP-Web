@@ -7,6 +7,22 @@ const source = fs.readFileSync(path.join(__dirname, '../javsp_web/web/assets/app
 const versions = source.slice(source.indexOf('function normalizeVersion'), source.indexOf('async function checkForAppUpdate'));
 const requests = source.slice(source.indexOf('const apiRequests'), source.indexOf('// Keep unchanged cards'));
 
+async function verifyReportedVersion() {
+  const tag = { dataset: {}, textContent: '' };
+  let result = { checked_at: '2026-10-11T08:00:00Z', current: 'bata.20261010195006', target: 'bata.20261010195006', available: false, channel: 'bata' };
+  const context = vm.createContext({ $: () => tag, api: async () => ({ result }) });
+  vm.runInContext(source.slice(source.indexOf('function normalizeVersion'), source.indexOf('const UPDATE_OVERLAY_KEY')), context);
+  const runtime = { version: 'bata.20261010195006', app_version: '1.1.38' };
+  await context.checkForAppUpdate(runtime);
+  assert.equal(tag.dataset.updateStatus, 'current', 'trust the completed server check for timestamped beta versions');
+  result = { ...result, available: true, target: 'bata.20261011195006' };
+  await context.checkForAppUpdate(runtime);
+  assert.equal(tag.dataset.updateStatus, 'available');
+  result = { ...result, error: '检查失败', available: false };
+  await context.checkForAppUpdate(runtime);
+  assert.equal(tag.dataset.updateStatus, 'unknown', 'failed checks must not claim the installation is current');
+}
+
 async function verifyUpdateOverlay() {
   const markup = fs.readFileSync(path.join(__dirname, '../javsp_web/web/index.html'), 'utf8');
   assert.match(markup, /id="update-overlay"[^>]*role="alertdialog"/);
@@ -33,7 +49,9 @@ async function verifyUpdateOverlay() {
     location: { reload: () => reloads++ },
   });
   const updateFunctions = source.slice(source.indexOf('const UPDATE_OVERLAY_KEY'), source.indexOf('function scheduleGitHubStarInvite'));
-  vm.runInContext(updateFunctions, context);
+  vm.runInContext(versions + '\n' + updateFunctions, context);
+  context.renderUpdateStatus({ current: '1.2.0', channel: 'stable', settings: { experience_program: false }, result: { channel: 'bata' } });
+  assert.equal(element('#update-channel-badge').textContent, '正式版', 'stale beta check results must not override the selected channel');
   context.watchUpdateJob({ id: 'first' });
   assert.equal(element('#update-overlay').hidden, false);
   assert.ok(classes.has('update-in-progress'));
@@ -108,9 +126,13 @@ async function main() {
   const timed = context.api('/api/slow');
   abortTimer();
   await assert.rejects(timed, /请求超时/);
+  const submitted = context.api('/api/tasks', { method: 'POST' });
+  abortTimer();
+  await assert.rejects(submitted, /先刷新列表确认/);
   mode = 'success';
   await context.api('/api/slow');
   await verifyUpdateOverlay();
+  await verifyReportedVersion();
   console.log('Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

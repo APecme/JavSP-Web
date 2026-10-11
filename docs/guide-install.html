@@ -19,7 +19,7 @@
 <aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-install.html" aria-current="page">安装与部署</a><a class="doc-chapter-link" href="#start">开始使用</a><a class="doc-chapter-link" href="#windows">Windows 本机部署</a><a class="doc-chapter-link" href="#docker">Docker / Compose</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
 <article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 01</p><h1>安装与部署</h1><p class="doc-lede">在 Windows 电脑、服务器或 NAS 上安装 JavSP WEB，设置影片目录并完成首次登录。</p></header>
 <section id="start"><h2>开始使用</h2><p class="doc-lede">Windows 电脑可直接运行 EXE，服务器或 NAS 推荐使用 Docker。安装后先用一个影片目录试刮削，确认资料和输出位置正确，再处理整个媒体库。</p>
-        <div class="doc-steps"><div><span>01</span><b>安装与登录</b><p>Windows 本机使用 EXE，服务器或 NAS 使用 Docker。</p></div><div><span>02</span><b>检查预设</b><p>确认分类、数据源、输出路径以及移动/硬链接设置。</p></div><div><span>03</span><b>小范围验证</b><p>先刮削一个影片目录，核对日志和输出，再开启自动化。</p></div></div>
+        <div class="doc-steps"><div><span>01</span><b>安装与登录</b><p>Windows 本机使用 EXE，服务器或 NAS 使用 Docker。</p></div><div><span>02</span><b>检查预设</b><p>确认分类、数据源、输出路径以及移动/硬链接设置。</p></div><div><span>03</span><b>小范围验证</b><p>先刮削一个影片目录，核对资料和输出位置，再开启自动化。</p></div></div>
         <p>首次账号和密码均为 <code>admin</code>。登录后到“系统设置 → 用户管理”修改密码。网页填写的路径必须由运行 JavSP WEB 的那台机器或容器访问，浏览器所在电脑的文件并不会自动上传。</p>
         <p>安装前也可以打开<a href="demo.html">交互示例</a>熟悉操作。示例使用演示数据，不会处理你的影片；填写的内容会在刷新后清除，请勿输入真实密码或密钥。</p>
       </section>
@@ -53,7 +53,7 @@
         <div class="doc-command doc-command-multiline"><code>docker compose config --quiet<br>docker compose up -d</code><button class="copy-button" data-copy="docker compose config --quiet&#10;docker compose up -d">复制命令</button></div>
         <p>浏览器打开 <code>http://服务器地址:8090/login</code>。若宿主机 8090 已占用，可将端口映射改成 <code>8091:8090</code>，网页访问 8091；容器端口无需改变。</p>
         <div class="doc-note"><b>路径示例</b><span>宿主机 <code>/mnt/media/待整理</code> → 容器 <code>/video/待整理</code>。在“待处理路径”和定时规则中填后者。输入和输出目录都应挂载，容器需有相应写入权限。</span></div>
-        <p><code>./data:/app/data</code> 用于保存账号、配置和任务记录，重新创建容器时请保留左侧的 <code>data</code> 文件夹。启动失败可查看 <code>docker compose logs --tail 100 javsp-web</code>。如何更新见<a href="guide-maintenance.html#updates">版本与备份</a>。</p>
+        <p><code>./data:/app/data</code> 用于保存账号、配置和任务记录，重新创建容器时请保留左侧的 <code>data</code> 文件夹。启动失败可查看 <code>docker compose logs --tail 100 javsp-web</code>。如何更新或切换正式版、体验版，见<a href="guide-maintenance.html#updates">更新与备份</a>。</p>
       </section>
 <nav class="doc-pager" aria-label="相邻主题"><a href="docs.html"><small>返回</small>教程目录</a><a href="guide-scraping.html"><small>下一主题</small>刮削与整理 →</a></nav></article>
 </main>

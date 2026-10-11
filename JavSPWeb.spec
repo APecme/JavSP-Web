@@ -8,7 +8,7 @@ datas += [(str(root / "javsp_web" / "skills"), "javsp_web/skills")]
 
 a = Analysis(["launcher.py"], pathex=[str(root), str(root / "vendor" / "JavSP")], datas=datas, hiddenimports=[
     "uvicorn", "uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",
-    "pystray", "javsp_web.server", "javsp.__main__",
+    "pystray", "javsp_web.server", "javsp_web.ai_translate", "javsp.__main__",
     "javsp.web.airav", "javsp.web.arzon", "javsp.web.arzon_iv", "javsp.web.avsox", "javsp.web.avwiki",
     "javsp.web.dl_getchu", "javsp.web.fanza", "javsp.web.fc2", "javsp.web.fc2fan", "javsp.web.fc2ppvdb",
     "javsp.web.gyutto", "javsp.web.jav321", "javsp.web.javbus", "javsp.web.javdb", "javsp.web.javlib",

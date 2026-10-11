@@ -43,7 +43,7 @@ if (document.querySelector('.guide-directory')) {
   const chapterPages = {
     start: 'guide-install.html', windows: 'guide-install.html', docker: 'guide-install.html',
     manual: 'guide-scraping.html', mounted: 'guide-scraping.html', preset: 'guide-scraping.html', crawlers: 'guide-scraping.html',
-    ai: 'guide-ai.html', 'ai-search': 'guide-ai.html', 'ai-context': 'guide-ai.html', 'ai-skills': 'guide-ai.html',
+    ai: 'guide-ai.html', 'ai-translation': 'guide-ai.html', 'ai-search': 'guide-ai.html', 'ai-context': 'guide-ai.html', 'ai-skills': 'guide-ai.html',
     automation: 'guide-automation.html', downloads: 'guide-automation.html', media: 'guide-automation.html',
     updates: 'guide-maintenance.html', trouble: 'guide-maintenance.html',
   };

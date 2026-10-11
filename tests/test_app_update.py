@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 import zipfile
 
-from javsp_web import app_supervisor, app_update, storage, updater
+from javsp_web import __version__, app_supervisor, app_update, storage, updater
 
 
 class AppUpdateTests(unittest.TestCase):
@@ -23,10 +23,17 @@ class AppUpdateTests(unittest.TestCase):
         self.enterContext(patch.object(app_supervisor, 'BASE_ROOT', self.base))
         self.enterContext(patch.object(app_supervisor, 'APP_DIR', self.apps))
         self.enterContext(patch.object(app_supervisor, 'STATE_FILE', self.root / 'state.json'))
+        self.enterContext(patch.object(app_supervisor, 'IMAGE_FILE', self.root / 'base-image.json'))
         self.enterContext(patch.object(app_supervisor, 'JOB_FILE', self.root / 'job.json'))
         self.enterContext(patch.object(storage, 'DATA_DIR', self.root))
+        self.enterContext(patch.object(storage, 'UPDATE_SETTINGS_FILE', self.root / 'update-settings.json'))
+        self.enterContext(patch.object(storage, 'ensure_seed_data'))
         self.enterContext(patch.dict(os.environ, {'JAVSP_WEB_APP_SUPERVISOR': '1'}, clear=False))
         os.environ.pop('JAVSP_WEB_UPDATE_MODE', None)
+        os.environ.pop('JAVSP_WEB_BASE_RELEASE_LABEL', None)
+        os.environ.pop('JAVSP_WEB_BASE_RELEASE_COMMIT', None)
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'bata.20260923000000'
+        os.environ['JAVSP_WEB_RELEASE_COMMIT'] = 'b' * 40
         self.commit = 'a' * 40
         self.info = {'target': 'bata.20260924044117', 'commit': self.commit}
         self.files = {
@@ -132,6 +139,163 @@ class AppUpdateTests(unittest.TestCase):
         with patch.object(app_supervisor.subprocess, 'Popen', return_value=child), patch.object(app_supervisor, 'health_ready', return_value=True) as ready, patch.object(app_supervisor.signal, 'signal'):
             self.assertEqual(app_supervisor.run(), 0)
         self.assertEqual(ready.call_args.args[1], '1.1.37')
+
+    def launch(self):
+        child = MagicMock()
+        child.wait.return_value = 0
+        with patch.object(app_supervisor.subprocess, 'Popen', return_value=child) as popen, patch.object(app_supervisor, 'health_ready', return_value=True), patch.object(app_supervisor.signal, 'signal'):
+            self.assertEqual(app_supervisor.run(), 0)
+        return popen.call_args.kwargs
+
+    def install_update(self, target=None):
+        self.mock_repository(self.archive())
+        info = dict(self.info, target=target or self.info['target'])
+        app_update.install(info)
+        return info
+
+    def test_same_image_restarts_preserve_installed_update_and_preferences(self):
+        info = self.install_update()
+        storage.save_update_settings({'experience_program': True, 'auto_update': True})
+        for _ in range(2):
+            launched = self.launch()
+            self.assertEqual(launched['cwd'], self.apps / info['target'])
+            self.assertEqual(launched['env']['JAVSP_WEB_RELEASE_LABEL'], info['target'])
+            self.assertEqual(launched['env']['JAVSP_WEB_BASE_RELEASE_LABEL'], 'bata.20260923000000')
+            self.assertEqual(launched['env']['JAVSP_WEB_BASE_RELEASE_COMMIT'], 'b' * 40)
+            self.assertTrue(storage.get_update_settings()['auto_update'])
+            self.assertTrue(storage.get_update_settings()['experience_program'])
+
+    def test_same_stable_image_preserves_deliberately_installed_beta(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.37'
+        info = self.install_update()
+        storage.save_update_settings({'experience_program': True})
+        for _ in range(2):
+            launched = self.launch()
+            self.assertEqual(launched['cwd'], self.apps / info['target'])
+            self.assertTrue(storage.get_update_settings()['experience_program'])
+        # The updater runs in the child, whose active release differs from the base.
+        with patch.dict(os.environ, launched['env']):
+            app_update.install(dict(info, target='bata.20260925000000'))
+        self.assertEqual(app_supervisor.read_state()['base_image']['label'], '1.1.37')
+        self.assertEqual(self.launch()['cwd'], self.apps / 'bata.20260925000000')
+
+    def test_beta_to_stable_image_clears_saved_beta_selection(self):
+        self.install_update()
+        storage.save_update_settings({'experience_program': True, 'auto_update': True})
+        storage._write_json(app_supervisor.JOB_FILE, {'mode': 'app', 'status': 'restarting'})
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.39'
+        os.environ['JAVSP_WEB_RELEASE_COMMIT'] = 'c' * 40
+        launched = self.launch()
+        self.assertEqual(launched['cwd'], self.base)
+        self.assertEqual(launched['env']['JAVSP_WEB_RELEASE_LABEL'], 'v1.1.39')
+        self.assertIsNone(app_supervisor.read_state()['current'])
+        self.assertFalse(storage.get_update_settings()['experience_program'])
+        self.assertTrue(storage.get_update_settings()['auto_update'])
+        self.assertEqual(updater.channel(), 'stable')
+        self.assertEqual(storage._read_json(app_supervisor.JOB_FILE, {})['status'], 'interrupted')
+        self.assertEqual(self.launch()['cwd'], self.base)
+
+    def test_older_updater_state_writer_preserves_cross_channel_choice_on_same_image(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.37'
+        first = self.install_update()
+        storage.save_update_settings({'experience_program': True})
+        self.launch()
+        self.assertEqual(storage._read_json(app_supervisor.IMAGE_FILE, {})['label'], '1.1.37')
+        second = dict(first, target='bata.20260925000000')
+        app_update.stage(second)
+        # A previously released child updater writes only the original fields.
+        app_supervisor.save_state({
+            'current': second['target'], 'commit': second['commit'],
+            'previous': first['target'], 'previous_commit': first['commit'], 'pending': True,
+        })
+        storage._write_json(app_supervisor.JOB_FILE, {'mode': 'app', 'status': 'restarting'})
+        for _ in range(2):
+            self.assertEqual(self.launch()['cwd'], self.apps / second['target'])
+            self.assertTrue(storage.get_update_settings()['experience_program'])
+        self.assertEqual(app_supervisor.read_state()['base_image']['label'], '1.1.37')
+        self.assertEqual(storage._read_json(app_supervisor.JOB_FILE, {})['status'], 'updated')
+
+    def test_recorded_image_change_wins_when_older_updater_omits_binding(self):
+        for before, after in [('v1.1.37', 'v1.1.39'), ('bata.20260923000000', 'bata.20260924000000')]:
+            with self.subTest(before=before, after=after):
+                os.environ['JAVSP_WEB_RELEASE_LABEL'] = before
+                app_supervisor.IMAGE_FILE.unlink(missing_ok=True)
+                self.install_update(target='bata.20260925000000')
+                self.launch()
+                legacy = app_supervisor.read_state()
+                legacy.pop('base_image')
+                app_supervisor.save_state(legacy)
+                os.environ['JAVSP_WEB_RELEASE_LABEL'] = after
+                self.assertEqual(self.launch()['cwd'], self.base)
+                self.assertEqual(storage._read_json(app_supervisor.IMAGE_FILE, {})['label'], after.lstrip('vV'))
+                self.assertEqual(updater.channel(), 'bata' if after.startswith('bata.') else 'stable')
+
+    def test_new_image_wins_even_when_saved_update_has_a_newer_version(self):
+        self.install_update(target='bata.20261011000000')
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'bata.20261010000000'
+        self.assertEqual(self.launch()['cwd'], self.base)
+        self.assertTrue(storage.get_update_settings()['experience_program'])
+
+    def test_same_channel_stable_image_upgrade_uses_new_image(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.37'
+        self.install_update(target='1.1.38')
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.39'
+        self.assertEqual(self.launch()['cwd'], self.base)
+
+    def test_changed_commit_or_dependency_declarations_replace_saved_update(self):
+        for change in ('commit', 'dependencies'):
+            with self.subTest(change=change):
+                self.install_update()
+                if change == 'commit':
+                    os.environ['JAVSP_WEB_RELEASE_COMMIT'] = 'c' * 40
+                else:
+                    (self.base / 'requirements.txt').write_bytes(b'fastapi==2\n')
+                self.assertEqual(self.launch()['cwd'], self.base)
+
+    def test_legacy_state_keeps_only_newer_update_in_same_channel(self):
+        cases = [
+            ('bata.20260923000000', 'bata.20260924044117', True),
+            ('bata.20260925000000', 'bata.20260924044117', False),
+            ('v1.1.37', '1.1.38', True),
+            ('v1.1.39', '1.1.38', False),
+            ('v1.1.39', 'bata.20260924044117', False),
+            ('bata.20260923000000', '1.1.39', False),
+        ]
+        for base_label, target, preserve in cases:
+            with self.subTest(base=base_label, target=target):
+                os.environ['JAVSP_WEB_RELEASE_LABEL'] = base_label
+                info = self.install_update(target=target)
+                legacy = app_supervisor.read_state()
+                legacy.pop('base_image')
+                legacy['pending'] = False
+                app_supervisor.save_state(legacy)
+                app_supervisor.IMAGE_FILE.unlink(missing_ok=True)
+                storage._write_json(storage.UPDATE_SETTINGS_FILE, {'experience_program': True})
+                expected = self.apps / target if preserve else self.base
+                self.assertEqual(self.launch()['cwd'], expected)
+                self.assertEqual(self.launch()['cwd'], expected, 'migration must be persisted')
+                self.assertEqual(app_supervisor.read_state()['base_image']['label'], base_label.lstrip('vV'))
+                if not preserve:
+                    self.assertEqual(updater.channel(), 'bata' if base_label.startswith('bata.') else 'stable')
+
+    def test_first_stable_image_launch_resets_unbound_beta_preference(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.39'
+        storage.save_update_settings({'experience_program': True, 'auto_update': True})
+        self.assertEqual(self.launch()['cwd'], self.base)
+        self.assertFalse(storage.get_update_settings()['experience_program'])
+        # A fresh, explicit opt-in on this image must survive subsequent restarts.
+        storage.save_update_settings({'experience_program': True})
+        self.launch()
+        self.assertTrue(storage.get_update_settings()['experience_program'])
+
+    def test_unlabeled_image_health_uses_package_version(self):
+        os.environ.pop('JAVSP_WEB_RELEASE_LABEL')
+        with patch.object(app_supervisor, 'health_ready', return_value=True) as ready:
+            child = MagicMock()
+            child.wait.return_value = 0
+            with patch.object(app_supervisor.subprocess, 'Popen', return_value=child), patch.object(app_supervisor.signal, 'signal'):
+                self.assertEqual(app_supervisor.run(), 0)
+        self.assertEqual(ready.call_args.args[1], __version__)
 
 
 if __name__ == '__main__':

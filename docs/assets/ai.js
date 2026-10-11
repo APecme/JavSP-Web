@@ -403,45 +403,46 @@
     panel.className = 'panel narrow ai-settings-card';
     panel.open = localStorage.getItem('javsp-web.ai-settings-open') !== 'false';
     panel.addEventListener('toggle', () => localStorage.setItem('javsp-web.ai-settings-open', String(panel.open)));
-    panel.innerHTML = `<summary><span><strong>AI 接入</strong><small class="muted">模型、联网搜索、上下文、提示词与 Skills</small></span></summary>
-      <p class="muted">需要支持工具调用的模型。<a href="https://apecme.github.io/JavSP-Web/docs.html#ai" target="_blank" rel="noopener noreferrer">查看 AI 接入教程 ↗</a></p>
+    panel.innerHTML = `<summary><span><strong>AI 接入</strong><small class="muted">模型连接与使用设置</small></span></summary>
+      <p class="muted">使用刮削助手时，模型需要支持工具调用。<a href="https://apecme.github.io/JavSP-Web/docs.html#ai" target="_blank" rel="noopener noreferrer">查看 AI 接入教程 ↗</a></p>
       <form id="ai-settings-form" class="stack">
         <details class="ai-setting-group" open><summary>模型接入</summary><div class="stack">
         <label class="check-label"><input id="ai-enabled" type="checkbox">启用 AI 刮削</label>
-        <label>LLM 提供商<select id="ai-provider"><option value="compatible">OpenAI 兼容服务</option><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="ollama">Ollama</option><option value="anthropic">Anthropic</option></select></label>
-        <label>LLM URL<input id="ai-base-url" type="url" maxlength="2048" placeholder="https://api.example.com/v1"></label>
-        <small class="muted">填写服务端可访问的 API 基础地址，通常以 /v1 结尾。</small>
+        <small class="muted">保存后可使用 AI 助手，并在刮削预设中选择 AI 翻译。</small>
+        <label>模型服务商<select id="ai-provider"><option value="compatible">OpenAI 兼容服务</option><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="ollama">Ollama</option><option value="anthropic">Anthropic</option></select></label>
+        <label>模型 API 地址<input id="ai-base-url" type="url" maxlength="2048" placeholder="https://api.example.com/v1"></label>
+        <small class="muted">填写服务商提供的 API 地址，不是聊天网页地址。</small>
         <label>模型名称<input id="ai-model" maxlength="200" placeholder="填写服务商提供的模型 ID"></label>
-        <label>API KEY<input id="ai-key" type="password" autocomplete="new-password" maxlength="4096" placeholder="留空保留已保存的密钥"></label>
-        <label class="check-label"><input id="ai-clear-key" type="checkbox">清除已保存的 API KEY</label>
+        <label>API 密钥<input id="ai-key" type="password" autocomplete="new-password" maxlength="4096" placeholder="留空保留已保存的密钥"></label>
+        <label class="check-label"><input id="ai-clear-key" type="checkbox">清除已保存的 API 密钥</label>
         <label>请求超时（秒）<input id="ai-timeout" type="number" min="10" max="120" value="60" required></label>
         </div></details>
         <details class="ai-setting-group"><summary>联网搜索</summary><div class="stack">
         <label class="check-label"><input id="ai-search-enabled" type="checkbox" checked>允许 AI 联网搜索</label>
-        <small class="muted">控制公开网页搜索和 AI 资料提取；关闭后仍可查看本地任务、使用普通爬虫。自动 AI 刮削依赖此开关。</small>
+        <small class="muted">AI 查找影片资料时需要开启；翻译不需要。</small>
         <label>搜索提供商<select id="ai-search-provider"><option value="bing">Bing RSS（无需密钥）</option><option value="searxng">SearXNG（自建服务）</option></select></label>
-        <label>SearXNG 服务 URL<input id="ai-search-url" type="url" maxlength="2048" placeholder="https://search.example.com"></label>
-        <small class="muted">仅 SearXNG 使用此地址，服务需启用 JSON 输出。对话搜索使用服务端网络；自动 AI 刮削沿用当前刮削预设代理。</small>
+        <label>SearXNG 服务地址<input id="ai-search-url" type="url" maxlength="2048" placeholder="https://search.example.com"></label>
+        <small class="muted">使用 SearXNG 时填写，并在该服务中开启 JSON 输出。</small>
         ${numberSettings(true)}
         <button class="button secondary" id="ai-test-search" type="button">测试联网搜索</button>
         </div></details>
         <details class="ai-setting-group"><summary>上下文与生成参数</summary><div class="stack">
         ${numberSettings(false)}
-        <small class="muted">上下文包含输入和预留输出。请按模型实际容量填写；程序按 UTF-8 字节数保守估算 Token 用量，超限时先移除较早对话，当前资料仍超限则提示缩小范围，不会截断工具参数。历史条数含用户与 AI 消息，不删除聊天记录。</small>
+        <small class="muted">不确定时保留默认值。上下文和输出长度不要超过模型上限。</small>
         <label>采样温度<input id="ai-temperature" type="number" min="0" max="1" step="0.1" placeholder="留空使用模型默认值"></label>
-        <small class="muted">较低值偏向稳定回答。部分推理模型不接受自定义温度，遇到参数错误请留空。输出长度上限也应符合提供商要求。</small>
+        <small class="muted">数值越低，回答越稳定；模型不支持时留空。</small>
         </div></details>
         <details class="ai-setting-group"><summary>预设提示词</summary><div class="stack">
         <label>预设提示词<textarea id="ai-system-prompt" rows="10" maxlength="12000" placeholder="留空使用默认提示词"></textarea></label>
-        <small class="muted">控制 AI 对话的回复方式。默认先给结论、合并同类问题，再给处理建议；需要详情时可在对话中要求展开。保存后从下一条消息开始生效，不影响自动刮削的资料提取规则。</small>
+        <small class="muted">填写回答偏好，例如“只给操作步骤”。保存后从下一次提问生效，仅影响对话回复。</small>
         <div class="form-actions"><button class="button secondary" id="ai-reset-prompt" type="button">恢复默认提示词</button></div>
         </div></details>
         <div class="form-actions"><button class="button secondary" id="ai-test" type="button">测试连接</button><button class="button primary" type="submit">保存 AI 配置</button></div>
         <p id="ai-settings-message" class="muted" role="status"></p>
       </form>
-      <details class="ai-skill-manager ai-setting-group"><summary>项目 Skills</summary><div class="panel-heading"><p class="muted">管理 AI 可按需读取的技能指令；添加或删除不会赋予额外工具权限。</p><button class="button secondary" id="ai-add-skill" type="button">添加 Skill</button></div>
+      <details class="ai-skill-manager ai-setting-group"><summary>项目 Skills</summary><div class="panel-heading"><p class="muted">AI 处理任务时参考的说明，可查看和修改。</p><button class="button secondary" id="ai-add-skill" type="button">添加 Skill</button></div>
         <div id="ai-skills-list"></div>
-        <div class="form-actions"><button class="button secondary" id="ai-restore-skills" type="button">恢复内置 Skills</button></div>
+        <div class="form-actions"><button class="button secondary" id="ai-restore-skills" type="button">恢复已移除的内置 Skills</button></div>
         <form id="ai-skill-form" class="stack" hidden><label>SKILL.md<textarea id="ai-skill-source" class="code-editor" rows="12" maxlength="32000" spellcheck="false" required></textarea></label><div class="form-actions"><button class="button primary" type="submit">保存 Skill</button><button class="button secondary" id="ai-cancel-skill" type="button">取消</button></div></form>
         <p id="ai-skills-message" role="status" class="muted"></p>
       </details>`;
@@ -475,7 +476,7 @@
         await api('/api/ai/skills', { method: 'PUT', body: JSON.stringify({ source: $('#ai-skill-source').value }) });
         $('#ai-skill-form').hidden = true;
         await loadSkills();
-        $('#ai-skills-message').textContent = 'Skill 已保存，后续 AI 请求可使用。';
+        $('#ai-skills-message').textContent = 'Skill 已保存。';
       } catch (error) { $('#ai-skills-message').textContent = error.message; }
       finally { button.disabled = false; }
     });
@@ -521,6 +522,7 @@
 
   function fillSettings(settings) {
     $('#ai-enabled').checked = settings.enabled;
+    state.aiEnabled = settings.enabled === true;
     $('#ai-provider').value = settings.provider;
     $('#ai-base-url').value = settings.base_url;
     $('#ai-model').value = settings.model;
@@ -534,7 +536,7 @@
     $('#ai-system-prompt').value = settings.system_prompt || defaultSystemPrompt;
     $('#ai-key').value = '';
     $('#ai-clear-key').checked = false;
-    $('#ai-settings-message').textContent = settings.has_api_key ? '已保存 API KEY，留空即可保留。' : '尚未保存 API KEY。';
+    $('#ai-settings-message').textContent = settings.has_api_key ? '已保存 API 密钥，留空即可保留。' : '尚未保存 API 密钥。';
   }
 
   async function submitSettings(test) {
@@ -548,10 +550,10 @@
     payload.search_url = $('#ai-search-url').value.trim();
     const message = $('#ai-settings-message');
     form.querySelectorAll('button').forEach(button => { button.disabled = true; });
-    message.textContent = test === 'search' ? '正在测试联网搜索…' : test ? '正在连接 LLM 并验证工具调用…' : '正在保存…';
+    message.textContent = test === 'search' ? '正在测试联网搜索…' : test ? '正在测试连接…' : '正在保存…';
     try {
       const result = await api(test === 'search' ? '/api/ai/test-search' : test ? '/api/ai/test' : '/api/ai/settings', { method: test ? 'POST' : 'PUT', body: JSON.stringify(payload), timeoutMs: ((test === 'search' ? payload.search_timeout : payload.timeout) + 15) * 1000 });
-      if (!test) { fillSettings(result); state.aiEnabled = result.enabled; }
+      if (!test) fillSettings(result);
       message.textContent = test ? result.message : 'AI 配置已保存';
     } catch (error) {
       message.textContent = error.message;
@@ -572,7 +574,7 @@
       fitLayout();
       try {
         const settings = await api('/api/ai/settings');
-        $('#ai-connection-status').textContent = settings.enabled ? `${settings.provider} · ${settings.model}` : '尚未启用 AI 刮削，请先到系统设置配置 LLM。';
+        $('#ai-connection-status').textContent = settings.enabled ? `${settings.provider} · ${settings.model}` : '请先在“系统设置 → AI 接入”配置模型，并启用 AI 刮削。';
         if (!loaded) {
           const saved = localStorage.getItem(storageKey());
           if (saved) {

@@ -25,7 +25,7 @@ def parse_data(movie: MovieInfo):
 
 函数接收并修改 `movie`，不返回新对象。常用字段：`dvdid`、`title`、`cover`、`big_cover`、`preview_pics`、`actress`、`publish_date`、`producer`、`publisher`、`url`。封面 URL 必须来自页面证据；剧照为 URL 列表，演员为字符串列表。缺失可选字段保持空值，找不到影片使用 `MovieNotFoundError`。
 
-使用 `Request` 沿用代理及 CookieCloud；不要硬编码 Cookie、账号密码、API KEY，不关闭 TLS 验证。相对 URL 用 `urljoin`。处理延迟加载属性；匹配封面应考虑站点命名规则，例如 `pl.jpg` 与经核实的 `<番号>_1200.jpg`，避免把缩略剧照当封面。
+使用 `Request` 沿用代理及 CookieCloud；不要硬编码 Cookie、账号密码、API 密钥，不关闭 TLS 验证。相对 URL 用 `urljoin`。处理延迟加载属性；根据已核实的页面和图片命名规则提取封面，避免把缩略剧照当封面。
 
 爬虫只获取并解析页面，禁止添加 shell 命令、包安装、环境变量收集、任意文件读写或凭据上传。
 

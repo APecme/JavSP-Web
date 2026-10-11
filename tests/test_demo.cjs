@@ -113,6 +113,24 @@ test('settings and skills can be explored without storing credentials', async ()
   assert.equal((await demo().json('/api/ai/settings')).enabled, true);
 });
 
+test('AI translation follows the shared AI switch and preserves preset translation settings', async () => {
+  const { json } = demo();
+  await json('/api/ai/settings', 'PUT', { enabled: true, search_enabled: false });
+  const runtime = await json('/api/runtime');
+  assert.equal(runtime.ai_enabled, true);
+  assert.equal(runtime.ai_translation_enabled, undefined);
+  const preset = await json('/api/presets', 'POST', { name: 'AI 翻译示例', mode: 'form', form: {
+    translator: { ai_enabled: true, engine: { name: 'google' }, fields: { title: true, plot: false } },
+  } });
+  assert.deepEqual(preset.form_values.translator, { ai_enabled: true, engine: { name: 'google' }, fields: { title: true, plot: false } });
+  await json('/api/ai/settings', 'PUT', { enabled: false });
+  assert.equal((await json('/api/runtime')).ai_enabled, false);
+  const saved = (await json('/api/presets')).find(item => item.id === preset.id);
+  assert.equal(saved.form_values.translator.ai_enabled, true);
+  assert.equal(saved.form_values.translator.engine.name, 'google');
+  assert.ok((await json('/api/ai/skills')).some(item => item.name === 'javsp-translate'));
+});
+
 test('preset forms, schedules, path mappings and demo exit', async () => {
   const { json, events, context } = demo();
   const preset = await json('/api/presets', 'POST', { name: '演示预设', mode: 'form', form: { scanner: { input_directory: '/video' } } });

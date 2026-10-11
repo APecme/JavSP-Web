@@ -57,8 +57,8 @@ def capability():
     if app_update.enabled():
         return {'supported': True, 'mode': 'app'}
     if Path('/.dockerenv').exists():
-        return {'supported': False, 'reason': '当前镜像没有应用监护进程；请先手动更新一次 Docker 镜像。'}
-    return {'supported': False, 'reason': '源码和 EXE 部署仅支持检测更新。'}
+        return {'supported': False, 'reason': '当前镜像尚不支持网页安装更新；请先手动更新一次 Docker 镜像。'}
+    return {'supported': False, 'reason': '当前安装方式只能检查更新。请下载新版程序并替换现有程序，保留 data 文件夹。'}
 
 
 @contextmanager
@@ -142,7 +142,7 @@ def check(force=False):
         try:
             target = registry_target('bata' if selected == 'bata' else 'latest')
             if selected == 'bata' and not re.fullmatch(r'bata\.\d{14}', target['target']):
-                raise UpdateError('bata 镜像的版本标识无效')
+                raise UpdateError('体验版镜像的版本信息不完整，请稍后重试或手动更新镜像')
             if selected == 'stable' and not version_tuple(target['target']):
                 raise UpdateError('正式版镜像的版本标识无效')
             result.update(target)

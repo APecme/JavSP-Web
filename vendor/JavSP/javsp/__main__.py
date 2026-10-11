@@ -513,8 +513,9 @@ def RunNormalMode(all_movies):
             raise Exception(msg + '\n')
 
     outer_bar = tqdm(all_movies, desc='整理影片', ascii=True, leave=False, disable=progress_enabled())
+    translation_enabled = bool(getattr(Cfg().translator, 'ai_enabled', False) or Cfg().translator.engine)
     total_step = 6
-    if Cfg().translator.engine:
+    if translation_enabled:
         total_step += 1
     if Cfg().summarizer.extra_fanarts.enabled:
         total_step += 1
@@ -562,7 +563,7 @@ def RunNormalMode(all_movies):
             check_step(has_required_keys, '资料汇总失败：缺少抓取成功必需字段')
             progress_event('summary', done=1, total=1)
 
-            if Cfg().translator.engine:
+            if translation_enabled:
                 inner_bar.set_description('翻译影片信息')
                 success = translate_movie_info(movie.info)
                 check_step(success, '影片信息翻译失败，请检查预设中的翻译服务配置及网络连接')

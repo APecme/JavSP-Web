@@ -19,10 +19,14 @@
 <aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-scraping.html">刮削与整理</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-maintenance.html" aria-current="page">维护与排错</a><a class="doc-chapter-link" href="#updates">更新、账号与备份</a><a class="doc-chapter-link" href="#trouble">问题排查</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
 <article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 05</p><h1>维护与排错</h1><p class="doc-lede">管理更新、账号和备份，并按任务失败阶段定位常见问题。</p></header>
 <section id="updates"><h2>更新、账号与备份</h2>
-        <h3>Docker 网页更新</h3><ol><li>进入“系统设置 → 软件更新”，查看当前版本、更新通道与检查结果。</li><li>点击“检测更新”，发现新版本后点击“立即更新”。等待页面提示更新完成。期间服务会短暂断开，恢复后检查当前版本是否已更新。</li><li>按需开启自动检测（默认间隔 24 小时）及自动更新。自动更新默认关闭；有排队、刮削或图片任务时需等待任务结束。</li></ol>
-        <p><b>加入体验计划：</b>想提前试用新功能，可勾选“加入体验计划”，程序会自动开始安装 <code>bata</code> 体验版。之后会继续接收体验版更新。使用 <code>bata</code> 镜像部署时，此项会保持勾选。</p>
-        <p>更新失败时先查看页面提示。若提示已回退，说明程序已恢复旧版本，可按错误信息排查后重试。需要更新 Docker 镜像时，在 Compose 所在目录执行：</p>
-        <div class="doc-command doc-command-multiline"><code>docker compose pull<br>docker compose up -d</code><button class="copy-button" data-copy="docker compose pull&#10;docker compose up -d">复制命令</button></div>
+        <h3>Docker 网页更新</h3><ol><li>进入“系统设置 → 软件更新”，查看当前版本、更新通道与检查结果。</li><li>点击“立即检查”，发现新版本后点击“立即更新”。等待页面提示更新完成。期间服务会短暂断开，恢复后检查当前版本是否已更新。</li><li>按需开启“自动检查更新”（默认间隔 24 小时）及“发现新版本后自动更新”。自动更新默认关闭；有排队、刮削或图片任务时需等待任务结束。</li></ol>
+        <p><b>加入体验计划：</b>勾选后会立即尝试安装体验版，不必另外开启“自动更新”。安装失败时页面会说明原因，体验计划仍保持开启，便于稍后重试。加入后继续接收体验版更新；运行体验版时，此项保持勾选。</p>
+        <p>更新失败时先查看页面提示。若提示已回退，说明程序已恢复旧版本，可按错误信息排查后重试。需要更新 Docker 镜像时，先等待当前任务结束并备份数据，再在 Compose 所在目录执行。以下命令只更新本教程的 <code>javsp-web</code> 服务；若自行改了服务名，请相应替换。</p>
+        <div class="doc-command doc-command-multiline"><code>docker compose pull javsp-web<br>docker compose up -d --force-recreate javsp-web</code><button class="copy-button" data-copy="docker compose pull javsp-web&#10;docker compose up -d --force-recreate javsp-web">复制命令</button></div>
+        <h3>从体验版回到正式版</h3><p>将 Compose 文件中的镜像改为 <code>apecme/javsp-web:latest</code>，再执行上面的拉取和重建命令。保留原 <code>data</code> 挂载与文件夹，无需删除账号、预设或任务记录；重新登录后核对当前版本和更新通道。</p>
+        <p>包含启动修复的新镜像会在检测到镜像版本变化后使用所选版本，避免旧的网页更新继续覆盖它。普通重启或重新拉取同一镜像仍保留已通过网页安装的版本；如果在正式镜像上通过网页加入了体验计划，而正式镜像没有变化，需按下面的步骤恢复。仅做网页更新无法修复旧镜像的启动方式。首次迁移后若希望继续使用体验版，可重新加入体验计划。</p>
+        <h3 id="restore-stable">拉取后仍显示体验版：恢复镜像自带版本</h3><p>先确认实际拉取的是已发布的正式镜像，并检查 Compose 是否手填了 <code>JAVSP_WEB_RELEASE_LABEL</code> 或 <code>JAVSP_WEB_RELEASE_COMMIT</code>。页面显示的是实际运行的应用版本；只给体验版镜像换一个标签名，或手填版本号，都不能把它变成正式版。自行添加的版本覆盖应移除，让程序使用镜像提供的信息。</p>
+        <ol><li>确认 Compose 使用 <code>apecme/javsp-web:latest</code>。暂停自动任务，等待当前扫描、刮削和图片任务结束，再执行 <code>docker compose stop javsp-web</code>。</li><li>找到映射到容器 <code>/app/data</code> 的宿主机目录，完整复制一份备份。本教程中是 <code>./data</code>；自行修改过挂载位置时以实际路径为准。</li><li>在这个数据目录内，仅将 <code>updates/app-current.json</code>、<code>updates/job.json</code>、<code>update-settings.json</code> 三个文件改名留存，例如加上 <code>.backup-日期时间</code>。不存在的文件跳过，已有备份不要覆盖；不要删除整个目录或媒体文件。</li><li>执行上方的拉取和重建命令，继续使用原来的数据挂载。</li><li>重新登录，在“系统设置 → 软件更新”确认正式版及更新偏好，再恢复需要的自动任务。该操作会重置网页更新选择，自动安装恢复为默认关闭；账号、预设和任务记录仍保留。</li></ol>
         <p>Windows EXE 与源码运行仅支持检测版本。EXE 退出后手动替换程序，源码按项目安装方式更新代码和依赖；都应保留原数据目录。</p>
         <h3>账号与备份</h3><p>管理员在“用户管理”添加、编辑或删除账号。管理员可管理系统设置、自动刮削、爬虫和 AI；操作员没有这些管理入口。首次登录应更改默认密码。</p>
         <p>迁移或更新前备份整个数据目录：Docker 为挂载到 <code>/app/data</code> 的宿主机目录，EXE 默认是程序旁的 <code>data</code>。建议停止应用后复制，避免备份过程中数据库仍在写入。影片与输出图片单独备份，数据目录备份不能代替媒体备份；其中的密钥、Cookie 和账号数据不要公开分享。</p>
@@ -36,7 +40,8 @@
           <tr><td>整理目标中的文件或目录已存在</td><td>核对目标影片、NFO、封面和“剧照”目录的现有内容，区分已入库和失败残留。重抓资料或删除任务记录不能消除文件冲突。</td></tr>
           <tr><td>403、超时、证书错误</td><td>预设代理、镜像域名、服务端出口、系统时间和证书信任；需要登录的站点再检查 Cookie。不要关闭 HTTPS 校验。</td></tr>
           <tr><td>下载完成但未刮削</td><td>规则是否启用、标签/分类是否命中、路径映射是否正确。查看下载自动刮削记录，不要只看下载器连接状态。</td></tr>
-          <tr><td>AI 连接或搜索失败</td><td>先分别测试模型和搜索；核对协议、模型 ID、工具调用支持及上下文限制。详见 AI 章节。</td></tr>
+          <tr><td>AI 连接或搜索失败</td><td>分别测试模型和搜索；检查服务商、API 地址、模型名称、密钥和网络。对话助手还需要模型支持工具调用。详见 <a href="guide-ai.html">AI 教程</a>。</td></tr>
+          <tr><td>AI 翻译未生效或报错</td><td>检查系统“启用 AI 刮削”总开关、预设翻译字段和“启用 AI 翻译”；再测试模型连接，确认 <code>javsp-translate</code> Skill 未被删除。翻译无需开启联网搜索。</td></tr>
         </tbody></table></div>
         <h3>提供日志以便排查</h3><p>打开失败任务详情，记录任务 ID 和错误信息。需要完整日志时，到 <code>data/task-logs/&lt;任务ID&gt;.log</code> 查找。如果容器无法启动，可运行 <code>docker compose logs --tail 100 javsp-web</code> 查看原因。</p>
         <p>提交 Issue 时说明当前版本、Docker/EXE/源码部署方式、复现步骤、预设中相关选项和脱敏日志。移除密钥、Cookie、密码与私人地址；不要把完整数据目录直接上传。</p>

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import ai_skills, storage
 from .ai import AIError, redact
+from .config_validation import format_validation_errors
 
 
 def skill_catalog():
@@ -196,7 +197,13 @@ def execute(name, arguments, *, confirmed=False):
 
 def error_message(exc):
     if isinstance(exc, ValidationError):
-        return '参数无效：' + '; '.join('.'.join(map(str, item['loc'])) + ': ' + item['msg'] for item in exc.errors(include_input=False))
+        labels = {
+            "name": "名称", "task_id": "任务 ID", "preset_id": "预设 ID", "query": "搜索内容", "limit": "返回条数",
+            "changes": "要修改的配置", "identifier": "影片番号", "input_value": "测试番号", "source": "爬虫代码",
+            "original_name": "原爬虫名称", "cron": "定时规则", "dvdid": "影片番号", "publish_date": "发行日期",
+            "apply_to_folder": "同时更新文件夹中的 NFO", "message": "消息内容", "conversation_id": "对话 ID", "approve": "是否确认执行",
+        }
+        return "AI 生成的参数不符合要求：" + format_validation_errors(exc.errors(include_input=False, include_url=False), labels)
     if isinstance(exc, HTTPException):
         return str(exc.detail)
     if isinstance(exc, AIError):

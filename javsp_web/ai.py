@@ -58,6 +58,14 @@ class AISettings(BaseModel):
     search_page_chars: int = Field(default=16000, ge=1000, le=32000)
     search_timeout: int = Field(default=15, ge=5, le=60)
 
+    @model_validator(mode="before")
+    @classmethod
+    def ignore_obsolete_translation_switch(cls, value):
+        if isinstance(value, dict) and "translation_enabled" in value:
+            # Older clients may still send the removed switch; it never enables AI.
+            value = {key: item for key, item in value.items() if key != "translation_enabled"}
+        return value
+
     @model_validator(mode="after")
     def validate_limits(self):
         if self.max_output_tokens >= self.context_tokens:
@@ -78,7 +86,7 @@ class AISettings(BaseModel):
         if value:
             parsed = urlsplit(value)
             if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
-                raise ValueError("LLM URL 必须是无账号、查询参数的 HTTP(S) API 基础地址")
+                raise ValueError("模型 API 地址必须以 http:// 或 https:// 开头，且不能包含账号、查询参数或 # 片段")
         return value
 
     @field_validator("model")
@@ -95,6 +103,7 @@ def settings(include_key=False):
         saved = storage._read_json(storage.DATA_DIR / "ai-settings.json", {})
         result = AISettings().model_dump() | saved
     result.pop("clear_api_key", None)
+    result.pop("translation_enabled", None)
     if not include_key:
         result["has_api_key"] = bool(result.pop("api_key", None))
         result["default_system_prompt"] = DEFAULT_SYSTEM_PROMPT
@@ -112,9 +121,9 @@ def merge_settings(body: AISettings):
 
 def validate_connection(config):
     if not config["base_url"] or not config["model"]:
-        raise AIError("请填写 LLM URL 和模型名称")
+        raise AIError("请填写模型 API 地址和模型名称")
     if config["provider"] not in ("ollama", "compatible") and not config.get("api_key"):
-        raise AIError("请填写 API KEY")
+        raise AIError("请填写 API 密钥")
 
 
 def save_settings(body):
@@ -172,10 +181,10 @@ def _stream_result(response, anthropic, deadline, on_update):
     finished = False
     for line in response.iter_lines(chunk_size=1):
         if time.monotonic() > deadline:
-            raise AIError("LLM 请求超时，请缩小请求范围后重试")
+            raise AIError("模型请求超时，请缩小请求范围后重试")
         size += len(line)
         if size > 2_000_000:
-            raise AIError("LLM 响应过大，请缩小请求范围")
+            raise AIError("模型响应过大，请缩小请求范围")
         if not line.startswith(b"data:"):
             continue
         data = line[5:].strip()
@@ -184,7 +193,7 @@ def _stream_result(response, anthropic, deadline, on_update):
             break
         event = json.loads(data)
         if event.get("error") or event.get("type") == "error":
-            raise AIError("LLM 流式响应失败，请稍后重试")
+            raise AIError("接收模型回复时出错，请稍后重试")
         if anthropic:
             kind = event.get("type")
             index = event.get("index", 0)
@@ -209,7 +218,7 @@ def _stream_result(response, anthropic, deadline, on_update):
                 elif delta["type"] == "input_json_delta":
                     block["partial_json"] = block.get("partial_json", "") + delta["partial_json"]
             elif kind == "message_delta" and event.get("delta", {}).get("stop_reason") == "max_tokens":
-                raise AIError("模型输出被截断，请缩小请求范围后重试")
+                raise AIError("回复超过了输出长度限制。请减少本次处理内容，或在 AI 接入设置中提高“最大输出长度”后重试")
             elif kind == "message_stop":
                 finished = True
         else:
@@ -217,7 +226,7 @@ def _stream_result(response, anthropic, deadline, on_update):
                 if choice.get("index", 0) != 0:
                     continue
                 if choice.get("finish_reason") == "length":
-                    raise AIError("模型输出被截断，请缩小请求范围后重试")
+                    raise AIError("回复超过了输出长度限制。请减少本次处理内容，或在 AI 接入设置中提高“最大输出长度”后重试")
                 delta = choice.get("delta", {})
                 content += delta.get("content") or ""
                 reasoning += delta.get("reasoning_content") or delta.get("reasoning") or ""
@@ -230,7 +239,7 @@ def _stream_result(response, anthropic, deadline, on_update):
                     finished = True
         on_update(content, reasoning)
     if not finished:
-        raise AIError("LLM 连接提前断开，请重试；已收到的内容已保留")
+        raise AIError("模型连接提前断开，请重试；已收到的内容已保留")
     if anthropic:
         for block in blocks.values():
             if "partial_json" in block:
@@ -256,6 +265,7 @@ def fit_context(config, messages, tools=None):
 def complete(config, messages, tools=None, on_update=None):
     validate_connection(config)
     messages = fit_context(config, messages, tools)
+    capability = "工具调用" if tools else "文本生成"
     anthropic = config["provider"] == "anthropic"
     suffix = "/messages" if anthropic else "/chat/completions"
     base = config["base_url"].rstrip("/")
@@ -287,9 +297,9 @@ def complete(config, messages, tools=None, on_update=None):
         with requests.post(endpoint, headers=headers, json=payload, timeout=(10, config["timeout"]),
                            allow_redirects=False, stream=True) as response:
             if response.status_code != 200:
-                reason = {401: "API KEY 无效", 403: "访问被拒绝", 404: "请检查 LLM URL 和模型名称",
-                          429: "请求限流或额度不足"}.get(response.status_code, "请检查服务状态和模型是否支持工具调用")
-                raise AIError(f"LLM 请求失败（HTTP {response.status_code}）：{reason}")
+                reason = {401: "API 密钥无效", 403: "访问被拒绝", 404: "请检查模型 API 地址和模型名称",
+                          429: "请求限流或额度不足"}.get(response.status_code, "请检查服务状态和模型是否支持" + capability)
+                raise AIError(f"模型请求失败（HTTP {response.status_code}）：{reason}")
             if on_update and "text/event-stream" in response.headers.get("Content-Type", ""):
                 result = _stream_result(response, anthropic, deadline, on_update)
             else:
@@ -297,14 +307,14 @@ def complete(config, messages, tools=None, on_update=None):
                 for chunk in response.iter_content(65536):
                     size += len(chunk)
                     if time.monotonic() > deadline:
-                        raise AIError("LLM 请求超时，请缩小请求范围后重试")
+                        raise AIError("模型请求超时，请缩小请求范围后重试")
                     if size > 2_000_000:
-                        raise AIError("LLM 响应过大，请缩小请求范围")
+                        raise AIError("模型响应过大，请缩小请求范围")
                     chunks.append(chunk)
                 result = json.loads(b"".join(chunks))
         if anthropic:
             if result.get("stop_reason") == "max_tokens":
-                raise AIError("模型输出被截断，请缩小请求范围后重试")
+                raise AIError("回复超过了输出长度限制。请减少本次处理内容，或在 AI 接入设置中提高“最大输出长度”后重试")
             content = result["content"]
             message = {"role": "assistant", "content": "\n".join(item["text"] for item in content if item["type"] == "text")}
             message["reasoning_content"] = "\n".join(item["thinking"] for item in content if item["type"] == "thinking")
@@ -314,27 +324,27 @@ def complete(config, messages, tools=None, on_update=None):
         else:
             choice = result["choices"][0]
             if choice.get("finish_reason") == "length":
-                raise AIError("模型输出被截断，请缩小请求范围后重试")
+                raise AIError("回复超过了输出长度限制。请减少本次处理内容，或在 AI 接入设置中提高“最大输出长度”后重试")
             raw = choice["message"]
             message = {"role": "assistant", "content": raw.get("content") or ""}
             if isinstance(raw.get("reasoning_content"), str):
                 message["reasoning_content"] = raw["reasoning_content"]
             calls = raw.get("tool_calls") or []
         if not isinstance(message["content"], str) or not isinstance(calls, list):
-            raise AIError("LLM 返回的消息格式无效")
+            raise AIError("模型返回的消息格式无效")
         if calls:
             for call in calls:
                 if not isinstance(call["id"], str) or not isinstance(call["function"]["name"], str):
-                    raise AIError("LLM 返回的工具调用格式无效")
+                    raise AIError("模型返回的工具调用格式无效")
                 if not isinstance(json.loads(call["function"]["arguments"]), dict):
-                    raise AIError("LLM 工具参数必须是对象")
+                    raise AIError("模型工具参数必须是对象")
             message["tool_calls"] = calls
         elif not message["content"].strip():
-            raise AIError("LLM 未返回内容")
+            raise AIError("模型未返回内容")
         return message
     except requests.Timeout as exc:
-        raise AIError("LLM 请求超时，请检查网络或增加超时时间") from exc
+        raise AIError("模型请求超时，请检查网络或增加超时时间") from exc
     except requests.RequestException as exc:
-        raise AIError("无法连接 LLM，请检查地址、网络和证书") from exc
+        raise AIError("无法连接模型，请检查地址、网络和证书") from exc
     except (KeyError, IndexError, TypeError, AttributeError, json.JSONDecodeError) as exc:
-        raise AIError("LLM 响应格式不兼容，请选择支持工具调用的模型和正确的提供商协议") from exc
+        raise AIError("模型响应格式不兼容，请选择支持" + capability + "的模型和正确的提供商协议") from exc
