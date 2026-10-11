@@ -7,6 +7,44 @@ const source = fs.readFileSync(path.join(__dirname, '../javsp_web/web/assets/app
 const versions = source.slice(source.indexOf('function normalizeVersion'), source.indexOf('async function checkForAppUpdate'));
 const requests = source.slice(source.indexOf('const apiRequests'), source.indexOf('// Keep unchanged cards'));
 
+async function verifyChannelSwitchSubmission() {
+  const elements = new Map();
+  const element = selector => {
+    if (!elements.has(selector)) elements.set(selector, {
+      checked: false, value: '24', textContent: '', listeners: {},
+      addEventListener(name, callback) { this.listeners[name] = callback; },
+      requestSubmit() { return this.listeners.submit({ preventDefault() {} }); },
+    });
+    return elements.get(selector);
+  };
+  let reply;
+  let submitted;
+  const watched = [];
+  const context = vm.createContext({
+    $: element,
+    api: async (url, options) => { assert.equal(url, '/api/update/settings'); submitted = JSON.parse(options.body); return reply; },
+    renderUpdateStatus() {}, watchUpdateJob: job => watched.push(job),
+    checkUpdateNow() {}, applyUpdateNow() {}, closeUpdateOverlay() {},
+  });
+  const start = source.indexOf("$('#update-settings-form')?.addEventListener('submit'");
+  const end = source.indexOf("document.addEventListener('submit'", start);
+  vm.runInContext(source.slice(start, end), context);
+  reply = { settings: { experience_program: false }, activation: { id: 'stable', status: 'scheduled' } };
+  await element('#update-experience').listeners.change();
+  assert.equal(submitted.experience_program, false);
+  assert.match(element('#update-settings-message').textContent, /已退出体验计划.*安装正式版/);
+  assert.equal(watched[0].id, 'stable');
+  reply = { settings: { experience_program: false }, activation_error: '正在刮削' };
+  await element('#update-settings-form').requestSubmit();
+  assert.match(element('#update-settings-message').textContent, /已退出体验计划.*安装正式版失败.*正在刮削/);
+  assert.equal(watched.length, 1);
+  element('#update-experience').checked = true;
+  reply = { settings: { experience_program: true }, activation: { id: 'beta', status: 'scheduled' } };
+  await element('#update-experience').listeners.change();
+  assert.equal(submitted.experience_program, true);
+  assert.match(element('#update-settings-message').textContent, /已加入体验计划.*安装体验版/);
+}
+
 async function verifyReportedVersion() {
   const tag = { dataset: {}, textContent: '' };
   let result = { checked_at: '2026-10-11T08:00:00Z', current: 'bata.20261010195006', target: 'bata.20261010195006', available: false, channel: 'bata' };
@@ -52,6 +90,12 @@ async function verifyUpdateOverlay() {
   vm.runInContext(versions + '\n' + updateFunctions, context);
   context.renderUpdateStatus({ current: '1.2.0', channel: 'stable', settings: { experience_program: false }, result: { channel: 'bata' } });
   assert.equal(element('#update-channel-badge').textContent, '正式版', 'stale beta check results must not override the selected channel');
+  context.renderUpdateStatus({ current: 'bata.20261011000000', channel: 'bata', settings: { experience_program: true } });
+  assert.equal(element('#update-experience').disabled, false, 'a running beta must allow leaving the experience program');
+  assert.match(element('#update-channel-help').textContent, /安装当前正式版/);
+  context.renderUpdateStatus({ current: 'bata.20261011000000', channel: 'stable', settings: { experience_program: false } });
+  assert.equal(element('#update-experience').checked, false);
+  assert.equal(element('#update-channel-badge').textContent, '正式版');
   context.watchUpdateJob({ id: 'first' });
   assert.equal(element('#update-overlay').hidden, false);
   assert.ok(classes.has('update-in-progress'));
@@ -133,6 +177,7 @@ async function main() {
   await context.api('/api/slow');
   await verifyUpdateOverlay();
   await verifyReportedVersion();
+  await verifyChannelSwitchSubmission();
   console.log('Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

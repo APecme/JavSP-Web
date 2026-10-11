@@ -322,10 +322,10 @@ def update_status(_: dict = Depends(current_user)) -> dict:
 
 @app.put("/api/update/settings")
 def update_settings(body: UpdateSettingsBody, _: dict = Depends(require_admin)) -> dict:
-    joining = body.experience_program and updater.channel() != 'bata'
+    switching = body.experience_program != (updater.channel() == 'bata')
     save_update_settings(body.model_dump())
     response = updater.status()
-    if joining:
+    if switching:
         try:
             response['activation'] = updater.apply()
         except updater.UpdateError as exc:

@@ -41,6 +41,7 @@
         <p>内置 <code>javsp-translate</code> Skill 提供翻译规则，可在“项目 Skills”查看或修改；删除后需恢复才能继续使用 AI 翻译。对话的“预设提示词”不改变自动翻译格式。原文及相关演员名、番号会发送给所配置的模型服务。</p>
       </section>
 <section id="ai-search"><h2>设置联网搜索</h2>
+        <p>制作爬虫时可直接发送搜索页或详情页链接。开启联网搜索后，AI 会先读取网页 HTML、正文、链接和图片地址；需要登录的站点可使用系统 CookieCloud，代理沿用系统网络设置。工具不执行 JavaScript，遇到登录失效或浏览器验证时仍需先解决访问问题。无需把 Cookie 发给 AI。</p>
         <p>AI 查找影片资料需要联网搜索。在“系统设置 → AI 接入 → 联网搜索”勾选“允许 AI 联网搜索”。如果只想分析已有任务、预设或使用 AI 翻译，可以关闭此项。</p>
         <h3>Bing RSS 或自建 SearXNG</h3><p><b>Bing RSS</b>无需搜索密钥，使用服务器网络访问 Bing。也可选择 <b>SearXNG</b>，填写自建实例地址，例如 <code>https://search.example.com</code>，并在实例的 <code>search.formats</code> 中启用 <code>json</code>。目前不支持需要额外鉴权请求头的实例。</p>
         <p>选好搜索服务后，点击“测试联网搜索”。测试成功后点击“保存 AI 配置”；如果失败，先检查服务器能否访问搜索服务。</p>

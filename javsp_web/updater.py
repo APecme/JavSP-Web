@@ -147,9 +147,7 @@ def check(force=False):
                 raise UpdateError('正式版镜像的版本标识无效')
             result.update(target)
             switching = result['current'].startswith('bata.') != (selected == 'bata')
-            if switching and selected == 'stable':
-                result['available'] = bool(version_tuple(__version__) and version_tuple(target['target']) > version_tuple(__version__))
-            elif switching:
+            if switching:
                 result['available'] = True
             elif selected == 'bata':
                 result['available'] = target['target'] > result['current']

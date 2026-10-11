@@ -1130,15 +1130,15 @@ function renderUpdateStatus(payload, syncSettings = true) {
     $('#update-auto-update').checked = Boolean(settings.auto_update);
     $('#update-experience').checked = Boolean(settings.experience_program);
     const runningBeta = normalizeVersion(payload.current).startsWith('bata.');
-    $('#update-experience').disabled = runningBeta;
+    $('#update-experience').disabled = false;
     if ($('#update-channel-help')) $('#update-channel-help').textContent = runningBeta
-      ? '当前正在使用体验版。返回正式版需要将 Docker 镜像改为 latest，再拉取镜像并重新创建容器；保留原有数据目录。'
+      ? '取消勾选并保存后，将安装当前正式版。安装期间服务会短暂重启。'
       : '体验版可能不稳定。勾选并保存后，将立即安装。';
     $('#update-interval').value = settings.check_interval_hours || 24;
   }
   const job = payload.job || {};
   const jobActive = ['scheduled', 'downloading', 'restarting'].includes(job.status);
-  const checkedStatus = result.error ? `检查失败：${result.error}` : result.available ? `发现更新：${result.target || '新版本'}` : result.checked_at && result.switching_channel && result.channel === 'stable' ? `正式版 ${result.target} 尚未比当前体验版更新` : result.checked_at ? `当前已是最新（${result.current || ''}）` : '尚未检查';
+  const checkedStatus = result.error ? `检查失败：${result.error}` : result.available ? `可安装版本：${result.target || '新版本'}` : result.checked_at ? `当前已是最新（${result.current || ''}）` : '尚未检查';
   const status = job.message && (jobActive || ['failed', 'rolled_back'].includes(job.status) || !result.checked_at) ? job.message : checkedStatus;
   $('#update-status').textContent = status;
   $('#update-capability').textContent = capability.reason || (payload.docker_available === false ? '当前部署不支持网页自动安装。' : '');
@@ -3297,10 +3297,13 @@ $('#update-settings-form')?.addEventListener('submit', async (event) => {
       check_interval_hours: Number($('#update-interval').value || 24),
     }) });
     renderUpdateStatus(settings);
+    const selectedBeta = Boolean(settings.settings?.experience_program);
+    const planStatus = selectedBeta ? '已加入体验计划' : '已退出体验计划';
+    const targetChannel = selectedBeta ? '体验版' : '正式版';
     if (settings.activation_error) {
-      message.textContent = `已加入体验计划，但自动安装失败：${settings.activation_error}`;
+      message.textContent = `${planStatus}，但安装${targetChannel}失败：${settings.activation_error}`;
     } else if (settings.activation) {
-      message.textContent = settings.activation.status === 'scheduled' ? '已加入体验计划，正在下载并安装体验版' : '已加入体验计划，当前已是最新版本';
+      message.textContent = settings.activation.status === 'scheduled' ? `${planStatus}，正在下载并安装${targetChannel}` : `${planStatus}，当前已是所选渠道的最新版本`;
       if (settings.activation.status === 'scheduled') watchUpdateJob(settings.activation);
     } else {
       message.textContent = '更新设置已保存';

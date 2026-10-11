@@ -278,6 +278,26 @@ class TaskStoreTests(unittest.TestCase):
         self.assertEqual(response.json()['activation_error'], '需要手动更新镜像')
         self.assertTrue(storage.get_update_settings()['experience_program'])
 
+    def test_leaving_experience_program_installs_stable_and_preserves_opt_out_on_failure(self):
+        self.enterContext(patch.dict(os.environ, {'JAVSP_WEB_RELEASE_LABEL': 'bata.20261011000000'}))
+        client = self.client()
+        from javsp_web import updater
+        for failure in (False, True):
+            storage.save_update_settings({'experience_program': True, 'auto_update': False})
+            with patch.object(updater, 'apply', return_value={'status': 'scheduled', 'target': '1.1.40'},
+                              side_effect=updater.UpdateError('正在刮削') if failure else None) as apply:
+                response = client.put('/api/update/settings', json={'experience_program': False, 'auto_update': False})
+            self.assertEqual(response.status_code, 200)
+            self.assertFalse(response.json()['settings']['experience_program'])
+            self.assertEqual(response.json()['channel'], 'stable')
+            self.assertEqual(storage.get_update_settings()['experience_program'], False)
+            apply.assert_called_once_with()
+            if failure:
+                self.assertEqual(response.json()['activation_error'], '正在刮削')
+            else:
+                self.assertEqual(response.json()['activation']['target'], '1.1.40')
+            self.assertFalse(client.get('/api/update').json()['settings']['experience_program'])
+
     def test_api_page_etag_thumbnail_and_version(self):
         client = self.client()
         from PIL import Image

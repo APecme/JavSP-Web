@@ -20,10 +20,10 @@
 <article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 05</p><h1>维护与排错</h1><p class="doc-lede">管理更新、账号和备份，并按任务失败阶段定位常见问题。</p></header>
 <section id="updates"><h2>更新、账号与备份</h2>
         <h3>Docker 网页更新</h3><ol><li>进入“系统设置 → 软件更新”，查看当前版本、更新通道与检查结果。</li><li>点击“立即检查”，发现新版本后点击“立即更新”。等待页面提示更新完成。期间服务会短暂断开，恢复后检查当前版本是否已更新。</li><li>按需开启“自动检查更新”（默认间隔 24 小时）及“发现新版本后自动更新”。自动更新默认关闭；有排队、刮削或图片任务时需等待任务结束。</li></ol>
-        <p><b>加入体验计划：</b>勾选后会立即尝试安装体验版，不必另外开启“自动更新”。安装失败时页面会说明原因，体验计划仍保持开启，便于稍后重试。加入后继续接收体验版更新；运行体验版时，此项保持勾选。</p>
+        <p><b>加入体验计划：</b>勾选后会立即尝试安装体验版，不必另外开启“自动更新”。取消勾选则尝试安装当前正式版，不必等待更高版本。安装失败时页面会说明原因，并保留你选择的更新渠道；处理问题后可点击“立即检查”和“立即更新”重试。</p>
         <p>更新失败时先查看页面提示。若提示已回退，说明程序已恢复旧版本，可按错误信息排查后重试。需要更新 Docker 镜像时，先等待当前任务结束并备份数据，再在 Compose 所在目录执行。以下命令只更新本教程的 <code>javsp-web</code> 服务；若自行改了服务名，请相应替换。</p>
         <div class="doc-command doc-command-multiline"><code>docker compose pull javsp-web<br>docker compose up -d --force-recreate javsp-web</code><button class="copy-button" data-copy="docker compose pull javsp-web&#10;docker compose up -d --force-recreate javsp-web">复制命令</button></div>
-        <h3>从体验版回到正式版</h3><p>将 Compose 文件中的镜像改为 <code>apecme/javsp-web:latest</code>，再执行上面的拉取和重建命令。保留原 <code>data</code> 挂载与文件夹，无需删除账号、预设或任务记录；重新登录后核对当前版本和更新通道。</p>
+        <h3>从体验版回到正式版</h3><p>在软件更新设置中取消“加入体验计划”，程序会尝试安装当前正式版。若提示需要更新镜像，将 Compose 文件中的镜像改为 <code>apecme/javsp-web:latest</code>，再执行上面的拉取和重建命令。保留原 <code>data</code> 挂载与文件夹，无需删除账号、预设或任务记录；重新登录后核对当前版本和更新通道。</p>
         <p>包含启动修复的新镜像会在检测到镜像版本变化后使用所选版本，避免旧的网页更新继续覆盖它。普通重启或重新拉取同一镜像仍保留已通过网页安装的版本；如果在正式镜像上通过网页加入了体验计划，而正式镜像没有变化，需按下面的步骤恢复。仅做网页更新无法修复旧镜像的启动方式。首次迁移后若希望继续使用体验版，可重新加入体验计划。</p>
         <h3 id="restore-stable">拉取后仍显示体验版：恢复镜像自带版本</h3><p>先确认实际拉取的是已发布的正式镜像，并检查 Compose 是否手填了 <code>JAVSP_WEB_RELEASE_LABEL</code> 或 <code>JAVSP_WEB_RELEASE_COMMIT</code>。页面显示的是实际运行的应用版本；只给体验版镜像换一个标签名，或手填版本号，都不能把它变成正式版。自行添加的版本覆盖应移除，让程序使用镜像提供的信息。</p>
         <ol><li>确认 Compose 使用 <code>apecme/javsp-web:latest</code>。暂停自动任务，等待当前扫描、刮削和图片任务结束，再执行 <code>docker compose stop javsp-web</code>。</li><li>找到映射到容器 <code>/app/data</code> 的宿主机目录，完整复制一份备份。本教程中是 <code>./data</code>；自行修改过挂载位置时以实际路径为准。</li><li>在这个数据目录内，仅将 <code>updates/app-current.json</code>、<code>updates/job.json</code>、<code>update-settings.json</code> 三个文件改名留存，例如加上 <code>.backup-日期时间</code>。不存在的文件跳过，已有备份不要覆盖；不要删除整个目录或媒体文件。</li><li>执行上方的拉取和重建命令，继续使用原来的数据挂载。</li><li>重新登录，在“系统设置 → 软件更新”确认正式版及更新偏好，再恢复需要的自动任务。该操作会重置网页更新选择，自动安装恢复为默认关闭；账号、预设和任务记录仍保留。</li></ol>

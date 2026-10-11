@@ -52,6 +52,13 @@ class WebSearch(Arguments):
     query: str = Field(min_length=1, max_length=500)
 
 
+class WebPage(Arguments):
+    url: str = Field(min_length=1, max_length=4096, description="用户提供或已读取页面中的 HTTP/HTTPS 地址")
+    offset: int = Field(default=0, ge=0, le=3000000, description="继续读取 HTML 时使用上次返回的 next_offset")
+    selector: str = Field(default="", max_length=500, description="可选 XPath，根据已读取 HTML 选择正文等元素")
+    use_cookiecloud: bool = Field(default=True, description="使用系统 CookieCloud 中匹配站点的登录信息，凭据不会返回给模型")
+
+
 def registry():
     from . import server
 
@@ -65,6 +72,7 @@ def registry():
         "test_crawler": (server.CrawlerTestBody, "用已有爬虫抓取指定番号，返回资料，不整理影片文件。", False),
         "ai_lookup": (Identifier, "通过公开网页搜索和 LLM 提取指定番号的影片资料，核验来源，不写入影片文件。", False),
         "web_search": (WebSearch, "搜索公开网页，返回标题、链接和摘要；摘要只是线索，不能据此声称已读取或核验全文。", False),
+        "read_webpage": (WebPage, "读取指定网页的 HTML、正文、链接和图片地址，用于核验页面及制作爬虫。沿用系统代理及 CookieCloud；不执行 JavaScript。长页面可分页或用 XPath 读取。", False),
         "list_presets": (Arguments, "列出刮削预设的 ID 和名称。", False),
         "get_preset": (PresetID, "读取预设配置，凭据已隐藏。", False),
         "list_tasks": (TaskSearch, "按番号或路径查找任务摘要。", False),
@@ -150,6 +158,9 @@ def execute(name, arguments, *, confirmed=False):
     if name == "web_search":
         from .ai_scrape import search_web
         return search_web(body.query)
+    if name == "read_webpage":
+        from .ai_web import read_webpage
+        return read_webpage(**body.model_dump())
     if name == "read_skill":
         return {"name": body.name, "instructions": ai_skills.read(body.name)["source"]}
     if name == "list_crawlers":

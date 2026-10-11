@@ -14,6 +14,7 @@
   const statusNames = { pending: '待确认', executing: '执行中', completed: '已完成', rejected: '已取消', failed: '失败', unknown: '结果待核实' };
   toolNames.ai_lookup = 'AI 搜索影片资料';
   toolNames.web_search = '搜索公开网页';
+  toolNames.read_webpage = '读取网页';
   const advancedNumbers = [
     ['context_tokens', '最长上下文（Token）', 8192, 1048576, 65536],
     ['max_output_tokens', '最大输出长度（Token）', 256, 65536, 4096],

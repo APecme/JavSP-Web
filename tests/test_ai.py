@@ -94,6 +94,27 @@ class AITests(unittest.TestCase):
         names = [item['function']['name'] for item in complete.call_args.args[2]]
         self.assertNotIn('web_search', names)
         self.assertNotIn('ai_lookup', names)
+        self.assertNotIn('read_webpage', names)
+        self.assertEqual(conversation['steps'][0]['status'], 'failed')
+
+    def test_webpage_tool_is_available_and_dispatched_without_write_action(self):
+        from javsp_web import ai_web
+        conversation = self.conversation('读取 https://example.com/search')
+        replies = [tool_call('read_webpage', {'url': 'https://example.com/search'}),
+                   {'role': 'assistant', 'content': '已读取页面'}]
+        with patch.object(ai, 'complete', side_effect=replies) as complete, patch.object(ai_web, 'read_webpage', return_value={'html': '<h1>测试</h1>'}) as read:
+            ai_router._run(conversation, self.config)
+        read.assert_called_once_with(url='https://example.com/search', offset=0, selector='', use_cookiecloud=True)
+        self.assertIn('read_webpage', [tool['function']['name'] for tool in complete.call_args.args[2]])
+        self.assertFalse(conversation['actions'])
+        self.assertEqual(conversation['steps'][0]['status'], 'completed')
+
+    def test_disabled_search_rejects_fabricated_webpage_call(self):
+        conversation = self.conversation()
+        replies = [tool_call('read_webpage', {'url': 'https://example.com'}), {'role': 'assistant', 'content': '联网已关闭'}]
+        with patch.object(ai, 'complete', side_effect=replies), patch.object(ai_tools, 'execute') as execute:
+            ai_router._run(conversation, self.config | {'search_enabled': False})
+        execute.assert_not_called()
         self.assertEqual(conversation['steps'][0]['status'], 'failed')
 
     def test_configured_round_limit_and_history_count(self):

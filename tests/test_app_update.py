@@ -278,6 +278,20 @@ class AppUpdateTests(unittest.TestCase):
                 if not preserve:
                     self.assertEqual(updater.channel(), 'bata' if base_label.startswith('bata.') else 'stable')
 
+    def test_return_from_web_beta_to_stable_survives_restarts(self):
+        os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.40'
+        self.install_update()
+        storage.save_update_settings({'experience_program': True})
+        beta = self.launch()
+        with patch.dict(os.environ, beta['env']):
+            storage.save_update_settings({'experience_program': False})
+            self.install_update(target='1.1.40')
+        for _ in range(2):
+            stable = self.launch()
+            self.assertEqual(stable['env']['JAVSP_WEB_RELEASE_LABEL'], '1.1.40')
+            self.assertEqual(stable['cwd'], self.apps / '1.1.40')
+            self.assertFalse(storage.get_update_settings()['experience_program'])
+
     def test_first_stable_image_launch_resets_unbound_beta_preference(self):
         os.environ['JAVSP_WEB_RELEASE_LABEL'] = 'v1.1.39'
         storage.save_update_settings({'experience_program': True, 'auto_update': True})
