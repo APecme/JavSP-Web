@@ -518,6 +518,24 @@ class ProfileBody(BaseModel):
     avatar_id: str = Field(default="", max_length=32)
 
 
+class CommunitySessionBody(ProfileBody):
+    comment_token: str = Field(pattern=r"^[A-Za-z0-9_-]{40,100}$")
+    comment_username: str = Field(min_length=1, max_length=24)
+
+
+@app.put("/api/profile/community")
+def save_community_session(body: CommunitySessionBody, response: Response, user: dict = Depends(current_user)) -> dict:
+    """Cache this account's Worker session; public authorship is verified by the Worker."""
+    from .storage import user_profile
+    if not re.fullmatch(re.escape(body.comment_username) + r"#[A-Z0-9]{4}", body.display_name):
+        raise HTTPException(status_code=422, detail="评论身份无效")
+    avatars = json.loads((WEB_DIR / "assets" / "avatar-catalog.json").read_text(encoding="utf-8"))
+    if body.avatar_id and body.avatar_id not in {item["id"] for item in avatars}:
+        raise HTTPException(status_code=422, detail="请从头像库选择头像")
+    response.headers["Cache-Control"] = "no-store"
+    return user_profile(user["username"], community=body.model_dump())
+
+
 @app.get("/api/profile")
 def get_profile(response: Response, user: dict = Depends(current_user)) -> dict:
     from .storage import user_profile

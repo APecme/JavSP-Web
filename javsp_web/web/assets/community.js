@@ -26,7 +26,7 @@ window.JavspCommunity = (() => {
     if (!base) throw new Error('评论服务未启用。');
     const response = await fetch(base + path, { ...options, credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json', ...headers(), ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || '评论服务暂时不可用，请重试。');
+    if (!response.ok) { const error = new Error(data.detail || '评论服务暂时不可用，请重试。'); error.status = response.status; throw error; }
     return data;
   }
   function verify(action) {
@@ -59,6 +59,11 @@ window.JavspCommunity = (() => {
   }
 
   async function loadHistory(more = false) {
+    if (!profile?.identity_ready) {
+      el('my-comments-list').innerHTML = ''; el('my-comments-count').textContent = '';
+      el('my-comments-message').textContent = '先创建或登录评论身份，即可查看自己的评论。';
+      el('my-comments-more').hidden = true; return;
+    }
     if (historyLoading) return;
     historyLoading = true;
     const version = ++historyVersion;
@@ -75,8 +80,8 @@ window.JavspCommunity = (() => {
       el('my-comments-count').textContent = `已发布 ${data.stats.published} · 待审核 ${data.stats.pending} · 已隐藏 ${data.stats.hidden}`;
       el('my-comments-more').hidden = !historyCursor;
       message.textContent = '';
-    } catch (_) { if (version === historyVersion) message.textContent = base ? '暂时无法读取评论，请检查网络后重试。' : '评论服务未启用。'; }
-    finally { historyLoading = false; el('my-comments-more').disabled = el('my-comments-refresh').disabled = false; }
+    } catch (error) { if (version === historyVersion) message.textContent = error.message; }
+    finally { if (version === historyVersion) { historyLoading = false; el('my-comments-more').disabled = el('my-comments-refresh').disabled = false; } }
   }
   function renderAvatars() {
     const query = el('avatar-search').value.normalize('NFKC').trim().toLocaleLowerCase();
@@ -90,7 +95,36 @@ window.JavspCommunity = (() => {
   }
   function renderPreview() {
     el('profile-avatar-preview').innerHTML = avatar(selectedAvatar, el('profile-name').value, 'profile-avatar');
-    el('profile-avatar-name').textContent = catalog?.find(x => x.id === selectedAvatar)?.name || '默认头像';
+    el('profile-avatar-name').textContent = catalog?.find(x => x.id === selectedAvatar)?.name || (selectedAvatar ? '当前头像' : '默认头像');
+  }
+  async function remember(data) {
+    const changed = profile?.display_name !== data.display_name;
+    profile = await api('/api/profile/community', { method: 'PUT', body: JSON.stringify({
+      comment_token: data.comment_token || profile.comment_token, comment_username: data.comment_username,
+      display_name: data.display_name, avatar_id: data.avatar_id,
+    }) });
+    if (changed) { historyVersion++; historyLoading = false; historyItems = []; historyCursor = null; el('my-comments-list').innerHTML = ''; el('my-comments-count').textContent = ''; }
+    selectedAvatar = profile.avatar_id; renderAccount();
+  }
+  function clearPin() { el('profile-pin').value = ''; el('profile-pin-confirm').value = ''; }
+  function renderMode() {
+    const creating = el('identity-mode').value === 'create';
+    el('pin-confirm-label').hidden = !creating; el('profile-pin-confirm').required = creating;
+    el('profile-pin').autocomplete = creating ? 'new-password' : 'current-password';
+    el('profile-save').textContent = creating ? '创建评论身份' : '登录评论身份';
+  }
+  function renderIdentity(edit = !profile?.identity_ready) {
+    el('profile-handle').textContent = profile.identity_ready ? profile.display_name : '设置你的评论身份';
+    el('profile-form').hidden = !edit; el('identity-switch').hidden = edit;
+    el('identity-cancel').hidden = !profile.identity_ready;
+    el('profile-name').value = profile.comment_username || profile.display_name;
+    el('identity-mode').value = profile.identity_ready ? 'login' : 'create';
+    clearPin(); renderMode();
+  }
+  async function requireIdentity() {
+    if (!profile?.identity_ready) { await open(); throw new Error('请先在个人中心创建或登录评论身份，评论草稿已保留。'); }
+    try { await remember(await service('/api/me/profile')); }
+    catch (error) { if (error.status === 401) { await open(); renderIdentity(true); el('identity-mode').value='login'; renderMode(); } throw error; }
   }
   async function open() {
     const dialog = el('profile-dialog');
@@ -99,37 +133,72 @@ window.JavspCommunity = (() => {
     try {
       if (!profile) await init();
       selectedAvatar = profile.avatar_id;
-      el('profile-name').value = profile.display_name;
       el('profile-login-name').textContent = profile.username;
-      renderPreview();
-      loadHistory();
-      if (!catalog) {
-        const response = await fetch(assetRoot() + 'avatar-catalog.json');
-        if (!response.ok) throw new Error();
-        catalog = await response.json();
+      renderIdentity(); renderPreview();
+      if (profile.identity_ready && base) {
+        try { await remember(await service('/api/me/profile')); renderIdentity(); renderPreview(); }
+        catch (error) { el('profile-message').textContent = error.message; if (error.status === 401) { renderIdentity(true); el('identity-mode').value='login'; renderMode(); } }
       }
-      renderPreview(); renderAvatars();
-    } catch (_) { el('profile-message').textContent = '个人资料读取失败，请关闭后重试。'; }
+      await loadHistory();
+      if (profile.avatar_id && !catalog) { await loadCatalog(); renderPreview(); }
+    } catch (error) { el('profile-message').textContent = error.message || '个人资料读取失败，请关闭后重试。'; }
+  }
+  async function loadCatalog() {
+    if (catalog) return;
+    const response = await fetch(assetRoot() + 'avatar-catalog.json');
+    if (!response.ok) throw new Error('头像读取失败，请重试。');
+    catalog = await response.json();
+  }
+  async function openAvatars() {
+    if (!profile) return;
+    selectedAvatar = profile.avatar_id; avatarPage = 0;
+    el('avatar-search').value = ''; el('avatar-message').textContent = '';
+    el('avatar-picker-dialog').showModal();
+    try {
+      await loadCatalog(); renderAvatars();
+    } catch(error) { el('avatar-message').textContent = error.message; }
   }
   document.addEventListener('click', event => {
     if (event.target.closest('[data-open-profile]')) open();
+    if (event.target.closest('#avatar-edit')) openAvatars();
+    if (event.target.closest('#identity-switch')) renderIdentity(true);
+    if (event.target.closest('#identity-cancel')) renderIdentity(false);
     const button = event.target.closest('[data-avatar-id]');
-    if (button) { selectedAvatar = button.dataset.avatarId; renderPreview(); renderAvatars(); }
-    if (event.target.closest('#avatar-default')) { selectedAvatar = ''; renderPreview(); renderAvatars(); }
+    if (button) { selectedAvatar = button.dataset.avatarId; renderAvatars(); }
+    if (event.target.closest('#avatar-default')) { selectedAvatar = ''; renderAvatars(); }
     if (event.target.closest('#avatar-prev')) { avatarPage--; renderAvatars(); }
     if (event.target.closest('#avatar-next')) { avatarPage++; renderAvatars(); }
     if (event.target.closest('#my-comments-more')) loadHistory(true);
     if (event.target.closest('#my-comments-refresh')) loadHistory();
   });
   el('avatar-search')?.addEventListener('input', () => { avatarPage = 0; renderAvatars(); });
-  el('profile-form')?.addEventListener('submit', async event => {
-    event.preventDefault();
-    const button = el('profile-save'); button.disabled = true;
+  el('identity-mode')?.addEventListener('change', () => { clearPin(); renderMode(); });
+  el('profile-dialog')?.addEventListener('close', clearPin);
+  el('avatar-save')?.addEventListener('click', async () => {
+    const button = el('avatar-save'); button.disabled = true;
     try {
-      profile = await api('/api/profile', { method: 'PUT', body: JSON.stringify({ display_name: el('profile-name').value.trim(), avatar_id: selectedAvatar }) });
-      renderAccount(); renderPreview(); el('profile-message').textContent = '已保存。之后发送的评论会使用新的用户名和头像。';
-    } catch (error) { el('profile-message').textContent = error.message; }
+      if (profile.identity_ready) await remember(await service('/api/me/profile', {method:'POST',body:JSON.stringify({avatar_id:selectedAvatar})}));
+      else profile = await api('/api/profile', {method:'PUT',body:JSON.stringify({display_name:profile.display_name,avatar_id:selectedAvatar})});
+      renderAccount(); renderPreview(); el('avatar-picker-dialog').close();
+      el('profile-message').textContent = '头像已更新。';
+    } catch(error) { el('avatar-message').textContent = error.message; }
     finally { button.disabled = false; }
   });
-  return { init, configure, headers, identity, avatar, verify, open };
+  el('profile-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = el('profile-save'); if (button.disabled) return;
+    const pin = el('profile-pin').value, mode = el('identity-mode').value;
+    if (!/^[0-9]{6}$/.test(pin)) { el('profile-message').textContent = 'PIN 必须是 6 位数字。'; return; }
+    if (mode === 'create' && pin !== el('profile-pin-confirm').value) { el('profile-message').textContent = '两次输入的 PIN 不一致。'; return; }
+    const username = el('profile-name').value.trim(); button.disabled = true;
+    try {
+      const turnstile_token = await verify('identity');
+      const data = await service('/api/identity', {method:'POST',body:JSON.stringify({username,pin,mode,avatar_id:profile.avatar_id,turnstile_token})});
+      await remember(data); renderIdentity(); renderPreview();
+      el('profile-message').textContent = mode === 'create' ? '评论身份已创建。请记住用户名和 PIN。' : '已登录，评论记录已同步。';
+      await loadHistory();
+    } catch (error) { el('profile-message').textContent = error.message; }
+    finally { clearPin(); button.disabled = false; }
+  });
+  return { init, configure, headers, identity, avatar, verify, open, requireIdentity };
 })();

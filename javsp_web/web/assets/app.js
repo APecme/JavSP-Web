@@ -3543,6 +3543,7 @@ window.JavspComments = (() => {
     button.disabled = true;
     message.textContent = '请完成安全验证…';
     try {
+      await window.JavspCommunity.requireIdentity();
       const turnstile_token = await window.JavspCommunity.verify('comment');
       if (active !== current) return;
       message.textContent = '正在提交…';
@@ -3565,6 +3566,7 @@ window.JavspComments = (() => {
       const liked = like.getAttribute('aria-pressed') !== 'true';
       like.disabled = true;
       try {
+        await window.JavspCommunity.requireIdentity();
         const turnstile_token = await window.JavspCommunity.verify('like');
         if (active !== current) return;
         const data = await request(active, `/api/comments/${encodeURIComponent(like.dataset.commentLike)}/like`, { method: 'POST', body: JSON.stringify({ liked, turnstile_token }) });

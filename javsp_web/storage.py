@@ -147,7 +147,7 @@ def list_users() -> list[dict[str, Any]]:
         return [{k: v for k, v in item.items() if k in {"username", "role", "created_at", "display_name", "avatar_id"}} for item in users]
 
 
-def user_profile(username: str, changes: dict | None = None) -> dict:
+def user_profile(username: str, changes: dict | None = None, *, community: dict | None = None) -> dict:
     """Keep the comment identity private to its local account across browser sessions."""
     ensure_seed_data()
     with _lock:
@@ -164,9 +164,14 @@ def user_profile(username: str, changes: dict | None = None) -> dict:
         if changes is not None:
             user.update({key: changes[key] for key in ("display_name", "avatar_id") if key in changes})
             changed = True
+        if community is not None:
+            user.update({key: community[key] for key in ("comment_token", "display_name", "avatar_id", "comment_username")})
+            user["identity_ready"] = True
+            changed = True
         if changed:
             _write_json(USERS_FILE, users)
-        return {key: user[key] for key in ("username", "display_name", "avatar_id", "comment_token")}
+        return {**{key: user[key] for key in ("username", "display_name", "avatar_id", "comment_token")},
+                "identity_ready": user.get("identity_ready", False), "comment_username": user.get("comment_username", "")}
 
 
 def find_user(username: str) -> dict[str, Any] | None:

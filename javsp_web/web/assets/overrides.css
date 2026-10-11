@@ -734,3 +734,14 @@ html[data-privacy-mode="1"] .overview-cover:hover .library-artwork img,html[data
 @media(max-width:700px){.film-hero .film-info{display:contents}.film-hero .detail-poster-wrap{grid-row:1 / span 2}.film-hero .film-heading-row,.film-hero .film-title{grid-column:2}.film-hero .film-title{align-self:start;margin:0;font-size:17px}.film-hero .task-detail-main{row-gap:16px}.film-hero .task-detail-data{grid-column:1 / -1;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:6px}}
 
 .film-navigation .film-nav-close{margin-left:auto;color:#7c8d96;font-weight:400}
+
+/* Personal identity and focused avatar picker. */
+.avatar-edit{position:relative;display:inline-flex;border:0;background:transparent;padding:0;border-radius:50%;cursor:pointer}
+.avatar-edit:focus-visible{outline:3px solid #175cd3;outline-offset:5px}
+.avatar-pencil{position:absolute;right:0;bottom:0;display:grid;place-items:center;width:28px;height:28px;border:3px solid #fff;border-radius:50%;background:#175cd3;color:white}
+.avatar-picker-actions{display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:-26px;padding:16px 0;background:#fff}
+.profile-dialog [hidden]{display:none!important}
+#profile-handle{font-size:20px;overflow-wrap:anywhere}
+#profile-form{min-width:0}.profile-comments{margin-top:24px}
+.user-avatar,.profile-avatar,.picker-avatar{object-position:center}
+@media(max-width:560px){.avatar-picker-actions{bottom:-16px}}

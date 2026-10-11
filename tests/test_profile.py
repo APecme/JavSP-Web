@@ -52,4 +52,20 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(self.client.put('/api/profile',json={'display_name':'新名字','avatar_id':avatar}).json()['avatar_id'],avatar)
         self.assertTrue((server.WEB_DIR/'assets/avatars'/f'{avatar}.webp').is_file())
 
+    def test_community_session_is_self_only_and_never_stores_pin(self):
+        body = {'display_name':'apecme#AB12','comment_username':'apecme','avatar_id':'','comment_token':'s'*64,'pin':'123456'}
+        self.assertEqual(self.client.put('/api/profile/community',json=body).status_code,401)
+        self.as_user('alice')
+        response = self.client.put('/api/profile/community',json=body)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.headers['cache-control'],'no-store')
+        self.assertTrue(response.json()['identity_ready'])
+        self.assertNotIn('123456',storage.USERS_FILE.read_text())
+        self.assertNotIn('s'*64,str(storage.list_users()))
+        self.as_user('bob')
+        self.assertFalse(self.client.get('/api/profile').json()['identity_ready'])
+        self.assertNotEqual(self.client.get('/api/profile').json()['comment_token'],'s'*64)
+        for change in [{'comment_token':'bad'}, {'display_name':'forged#AB12'}, {'avatar_id':'../../secret'}]:
+            self.assertEqual(self.client.put('/api/profile/community',json={**body,**change}).status_code,422)
+
 if __name__ == '__main__': unittest.main()
