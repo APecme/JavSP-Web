@@ -1,6 +1,6 @@
 {
   "date": "2026-10-13",
-  "historical_f04_f08_found": false,
+  "historical_f04_f08_found": true,
   "backups": [
     {
       "path": "comments-service/data/backups/20261013/d1-current.sql",
@@ -36,6 +36,52 @@
         "sqlite_sequence"
       ],
       "kind": "pre_identity_existing"
+    },
+    {
+      "path": "comments-service/data/backups/20261013/before-f04.sql",
+      "source_path": "tmp/d1-backup/before-f04.sql",
+      "provenance": "Deployment stage identified by user",
+      "bytes": 3928,
+      "sha256": "c9c103cbbc453fddffe14e69672c993c4ba9d4129ad58abeb896b76fb1b6b8cb",
+      "sqlite_restore": true,
+      "integrity_check": "ok",
+      "tables": [
+        "comments",
+        "d1_migrations",
+        "identities",
+        "identity_sessions",
+        "likes",
+        "rate_limits",
+        "reports",
+        "settings",
+        "sqlite_sequence"
+      ],
+      "kind": "pre_f04",
+      "copy_verified": true,
+      "original_preserved": true
+    },
+    {
+      "path": "comments-service/data/backups/20261013/before-f08.sql",
+      "source_path": "tmp/d1-backup/before-f08.sql",
+      "provenance": "Deployment stage identified by user",
+      "bytes": 4118,
+      "sha256": "144b602a56ea9c9a496c0f494b2946fb2061a37a7da958e342c93ae1f4884d56",
+      "sqlite_restore": true,
+      "integrity_check": "ok",
+      "tables": [
+        "comments",
+        "d1_migrations",
+        "identities",
+        "identity_sessions",
+        "likes",
+        "rate_limits",
+        "reports",
+        "settings",
+        "sqlite_sequence"
+      ],
+      "kind": "pre_f08",
+      "copy_verified": true,
+      "original_preserved": true
     }
   ]
 }
