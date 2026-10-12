@@ -127,10 +127,24 @@
       setTimeout(() => { if (task.status === 'running') task.status = 'succeeded'; }, 2500);
       return json({ scan: false, count: 1, task_id: task.id }, 202);
     }
+    if (path === '/api/tasks/overview-groups') {
+      const by = url.searchParams.get('by') === 'library' ? 'actress' : (url.searchParams.get('by') || 'actress');
+      const films = tasks.filter(task => ['succeeded', 'failed', 'cancelled'].includes(task.status));
+      const values = task => { const meta = task.progress?.metadata || {}; if (by === 'actress') return [].concat(meta.actress || []).filter(Boolean).length ? [].concat(meta.actress) : ['']; if (by === 'year') return [/^\d{4}/.test(meta.publish_date || '') ? meta.publish_date.slice(0, 4) : '']; return [meta.producer || '']; };
+      const cover = task => task.cover_count ? [{ id: task.id, v: task.finished_at }] : [];
+      const groups = new Map();
+      films.forEach(task => values(task).forEach(key => { const group = groups.get(key) || { key, name: key || { actress: '未知女优', producer: '未知片商', year: '未知年份' }[by], count: 0, covers: [] }; group.count += 1; group.covers.push(...cover(task)); groups.set(key, group); }));
+      const query = (url.searchParams.get('query') || '').toLowerCase();
+      const items = [...groups.values()].filter(group => group.name.toLowerCase().includes(query)).sort((a, b) => (!a.key - !b.key) || b.count - a.count);
+      const offset = Number(url.searchParams.get('offset') || 0), limit = Number(url.searchParams.get('limit') || 12);
+      return json({ by, groups: items.slice(offset, offset + limit), total: items.length, offset, limit, libraries_available: false, all: { count: films.length, covers: films.flatMap(cover).slice(0, 9) }, metrics: { total: tasks.length, running: tasks.filter(task => task.status === 'running').length, latest_status: tasks[0]?.status } });
+    }
     if (path === '/api/tasks') {
       let items = tasks.filter(task => !url.searchParams.get('status') || task.status === url.searchParams.get('status'));
       const query = url.searchParams.get('query')?.toLowerCase();
       if (query) items = items.filter(task => JSON.stringify(task).toLowerCase().includes(query));
+      const groupBy = url.searchParams.get('group_by'), group = url.searchParams.get('group') || '';
+      if (groupBy) items = items.filter(task => { const meta = task.progress?.metadata || {}; if (groupBy === 'actress') return group ? [].concat(meta.actress || []).includes(group) : ![].concat(meta.actress || []).length; if (groupBy === 'year') return (/^\d{4}/.test(meta.publish_date || '') ? meta.publish_date.slice(0, 4) : '') === group; return (meta.producer || '') === group; });
       const offset = Number(url.searchParams.get('offset') || 0), limit = Number(url.searchParams.get('limit') || 20);
       return json({ items: items.slice(offset, offset + limit), total: items.length, offset, limit, metrics: { total: tasks.length, latest_status: tasks[0]?.status, running: tasks.filter(task => task.status === 'running').length, succeeded: tasks.filter(task => task.status === 'succeeded').length, failed: tasks.filter(task => task.status === 'failed').length } });
     }

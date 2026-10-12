@@ -1,0 +1,50 @@
+{
+  "sandbox": "F:\\AutoOrder\\JavSP-Web\\tmp\\audit-bata-20261010195006\\task-audit-bbjpva3f",
+  "results": {
+    "incomplete_download": {
+      "raw_progress": 0.9996,
+      "displayed": 100.0,
+      "state": "downloading",
+      "scrape_match": true,
+      "removed": [
+        "incomplete"
+      ]
+    },
+    "cancel_lost": {
+      "ok": true,
+      "during": "cancelled",
+      "after": "running"
+    },
+    "deleted_task_resurrected": {
+      "accepted": true,
+      "absent_after_delete": true,
+      "exists_after_retry": true
+    },
+    "metadata_lost": {
+      "accepted": true,
+      "during": "User edit",
+      "after": null
+    },
+    "multipart_partial_commit": {
+      "original_part1_exists": false,
+      "original_part2_exists": true,
+      "output_part1_exists": true,
+      "organizer_manifest_exists": false
+    },
+    "download_dedup_evicted": {
+      "initial_tasks": 1001,
+      "retained_keys": 1000,
+      "duplicate_tasks_next_tick": 1
+    },
+    "global_lock_mount_io": {
+      "unrelated_scan_blocked": true,
+      "completed_after_mount_release": true
+    },
+    "relative_output_restore": {
+      "organized_path": "#organized/TEST-002\\TEST-002.mp4",
+      "advertised_restore_available": true,
+      "restore_result": false,
+      "actual_output_exists": true
+    }
+  }
+}

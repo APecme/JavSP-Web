@@ -1,0 +1,681 @@
+{
+  "release_label": "bata.20261010195006",
+  "commit": "1e2d73bc180bf1b61ec83ed10df2fd6687acf275",
+  "git_tree": "df8209085992a16e3fe86b3116ee58379c16a08f",
+  "report_date_timezone": "2026-10-11 Asia/Shanghai",
+  "source_zip_sha256": "d04e5fa5a1bb23fdc8e38787164d82b74f55ed6a9763a9a260b7878c929446d5",
+  "release_run": "https://github.com/APecme/JavSP-Web/actions/runs/38049788026",
+  "python": "3.12.14",
+  "node": "24.13.0",
+  "business_python_files": 23,
+  "business_python_lines": 7592,
+  "python_tests": {
+    "test_ai.py": 36,
+    "test_ai_scrape.py": 13,
+    "test_app_update.py": 9,
+    "test_cover_progress.py": 2,
+    "test_download_cache.py": 2,
+    "test_multipart.py": 12,
+    "test_scrape_logging.py": 21,
+    "test_task_scans.py": 16,
+    "test_task_store.py": 24,
+    "test_updater.py": 7
+  },
+  "declared_http_and_websocket_routes": [
+    {
+      "file": "server.py",
+      "line": 312,
+      "method": "get",
+      "path": "/api/runtime"
+    },
+    {
+      "file": "server.py",
+      "line": 318,
+      "method": "get",
+      "path": "/api/update"
+    },
+    {
+      "file": "server.py",
+      "line": 323,
+      "method": "put",
+      "path": "/api/update/settings"
+    },
+    {
+      "file": "server.py",
+      "line": 337,
+      "method": "post",
+      "path": "/api/update/check"
+    },
+    {
+      "file": "server.py",
+      "line": 342,
+      "method": "post",
+      "path": "/api/update/apply"
+    },
+    {
+      "file": "server.py",
+      "line": 385,
+      "method": "post",
+      "path": "/api/path/select"
+    },
+    {
+      "file": "server.py",
+      "line": 391,
+      "method": "post",
+      "path": "/api/path/select-multi"
+    },
+    {
+      "file": "server.py",
+      "line": 396,
+      "method": "get",
+      "path": "/api/path/options"
+    },
+    {
+      "file": "server.py",
+      "line": 432,
+      "method": "get",
+      "path": "/api/path/browse"
+    },
+    {
+      "file": "server.py",
+      "line": 459,
+      "method": "get",
+      "path": "/health"
+    },
+    {
+      "file": "server.py",
+      "line": 464,
+      "method": "get",
+      "path": "/api/public-info"
+    },
+    {
+      "file": "server.py",
+      "line": 469,
+      "method": "get",
+      "path": "/login"
+    },
+    {
+      "file": "server.py",
+      "line": 475,
+      "method": "get",
+      "path": "/"
+    },
+    {
+      "file": "server.py",
+      "line": 482,
+      "method": "get",
+      "path": "/favicon.ico"
+    },
+    {
+      "file": "server.py",
+      "line": 487,
+      "method": "post",
+      "path": "/api/auth/login"
+    },
+    {
+      "file": "server.py",
+      "line": 496,
+      "method": "post",
+      "path": "/api/auth/logout"
+    },
+    {
+      "file": "server.py",
+      "line": 503,
+      "method": "get",
+      "path": "/api/auth/me"
+    },
+    {
+      "file": "server.py",
+      "line": 508,
+      "method": "get",
+      "path": "/api/users"
+    },
+    {
+      "file": "server.py",
+      "line": 520,
+      "method": "post",
+      "path": "/api/users"
+    },
+    {
+      "file": "server.py",
+      "line": 529,
+      "method": "put",
+      "path": "/api/users/{username}"
+    },
+    {
+      "file": "server.py",
+      "line": 540,
+      "method": "delete",
+      "path": "/api/users/{username}"
+    },
+    {
+      "file": "server.py",
+      "line": 549,
+      "method": "get",
+      "path": "/api/presets"
+    },
+    {
+      "file": "server.py",
+      "line": 554,
+      "method": "post",
+      "path": "/api/presets/convert"
+    },
+    {
+      "file": "server.py",
+      "line": 865,
+      "method": "post",
+      "path": "/api/presets/network/proxy-test"
+    },
+    {
+      "file": "server.py",
+      "line": 870,
+      "method": "post",
+      "path": "/api/presets"
+    },
+    {
+      "file": "server.py",
+      "line": 888,
+      "method": "put",
+      "path": "/api/presets/{preset_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 900,
+      "method": "delete",
+      "path": "/api/presets/{preset_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 908,
+      "method": "get",
+      "path": "/api/config"
+    },
+    {
+      "file": "server.py",
+      "line": 918,
+      "method": "get",
+      "path": "/api/cookiecloud"
+    },
+    {
+      "file": "server.py",
+      "line": 923,
+      "method": "put",
+      "path": "/api/cookiecloud"
+    },
+    {
+      "file": "server.py",
+      "line": 934,
+      "method": "post",
+      "path": "/api/cookiecloud/test"
+    },
+    {
+      "file": "server.py",
+      "line": 947,
+      "method": "get",
+      "path": "/api/crawler-config"
+    },
+    {
+      "file": "server.py",
+      "line": 955,
+      "method": "get",
+      "path": "/api/crawler-config/names"
+    },
+    {
+      "file": "server.py",
+      "line": 963,
+      "method": "get",
+      "path": "/api/crawler-config/{name}"
+    },
+    {
+      "file": "server.py",
+      "line": 971,
+      "method": "put",
+      "path": "/api/crawler-config/custom"
+    },
+    {
+      "file": "server.py",
+      "line": 999,
+      "method": "delete",
+      "path": "/api/crawler-config/custom/{name}"
+    },
+    {
+      "file": "server.py",
+      "line": 1010,
+      "method": "delete",
+      "path": "/api/crawler-config/built-in/{name}"
+    },
+    {
+      "file": "server.py",
+      "line": 1020,
+      "method": "post",
+      "path": "/api/crawler-config/built-in/{name}/restore"
+    },
+    {
+      "file": "server.py",
+      "line": 1030,
+      "method": "post",
+      "path": "/api/crawler-config/test"
+    },
+    {
+      "file": "server.py",
+      "line": 1093,
+      "method": "put",
+      "path": "/api/config"
+    },
+    {
+      "file": "server.py",
+      "line": 1109,
+      "method": "get",
+      "path": "/api/tasks"
+    },
+    {
+      "file": "server.py",
+      "line": 1127,
+      "method": "post",
+      "path": "/api/tasks"
+    },
+    {
+      "file": "server.py",
+      "line": 1137,
+      "method": "get",
+      "path": "/api/tasks/{task_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1145,
+      "method": "patch",
+      "path": "/api/tasks/{task_id}/metadata"
+    },
+    {
+      "file": "server.py",
+      "line": 1153,
+      "method": "get",
+      "path": "/api/tasks/{task_id}/cover/{index:int}"
+    },
+    {
+      "file": "server.py",
+      "line": 1161,
+      "method": "get",
+      "path": "/api/tasks/{task_id}/fanart/{index:int}"
+    },
+    {
+      "file": "server.py",
+      "line": 1219,
+      "method": "get",
+      "path": "/api/media-servers"
+    },
+    {
+      "file": "server.py",
+      "line": 1224,
+      "method": "post",
+      "path": "/api/media-servers"
+    },
+    {
+      "file": "server.py",
+      "line": 1235,
+      "method": "put",
+      "path": "/api/media-servers/{server_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1249,
+      "method": "delete",
+      "path": "/api/media-servers/{server_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1258,
+      "method": "post",
+      "path": "/api/media-servers/{server_id}/sync"
+    },
+    {
+      "file": "server.py",
+      "line": 1269,
+      "method": "post",
+      "path": "/api/media-servers/libraries"
+    },
+    {
+      "file": "server.py",
+      "line": 1298,
+      "method": "get",
+      "path": "/api/qbittorrent/settings"
+    },
+    {
+      "file": "server.py",
+      "line": 1303,
+      "method": "put",
+      "path": "/api/qbittorrent/settings"
+    },
+    {
+      "file": "server.py",
+      "line": 1315,
+      "method": "post",
+      "path": "/api/qbittorrent/test"
+    },
+    {
+      "file": "server.py",
+      "line": 1355,
+      "method": "get",
+      "path": "/api/downloaders"
+    },
+    {
+      "file": "server.py",
+      "line": 1360,
+      "method": "post",
+      "path": "/api/downloaders"
+    },
+    {
+      "file": "server.py",
+      "line": 1373,
+      "method": "put",
+      "path": "/api/downloaders/{downloader_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1389,
+      "method": "post",
+      "path": "/api/downloaders/test"
+    },
+    {
+      "file": "server.py",
+      "line": 1398,
+      "method": "post",
+      "path": "/api/downloaders/{downloader_id}/test"
+    },
+    {
+      "file": "server.py",
+      "line": 1410,
+      "method": "delete",
+      "path": "/api/downloaders/{downloader_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1625,
+      "method": "get",
+      "path": "/api/downloads/settings"
+    },
+    {
+      "file": "server.py",
+      "line": 1630,
+      "method": "post",
+      "path": "/api/downloads/auto-scrape/path-check"
+    },
+    {
+      "file": "server.py",
+      "line": 1635,
+      "method": "get",
+      "path": "/api/download-auto-scrape-runs"
+    },
+    {
+      "file": "server.py",
+      "line": 1645,
+      "method": "put",
+      "path": "/api/downloads/settings"
+    },
+    {
+      "file": "server.py",
+      "line": 1679,
+      "method": "get",
+      "path": "/api/downloads"
+    },
+    {
+      "file": "server.py",
+      "line": 1691,
+      "method": "get",
+      "path": "/api/path-mappings"
+    },
+    {
+      "file": "server.py",
+      "line": 1696,
+      "method": "put",
+      "path": "/api/path-mappings"
+    },
+    {
+      "file": "server.py",
+      "line": 1703,
+      "method": "delete",
+      "path": "/api/downloads/{downloader_id}/{torrent_hash}"
+    },
+    {
+      "file": "server.py",
+      "line": 1786,
+      "method": "get",
+      "path": "/api/auto-scrape-schedules"
+    },
+    {
+      "file": "server.py",
+      "line": 1791,
+      "method": "post",
+      "path": "/api/auto-scrape-schedules"
+    },
+    {
+      "file": "server.py",
+      "line": 1815,
+      "method": "put",
+      "path": "/api/auto-scrape-schedules/{schedule_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1836,
+      "method": "post",
+      "path": "/api/auto-scrape-schedules/{schedule_id}/run"
+    },
+    {
+      "file": "server.py",
+      "line": 1849,
+      "method": "delete",
+      "path": "/api/auto-scrape-schedules/{schedule_id}/runs/{run_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1856,
+      "method": "delete",
+      "path": "/api/auto-scrape-schedules/{schedule_id}"
+    },
+    {
+      "file": "server.py",
+      "line": 1921,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/cancel"
+    },
+    {
+      "file": "server.py",
+      "line": 1928,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/images/retry"
+    },
+    {
+      "file": "server.py",
+      "line": 1936,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/cover/search"
+    },
+    {
+      "file": "server.py",
+      "line": 1936,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/cover/google-search"
+    },
+    {
+      "file": "server.py",
+      "line": 1943,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/cover/upload"
+    },
+    {
+      "file": "server.py",
+      "line": 1952,
+      "method": "get",
+      "path": "/api/tasks/{task_id}/cover/candidates"
+    },
+    {
+      "file": "server.py",
+      "line": 1952,
+      "method": "get",
+      "path": "/api/tasks/{task_id}/cover/google-candidates"
+    },
+    {
+      "file": "server.py",
+      "line": 1960,
+      "method": "get",
+      "path": "/api/tasks/{task_id}/cover/candidates/{candidate_id}/thumbnail"
+    },
+    {
+      "file": "server.py",
+      "line": 1972,
+      "method": "websocket",
+      "path": "/api/tasks/{task_id}/cover/browser"
+    },
+    {
+      "file": "server.py",
+      "line": 2015,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/cover/select"
+    },
+    {
+      "file": "server.py",
+      "line": 2015,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/cover/google-select"
+    },
+    {
+      "file": "server.py",
+      "line": 2023,
+      "method": "post",
+      "path": "/api/tasks/{task_id}/restore"
+    },
+    {
+      "file": "server.py",
+      "line": 2030,
+      "method": "delete",
+      "path": "/api/tasks/{task_id}"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 83,
+      "method": "get",
+      "path": "/settings"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 88,
+      "method": "put",
+      "path": "/settings"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 98,
+      "method": "post",
+      "path": "/test"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 114,
+      "method": "get",
+      "path": "/skills"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 119,
+      "method": "post",
+      "path": "/test-search"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 131,
+      "method": "get",
+      "path": "/skills/{name}"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 139,
+      "method": "put",
+      "path": "/skills"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 147,
+      "method": "delete",
+      "path": "/skills/{name}"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 156,
+      "method": "post",
+      "path": "/skills/restore-defaults"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 162,
+      "method": "get",
+      "path": "/conversations"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 175,
+      "method": "patch",
+      "path": "/conversations/{conversation_id}"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 189,
+      "method": "delete",
+      "path": "/conversations/{conversation_id}"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 199,
+      "method": "post",
+      "path": "/conversations/{conversation_id}/stop"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 210,
+      "method": "get",
+      "path": "/conversations/{conversation_id}"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 352,
+      "method": "post",
+      "path": "/chat"
+    },
+    {
+      "file": "ai_router.py",
+      "line": 383,
+      "method": "post",
+      "path": "/conversations/{conversation_id}/actions/{action_id}"
+    }
+  ],
+  "original_finding_counts_before_functional_review": {
+    "P1": 7,
+    "P2": 10,
+    "P3": 2,
+    "total": 19
+  },
+  "finding_counts": {
+    "functional_defects": {"P1": 4, "P2": 5, "P3": 2, "total": 11},
+    "conditional_risks": {"P1": 2, "P2": 4, "P3": 0, "total": 6},
+    "engineering_observations": {"total": 2},
+    "total_retained_findings": 19
+  },
+  "functional_review": {
+    "date": "2026-10-11",
+    "basis": "Target-commit README, user management and preset UI, role checks and existing control flow; original evidence preserved; no test rerun",
+    "mapping": "../功能适配复核说明.md",
+    "functional_defects": ["SEC-03", "SEC-05", "T01", "T02", "T04", "T05", "T06", "FR-01", "FR-02", "FR-06", "FR-07"],
+    "conditional_risks": ["SEC-01", "SEC-02", "SEC-04", "T03", "T07", "FR-03"],
+    "engineering_observations": ["FR-04", "FR-05"],
+    "notes": [
+      "SEC-01 reclassified from P1 unauthorized access to P2 conditional credential-trust risk: operator preset read is an existing capability",
+      "SEC-03 functional defect is old-token identity reuse after account deletion and same-name creation; password-change session retention alone is a policy observation",
+      "FR-04 default source-build path and FR-05 package metadata drift do not establish an official target-beta runtime defect",
+      "New AI translation capability is an enhancement, not a retrospective target-version defect"
+    ]
+  },
+  "limitations": [
+    "Source-level audit; no original image digest",
+    "Resolved dependencies at audit time",
+    "No live NAS, LLM, downloader, media server or production task execution"
+  ]
+}

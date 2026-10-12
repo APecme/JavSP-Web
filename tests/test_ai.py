@@ -578,6 +578,35 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(ai.list_models(self.config | {'provider': 'anthropic'}), ['a', 'b'])
         self.assertEqual(get.call_args.kwargs['params'], {'after_id': 'a'})
 
+    def test_gateway_models_accept_wrapped_lists_and_names(self):
+        for data in ([{'id': 'a'}], {'models': ['a']}, {'data': {'models': [{'name': 'a'}]}}):
+            with self.subTest(data=data), patch.object(ai.requests, 'get', return_value=self.response(data)):
+                self.assertEqual(ai.list_models(self.config), ['a'])
+
+    def test_gateway_rate_limit_retries_are_bounded(self):
+        rate_limit = self.response({}, 429)
+        rate_limit.__enter__.return_value.headers = {'Retry-After': '1'}
+        with patch.object(ai.requests, 'get', side_effect=[rate_limit, self.response({'data': [{'id': 'a'}]})]) as get, patch.object(ai.time, 'sleep') as sleep:
+            self.assertEqual(ai.list_models(self.config), ['a'])
+            self.assertEqual(get.call_count, 2)
+            sleep.assert_called_once_with(1)
+        with patch.object(ai.requests, 'get', return_value=rate_limit) as get, patch.object(ai.time, 'sleep'):
+            with self.assertRaisesRegex(ai.AIError, '429'):
+                ai.list_models(self.config)
+            self.assertEqual(get.call_count, 3)
+
+    def test_models_redirect_only_within_same_origin(self):
+        redirect = self.response({}, 307)
+        redirect.__enter__.return_value.headers = {'Location': '/v1/models/'}
+        with patch.object(ai.requests, 'get', side_effect=[redirect, self.response({'data': [{'id': 'a'}]})]) as get:
+            self.assertEqual(ai.list_models(self.config), ['a'])
+            self.assertTrue(get.call_args.args[0].endswith('/v1/models/'))
+        redirect.__enter__.return_value.headers = {'Location': 'https://other.test/models'}
+        with patch.object(ai.requests, 'get', return_value=redirect) as get:
+            with self.assertRaises(ai.AIError):
+                ai.list_models(self.config)
+            self.assertEqual(get.call_count, 1)
+
     def test_model_list_errors_do_not_expose_response_or_credentials(self):
         for status, data in ((401, {'secret': 'private-key'}), (302, {}), (200, {'data': []}), (200, [])):
             with self.subTest(status=status, data=data), patch.object(ai.requests, 'get', return_value=self.response(data)):

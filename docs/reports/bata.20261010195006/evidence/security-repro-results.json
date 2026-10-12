@@ -1,0 +1,38 @@
+{
+  "operator_secret_read": [
+    {
+      "route": "/api/config",
+      "http": 200,
+      "translator_secret_visible": true,
+      "proxy_password_visible": true
+    },
+    {
+      "route": "/api/presets",
+      "http": 200,
+      "translator_secret_visible": true,
+      "proxy_password_visible": true
+    }
+  ],
+  "password_reset_session": {
+    "reset_http": 200,
+    "old_password_login_http": 401,
+    "old_session_http": 200
+  },
+  "deleted_username_reuse": {
+    "delete_http": 200,
+    "session_while_deleted_http": 401,
+    "recreate_http": 200,
+    "old_session_after_recreate": {
+      "username": "auditoperator",
+      "role": "admin"
+    },
+    "admin_api_http": 200
+  },
+  "corrupt_user_store": {
+    "default_password_before_corruption_http": 401,
+    "default_password_after_corruption_http": 200,
+    "accounts_after_corruption": [
+      "admin"
+    ]
+  }
+}

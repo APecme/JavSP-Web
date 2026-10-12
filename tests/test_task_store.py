@@ -63,6 +63,27 @@ class TaskStoreTests(unittest.TestCase):
         storage.TASKS_FILE.write_text(json.dumps([self.item()]), encoding='utf-8')
         self.assertEqual(len(storage.load_tasks()), 1)
 
+    def test_playback_api_returns_links_and_reports_missing_items(self):
+        client = self.client()
+        storage.save_tasks([self.item()])
+        links = [{'name': 'Jellyfin', 'url': 'https://play.test/web/#/details?id=film'}]
+        with patch.object(self.server, 'playback_links', return_value=links) as resolve:
+            self.assertEqual(client.get('/api/tasks/one/playback').json(), {'links': links})
+            self.assertEqual(resolve.call_args.args[0]['id'], 'one')
+        with patch.object(self.server, 'playback_links', return_value=[]):
+            self.assertEqual(client.get('/api/tasks/one/playback').status_code, 404)
+        self.assertEqual(client.get('/api/tasks/missing/playback').status_code, 404)
+
+    def test_replaced_outputs_do_not_offer_destructive_restore(self):
+        original, organized = self.folder / 'original.mp4', self.folder / 'organized.mp4'
+        organized.write_bytes(b'video')
+        record = self.item(file_organizer={'original_files': [str(original)], 'organized_files': [str(organized)],
+                                          'generated_files': [], 'preexisting_output': True, 'replaced_existing': True})
+        storage.save_tasks([record])
+        self.assertFalse(tasks.get_task('one')['restore_available'])
+        self.assertFalse(tasks.restore_task_files('one'))
+        self.assertTrue(organized.exists())
+
     def test_duplicate_ids_abort_import(self):
         storage.TASKS_FILE.write_text(json.dumps([self.item(), self.item()]), encoding='utf-8')
         with self.assertRaisesRegex(ValueError, '重复'):
@@ -115,6 +136,44 @@ class TaskStoreTests(unittest.TestCase):
         group = next(item for item in combined if len(item['task_ids']) == 3)
         self.assertEqual(set(group['task_ids']), {'0', '1', '2'})
         self.assertEqual(group['status'], 'succeeded')
+
+    def test_overview_cover_groups_aggregate_film_representatives_and_filter_walls(self):
+        records = [self.item(str(i), image_sources={'cover_urls': ['https://example.test/cover']}) for i in range(6)]
+        details = [(['Alice', 'Bea'], 'S1', '2024-01-02', 'D:\\Media\\JAV\\A'), (['Alice'], 'S1', '2023-05-06', 'D:/Media/JAV/B'),
+                   ('Bea', 'Moodyz', '2023', '/other/C'), ([], '', 'unknown', '/media/jav/D'), (['Alice'], 'S1', '2024-03-04', '/shared'),
+                   (['Alice'], 'S1', '2024-03-04', '/shared')]
+        for record, (actress, producer, date, folder) in zip(records, details):
+            record['metadata_override'] = {'title': record['id'], 'actress': actress, 'producer': producer, 'publish_date': date, 'dvdid': 'ABC-' + record['id']}
+            record['image_output'] = {'save_dir': folder, 'fanart_file': folder + '/fanart.jpg'}
+        storage.save_tasks(records)
+        actress = task_store.overview_groups('actress')
+        self.assertEqual(actress['all']['count'], 5)
+        self.assertEqual([(item['name'], item['count']) for item in actress['groups']], [('Alice', 3), ('Bea', 2), ('未知女优', 1)])
+        self.assertEqual([item['key'] for item in task_store.overview_groups('year')['groups']], ['2024', '2023', ''])
+        self.assertEqual([item['name'] for item in task_store.overview_groups('producer', query='mood')['groups']], ['Moodyz'])
+        libraries = [{'key': 'srv:lib', 'name': '影片', 'roots': ['d:/media/jav']}, {'key': 'srv:empty', 'name': '空库', 'roots': ['/nowhere']}]
+        grouped = task_store.overview_groups('library', libraries=libraries)
+        self.assertEqual([(item['name'], item['count']) for item in grouped['groups']], [('影片', 2), ('空库', 0)])
+        wall = lambda **filters: {item['id'] for item in tasks.list_task_summaries(20, 0, view='overview', **filters)['items']}
+        self.assertEqual(wall(group_by='actress', group='Alice'), {'0', '1', '4'})
+        self.assertEqual(wall(group_by='actress', group='Bea'), {'0', '2'})
+        self.assertEqual(wall(group_by='actress', group=''), {'3'})
+        self.assertEqual(wall(group_by='year', group='2023'), {'1', '2'})
+        self.assertEqual(wall(group_by='year', group=''), {'3'})
+        self.assertEqual(wall(group_by='library', group='srv:lib', group_roots=['D:/Media/JAV']), {'0', '1'})
+        self.assertEqual(wall(group_by='library', group='x', group_roots=[]), set())
+        client = self.client()
+        with patch.object(self.server, 'overview_libraries', return_value=libraries):
+            response = client.get('/api/tasks/overview-groups', params={'by': 'library'})
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()['libraries_available'])
+            self.assertEqual(response.json()['groups'][0]['count'], 2)
+            self.assertEqual(client.get('/api/tasks/overview-groups', headers={'If-None-Match': response.headers['etag']}, params={'by': 'library'}).status_code, 304)
+            items = client.get('/api/tasks', params={'view': 'overview', 'limit': 20, 'group_by': 'library', 'group': 'srv:lib'}).json()['items']
+            self.assertEqual({item['id'] for item in items}, {'0', '1'})
+        with patch.object(self.server, 'overview_libraries', return_value=[]):
+            payload = client.get('/api/tasks/overview-groups', params={'by': 'library'}).json()
+            self.assertEqual((payload['by'], payload['libraries_available']), ('actress', False))
 
     def test_metadata_update_and_detail_touch_one_record(self):
         storage.save_tasks([self.item('one'), self.item('two')])

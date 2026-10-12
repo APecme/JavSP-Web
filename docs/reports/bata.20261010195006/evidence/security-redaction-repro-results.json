@@ -1,0 +1,23 @@
+[
+  {
+    "input": "Authorization: Bearer SYNTHETIC_BEARER_CREDENTIAL",
+    "output": {
+      "source": "Authorization: [已隐藏] SYNTHETIC_BEARER_CREDENTIAL"
+    },
+    "credential_remains": true
+  },
+  {
+    "input": "headers = {'Authorization': 'Bearer SYNTHETIC_BEARER_CREDENTIAL'}",
+    "output": {
+      "source": "headers = {'Authorization': '[已隐藏] SYNTHETIC_BEARER_CREDENTIAL'}"
+    },
+    "credential_remains": true
+  },
+  {
+    "input": "Cookie: session=SYNTHETIC_COOKIE_CREDENTIAL",
+    "output": {
+      "source": "Cookie: session=SYNTHETIC_COOKIE_CREDENTIAL"
+    },
+    "credential_remains": true
+  }
+]

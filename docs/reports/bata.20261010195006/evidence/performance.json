@@ -1,0 +1,286 @@
+{
+  "environment": {
+    "python": "3.12.14",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "repeats": 3
+  },
+  "method": "Synthetic completed tasks, 40 progress events/task; warm summaries. In-process HTTP via TestClient; authentication dependency stubbed. No WAN, NAS or browser layout measurements.",
+  "assets": [
+    {
+      "name": "ai-markdown.js",
+      "bytes": 4002,
+      "gzip_bytes_estimate": 1304,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "ai.js",
+      "bytes": 33753,
+      "gzip_bytes_estimate": 9352,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "app.css",
+      "bytes": 40378,
+      "gzip_bytes_estimate": 8078,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "app.js",
+      "bytes": 233660,
+      "gzip_bytes_estimate": 55953,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "javsp-logo.ico",
+      "bytes": 25862,
+      "gzip_bytes_estimate": 24957,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "javsp-logo.png",
+      "bytes": 12875,
+      "gzip_bytes_estimate": 12261,
+      "cache_control": "public, no-cache"
+    },
+    {
+      "name": "overrides.css",
+      "bytes": 49165,
+      "gzip_bytes_estimate": 9162,
+      "cache_control": "public, no-cache"
+    }
+  ],
+  "history": [
+    {
+      "tasks": 100,
+      "sqlite_bytes": 749568,
+      "load_tasks": {
+        "median_ms": 3.78,
+        "max_ms": 4.51
+      },
+      "summary_warm": {
+        "median_ms": 2.39,
+        "max_ms": 2.42
+      },
+      "detail": {
+        "median_ms": 2.01,
+        "max_ms": 2.87
+      },
+      "api_decoded_bytes": 115291,
+      "api_gzip_bytes_estimate": 2798,
+      "api_identity": {
+        "median_ms": 6.02,
+        "max_ms": 6.66
+      },
+      "api_gzip": {
+        "median_ms": 6.98,
+        "max_ms": 7.34
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 36.53,
+        "max_ms": 36.53
+      },
+      "page_50": {
+        "median_ms": 6.68,
+        "max_ms": 7.66
+      },
+      "overview_24": {
+        "median_ms": 6.95,
+        "max_ms": 7.0
+      },
+      "page_decoded_bytes": 57759,
+      "page_unchanged": {
+        "median_ms": 6.69,
+        "max_ms": 6.88
+      },
+      "persist_one_task": {
+        "median_ms": 4.74,
+        "max_ms": 5.38
+      }
+    },
+    {
+      "tasks": 1000,
+      "sqlite_bytes": 7159808,
+      "load_tasks": {
+        "median_ms": 28.56,
+        "max_ms": 29.23
+      },
+      "summary_warm": {
+        "median_ms": 12.18,
+        "max_ms": 12.29
+      },
+      "detail": {
+        "median_ms": 1.68,
+        "max_ms": 2.01
+      },
+      "api_decoded_bytes": 1153891,
+      "api_gzip_bytes_estimate": 20371,
+      "api_identity": {
+        "median_ms": 23.42,
+        "max_ms": 50.87
+      },
+      "api_gzip": {
+        "median_ms": 34.04,
+        "max_ms": 37.45
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 30.91,
+        "max_ms": 30.91
+      },
+      "page_50": {
+        "median_ms": 13.18,
+        "max_ms": 14.86
+      },
+      "overview_24": {
+        "median_ms": 18.91,
+        "max_ms": 19.24
+      },
+      "page_decoded_bytes": 57807,
+      "page_unchanged": {
+        "median_ms": 11.99,
+        "max_ms": 12.34
+      },
+      "persist_one_task": {
+        "median_ms": 3.99,
+        "max_ms": 5.09
+      }
+    },
+    {
+      "tasks": 5000,
+      "sqlite_bytes": 35680256,
+      "load_tasks": {
+        "median_ms": 209.37,
+        "max_ms": 210.4
+      },
+      "summary_warm": {
+        "median_ms": 149.22,
+        "max_ms": 159.87
+      },
+      "detail": {
+        "median_ms": 2.58,
+        "max_ms": 2.58
+      },
+      "api_decoded_bytes": 5773891,
+      "api_gzip_bytes_estimate": 99407,
+      "api_identity": {
+        "median_ms": 169.7,
+        "max_ms": 197.58
+      },
+      "api_gzip": {
+        "median_ms": 240.25,
+        "max_ms": 243.64
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 41.41,
+        "max_ms": 41.41
+      },
+      "page_50": {
+        "median_ms": 51.36,
+        "max_ms": 52.97
+      },
+      "overview_24": {
+        "median_ms": 122.82,
+        "max_ms": 124.26
+      },
+      "page_decoded_bytes": 57844,
+      "page_unchanged": {
+        "median_ms": 38.3,
+        "max_ms": 39.61
+      },
+      "persist_one_task": {
+        "median_ms": 5.4,
+        "max_ms": 5.59
+      }
+    },
+    {
+      "tasks": 10000,
+      "sqlite_bytes": 71323648,
+      "load_tasks": {
+        "median_ms": 405.54,
+        "max_ms": 415.0
+      },
+      "summary_warm": {
+        "median_ms": 303.3,
+        "max_ms": 346.19
+      },
+      "detail": {
+        "median_ms": 2.97,
+        "max_ms": 3.53
+      },
+      "api_decoded_bytes": 11548891,
+      "api_gzip_bytes_estimate": 196774,
+      "api_identity": {
+        "median_ms": 332.18,
+        "max_ms": 391.13
+      },
+      "api_gzip": {
+        "median_ms": 412.59,
+        "max_ms": 434.16
+      },
+      "cover_lookup_24_serial": {
+        "median_ms": 39.49,
+        "max_ms": 39.49
+      },
+      "page_50": {
+        "median_ms": 83.4,
+        "max_ms": 85.26
+      },
+      "overview_24": {
+        "median_ms": 241.95,
+        "max_ms": 260.77
+      },
+      "page_decoded_bytes": 57846,
+      "page_unchanged": {
+        "median_ms": 69.16,
+        "max_ms": 88.81
+      },
+      "persist_one_task": {
+        "median_ms": 6.19,
+        "max_ms": 6.77
+      }
+    }
+  ],
+  "empty_api": {
+    "/api/tasks": {
+      "median_ms": 4.68,
+      "max_ms": 4.92,
+      "decoded_bytes": 2
+    },
+    "/api/runtime": {
+      "median_ms": 2.75,
+      "max_ms": 2.88,
+      "decoded_bytes": 126
+    },
+    "/api/presets": {
+      "median_ms": 20.03,
+      "max_ms": 20.82,
+      "decoded_bytes": 19232
+    },
+    "/api/crawler-config/names": {
+      "median_ms": 2.93,
+      "max_ms": 3.36,
+      "decoded_bytes": 797
+    },
+    "/api/downloads": {
+      "median_ms": 3.4,
+      "max_ms": 3.42,
+      "decoded_bytes": 43
+    }
+  },
+  "log_processing": [
+    {
+      "events": 100,
+      "median_ms": 33.12,
+      "max_ms": 41.5
+    },
+    {
+      "events": 500,
+      "median_ms": 818.78,
+      "max_ms": 823.28
+    },
+    {
+      "events": 1000,
+      "median_ms": 3232.06,
+      "max_ms": 3448.22
+    }
+  ]
+}

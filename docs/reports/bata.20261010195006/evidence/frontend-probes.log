@@ -1,0 +1,3 @@
+CONFIRMED known-current beta update status renders unknown: {"textContent":"vbata.20261010195006","title":"当前部署版本无法与 GitHub Release 标签比较","dataset":{"updateStatus":"unknown"}}
+CONFIRMED 12 successful download polls register 12 distinct reset handlers; all use once=true
+Duplicate top-level production function declarations: {"taskCard":[737,783,1867],"progressMarkup":[772,793,806],"renderTasks":[859,1906],"renderOverview":[865,880,888,2041],"renderPresetList":[1337,1351]}

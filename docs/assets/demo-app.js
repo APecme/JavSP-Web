@@ -3,6 +3,16 @@ const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
 state.overviewPageSize = OVERVIEW_PAGE_SIZES.includes(savedOverviewPageSize) ? savedOverviewPageSize : 24;
+// Overview groups: [type, Chinese label, English cover subtitle].
+const OVERVIEW_GROUP_TYPES = [['library', '媒体库', 'LIBRARY'], ['actress', '女优', 'ACTRESS'], ['producer', '片商', 'STUDIO'], ['year', '年份', 'YEAR']];
+const OVERVIEW_GROUP_PAGE_SIZE = 12;
+const savedOverviewGroupBy = localStorage.getItem('javsp-web.overview-group-by');
+state.overviewGroupBy = OVERVIEW_GROUP_TYPES.some(([type]) => type === savedOverviewGroupBy) ? savedOverviewGroupBy : 'library';
+state.overviewGroup = null;
+state.overviewGroups = null;
+state.overviewGroupPage = 1;
+state.overviewGroupQuery = '';
+state.overviewLibrariesAvailable = true;
 const $ = (selector) => document.querySelector(selector);
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const BUILT_IN_MEDIA_TYPE_IDS = new Set(['fc2', 'getchu', 'gyutto', 'cid', 'normal']);
@@ -19,7 +29,7 @@ const FORM_TABS = [
   { id: 'media-types', section: 'scanner', prefixes: ['media_types'], label: '影片分类', description: '按文件名识别影片类型。' },
   { id: 'network', section: 'network', label: '网络', description: '设置代理、重试次数和网络请求超时。' },
   { id: 'crawler', section: 'crawler', label: '爬虫', description: '选择资料来源，调整查询顺序。' },
-  { id: 'folder', section: 'summarizer', prefixes: ['move_files', 'path', 'title'], label: '文件夹整理', description: '设置输出目录、文件名、路径长度和文件移动规则。' },
+  { id: 'folder', section: 'summarizer', prefixes: ['move_files', 'existing_file_policy', 'path', 'title'], label: '文件夹整理', description: '设置输出目录、文件名、路径长度和文件移动规则。' },
   { id: 'defaults', section: 'summarizer', prefixes: ['default'], label: '替代文本', description: '没有查到的资料，用什么文字代替。' },
   { id: 'images', section: 'summarizer', prefixes: ['cover', 'fanart', 'extra_fanarts'], label: '图片', description: '设置封面、横版封面、裁剪和剧照下载规则。' },
   { id: 'custom', section: 'summarizer', prefixes: ['nfo', 'censor_options_representation'], label: '自定义', description: '设置媒体库中的影片名称、分类和标签。' },
@@ -359,6 +369,7 @@ function renderPresetNavigation() {
 }
 
 function renderConfigFields() {
+  if (state.formValues?.summarizer) state.formValues.summarizer.existing_file_policy ??= 'never';
   FORM_TABS.forEach((tab) => {
     const container = $(`#preset-fields-${tab.id}`);
     if (!container) return;
@@ -382,6 +393,9 @@ function renderConfigFields() {
       const complex = Array.isArray(value) || (value && typeof value === 'object') || (tab.section === 'scanner' && path === 'media_types');
       const boolean = typeof value === 'boolean';
       const sourcePath = `${tab.section}.${path}`;
+      if (sourcePath === 'summarizer.existing_file_policy') {
+        return `<label class="config-field"><span class="config-field-name">已有影片覆盖方式</span><select class="config-field-input" data-config-path="${sourcePath}">${[['never', '从不'], ['always', '总是'], ['larger', '按文件大小'], ['newer', '仅保留最新']].map(([key, label]) => `<option value="${key}"${value === key ? ' selected' : ''}>${label}</option>`).join('')}</select><small class="config-description">按大小保留较大的影片；按时间保留修改时间较新的影片。相同则保留已有版本，源文件不删除。</small></label>`;
+      }
       if (sourcePath === 'crawler.ai_enabled' || sourcePath === 'crawler.ai_fallback_only') {
         const label = path === 'ai_enabled' ? '启用 AI 刮削' : '仅在爬虫失败时使用 AI';
         const help = path === 'ai_enabled' ? '使用系统设置中接入的 AI 模型查找影片资料。' : '取消后直接使用 AI，不查询普通爬虫。';
@@ -910,7 +924,13 @@ function taskPageRequest() {
   const size = view === 'overview' ? state.overviewPageSize : state.taskPageSize;
   const page = view === 'overview' ? state.overviewPage - 1 : state.taskPage;
   params.set('limit', size); params.set('offset', page * size);
+  if (view === 'overview' && !state.overviewGroup) {
+    const groups = new URLSearchParams({ by: state.overviewGroupBy, limit: String(OVERVIEW_GROUP_PAGE_SIZE), offset: String((state.overviewGroupPage - 1) * OVERVIEW_GROUP_PAGE_SIZE) });
+    if (state.overviewGroupQuery) groups.set('query', state.overviewGroupQuery);
+    return `/api/tasks/overview-groups?${groups}`;
+  }
   if (view === 'overview') {
+    if (state.overviewGroup.key !== '__all__') { params.set('group_by', state.overviewGroup.by); params.set('group', state.overviewGroup.key); }
     params.set('sort', state.overviewSort.key); params.set('direction', state.overviewSort.direction);
     if (state.overviewQuery) params.set('query', state.overviewQuery);
   } else {
@@ -937,11 +957,22 @@ async function loadTasks() {
       const result = await api(path);
       if (path !== taskPageRequest()) return;
       const signature = JSON.stringify(result);
-      state.tasks = result.items || [];
-      state.taskTotal = Number(result.total || 0);
-      state.taskMetrics = result.metrics || {};
       const view = document.querySelector('.view.active')?.dataset.panel;
-      if (view === 'overview') state.overviewPage = Math.floor(result.offset / result.limit) + 1;
+      state.taskMetrics = result.metrics || {};
+      if (Array.isArray(result.groups)) {
+        state.overviewGroups = result;
+        state.overviewGroupBy = result.by || state.overviewGroupBy;
+        state.overviewLibrariesAvailable = result.libraries_available !== false;
+        state.overviewFilmCount = Number(result.all?.count || 0);
+        state.overviewGroupPage = Math.floor(result.offset / result.limit) + 1;
+        state.tasks = [];
+        state.taskTotal = 0;
+      } else {
+        state.tasks = result.items || [];
+        state.taskTotal = Number(result.total || 0);
+        if (view === 'overview' && state.overviewGroup?.key === '__all__' && !state.overviewQuery) state.overviewFilmCount = state.taskTotal;
+      }
+      if (view === 'overview') { if (!Array.isArray(result.groups)) state.overviewPage = Math.floor(result.offset / result.limit) + 1; }
       else state.taskPage = Math.floor(result.offset / result.limit);
       if (state.tasksSignature !== signature || state.tasksView !== view) {
         state.tasksSignature = signature; state.tasksView = view;
@@ -1543,8 +1574,20 @@ $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-task-page]'); if (button && !button.disabled) { state.taskPage = Math.max(0, Number(button.dataset.taskPage) || 0); loadTasks(); } });
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) { event.stopPropagation(); deleteTaskInDialog(button.dataset.deleteTask); } });
-$('#library-search-form')?.addEventListener('submit', (event) => { event.preventDefault(); state.overviewQuery = $('#library-search').value.trim(); state.overviewPage = 1; state.tasksSignature = ''; loadTasks(); });
-$('#library-search-form')?.addEventListener('reset', () => { state.overviewQuery = ''; state.overviewPage = 1; state.tasksSignature = ''; loadTasks(); });
+$('#library-search-form')?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const value = $('#library-search').value.trim();
+  if (state.overviewGroup) { state.overviewQuery = value; state.overviewPage = 1; }
+  else { state.overviewGroupQuery = value; state.overviewGroupPage = 1; }
+  state.tasksSignature = '';
+  loadTasks();
+});
+$('#library-search-form')?.addEventListener('reset', () => {
+  if (state.overviewGroup) { state.overviewQuery = ''; state.overviewPage = 1; }
+  else { state.overviewGroupQuery = ''; state.overviewGroupPage = 1; }
+  state.tasksSignature = '';
+  loadTasks();
+});
 document.addEventListener('click', event => { const button = event.target.closest('[data-detail-section]'); if (button) document.getElementById(button.dataset.detailSection)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); });
 document.addEventListener('change', (event) => {
   if (event.target.id === 'overview-sort-key' || event.target.id === 'overview-sort-direction') {
@@ -1951,11 +1994,15 @@ async function openTaskDetail(taskId, background = false) {
     return;
   }
   const metadata = task.progress?.metadata || {};
-  const rows = [['番号', metadata.dvdid], ['女优', Array.isArray(metadata.actress) ? metadata.actress.join('、') : metadata.actress], ['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date]].map(([label, value]) => `<div class="detail-data-row"><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
-  const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
+  const poster = `<div class="detail-poster-wrap">${posterImage}${playButton(task.id)}</div>`;
+  const backdropSource = task.fanart_count ? `/api/tasks/${encodeURIComponent(task.id)}/fanart/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}` : (task.cover_count ? `/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}` : '');
+  const backdrop = backdropSource ? `<span class="lc-film-backdrop" aria-hidden="true"><img src="${backdropSource}" alt=""></span>` : '';
+  const actressNames = (Array.isArray(metadata.actress) ? metadata.actress : [metadata.actress]).map((name) => String(name || '').trim()).filter(Boolean);
+  const actressChips = actressNames.length ? `<div class="lc-actress">${actressNames.map((name) => `<span>${escapeHtml(name)}</span>`).join('')}</div>` : '';
+  const facts = [['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date]].map(([label, value]) => `<div><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const actressInput = Array.isArray(metadata.actress) ? metadata.actress.join('\n') : (metadata.actress || '');
-  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="task-metadata-summary film-hero"><div class="task-detail-main">${poster}<div class="film-info"><div class="film-heading-row"><p class="film-number">${escapeHtml(metadata.dvdid || '影片资料')}</p><button class="button secondary" type="button" data-edit-task-metadata>编辑资料</button></div><h3 class="film-title">${escapeHtml(metadata.title || taskDisplayName(task))}</h3><dl class="task-detail-data">${rows}</dl></div></div></section>`;
+  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="lc-film-hero">${backdrop}${poster}<div class="lc-film-copy"><div class="lc-film-badges"><span class="lc-chip lc-chip-accent">${escapeHtml(metadata.dvdid || '未识别番号')}</span>${metadata.publish_date ? `<span class="lc-chip">${escapeHtml(metadata.publish_date)}</span>` : ''}${task.fanart_count ? `<span class="lc-chip">${Number(task.fanart_count)} 张剧照</span>` : ''}</div><h3 class="film-title">${escapeHtml(metadata.title || taskDisplayName(task))}</h3>${actressChips}<dl class="lc-facts">${facts}</dl><div class="lc-film-actions"><button class="button primary" type="button" data-play-task="${escapeHtml(task.id)}"><img src="/assets/play.svg" alt="">播放影片</button><button class="button secondary" type="button" data-edit-task-metadata>编辑资料</button></div></div></section>`;
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
@@ -1973,9 +2020,9 @@ async function openTaskDetail(taskId, background = false) {
   const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = metadata.dvdid || '影片详情';
-  $('#task-detail-subtitle').textContent = metadata.publish_date || '';
+  $('#task-detail-subtitle').textContent = ['影片详情', task.preset_name, metadata.publish_date].filter(Boolean).join(' · ');
   const identifier = String(metadata.dvdid || '').trim();
-  patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><div><p class="library-eyebrow">画面预览</p><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
+  patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
   window.JavspComments?.open(identifier, state.runtime?.comments_url || '');
 }
 
@@ -2073,30 +2120,136 @@ function overviewSelectionIcon(selected = false) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect>${selected ? '<path d="m8 12 2.7 2.7L16.5 9"></path>' : ''}</svg>`;
 }
 
+function overviewGroupType(type = state.overviewGroupBy) {
+  return OVERVIEW_GROUP_TYPES.find(([key]) => key === type) || OVERVIEW_GROUP_TYPES[1];
+}
+
+function renderOverviewChrome() {
+  const metrics = state.taskMetrics || {};
+  $('#metric-total').textContent = metrics.total || 0;
+  $('#metric-running').textContent = metrics.running || 0;
+  $('#metric-result').textContent = ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中', cancelled: '已取消' }[metrics.latest_status] || '-');
+  if ($('#metric-films')) $('#metric-films').textContent = state.overviewFilmCount ?? '-';
+  const tabs = $('#overview-group-tabs');
+  if (tabs) patchChildren(tabs, OVERVIEW_GROUP_TYPES.filter(([type]) => type !== 'library' || state.overviewLibrariesAvailable)
+    .map(([type, label]) => `<button type="button" role="tab" data-overview-group-by="${type}" aria-selected="${!state.overviewGroup && state.overviewGroupBy === type}"${state.overviewGroupBy === type ? ' class="active"' : ''}>${label}</button>`).join(''));
+  const search = $('#library-search');
+  if (search && document.activeElement !== search) {
+    search.value = state.overviewGroup ? state.overviewQuery : state.overviewGroupQuery;
+    search.placeholder = state.overviewGroup ? '搜索番号、片名或女优' : `搜索${overviewGroupType()[1]}名称`;
+  }
+}
+
 function renderOverview() {
-  $('#metric-total').textContent = state.taskMetrics?.total || 0;
-  $('#metric-running').textContent = state.taskMetrics?.running || 0;
-  $('#metric-result').textContent = ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中', cancelled: '已取消' }[state.taskMetrics?.latest_status] || '-');
+  renderOverviewChrome();
+  if (!state.overviewGroup) { renderOverviewGroups(); return; }
+  const group = state.overviewGroup;
   const cards = state.tasks.map((task) => ({ task, taskCount: task.task_ids?.length || 1, taskIds: task.task_ids || [task.id] }));
   const totalPages = Math.max(1, Math.ceil(state.taskTotal / state.overviewPageSize));
-  const pageCards = cards;
   const pageIds = new Set(cards.flatMap((entry) => entry.taskIds));
   const allSelected = pageIds.size > 0 && [...pageIds].every((id) => state.selectedOverviewTasks.has(id));
   const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
-  $('#library-count').textContent = `${state.taskTotal || 0}`;
-  const overviewMarkup = cards.length ? `${toolbar}<div class="overview-cover-wall">${pageCards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : `<div class="library-empty"><span aria-hidden="true">▤</span><h3>${state.overviewQuery ? '没有找到符合条件的影片' : '收藏从第一部影片开始'}</h3><p>${state.overviewQuery ? '试试其他番号、片名或女优名字。' : '添加刮削任务，完成后就能在这里浏览封面和影片资料。'}</p>${state.overviewQuery ? '' : '<button class="button primary" data-go="scrape">添加影片</button>'}</div>`;
+  const [, typeLabel, english] = group.key === '__all__' ? ['', '全部', 'ALL MOVIES'] : overviewGroupType(group.by);
+  const header = `<header class="lc-group-head"><div class="lc-group-art">${libraryCover(group, english)}</div><div class="lc-group-info"><button class="lc-back" type="button" data-overview-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>返回${escapeHtml(overviewGroupType(group.by)[1])}分类</button><p class="lc-eyebrow">${escapeHtml(typeLabel)} · ${escapeHtml(english)}</p><h2>${escapeHtml(group.name)}</h2><p class="lc-group-count"><i></i>${state.taskTotal} 部影片${state.overviewQuery ? ` · 搜索“${escapeHtml(state.overviewQuery)}”` : ''}</p></div></header>`;
+  const wall = cards.length ? `${toolbar}<div class="lc-film-grid">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : `<div class="library-empty lc-empty-state"><span aria-hidden="true">▤</span><h3>${state.overviewQuery ? '没有找到符合条件的影片' : '这个分类还没有影片'}</h3><p>${state.overviewQuery ? '试试其他番号、片名或女优名字。' : '刮削完成的影片会自动出现在这里。'}</p></div>`;
   const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}>下一页</button></div>` : '';
-  const overviewContainer = $('#overview-tasks');
-  patchChildren(overviewContainer, overviewMarkup + pagination);
+  patchChildren($('#overview-tasks'), header + wall + pagination);
   if (state.overviewSelectionFeedback.size) window.setTimeout(() => state.overviewSelectionFeedback.clear(), 260);
+}
+
+function renderOverviewGroups() {
+  const result = state.overviewGroups;
+  const container = $('#overview-tasks');
+  if (!result) { patchChildren(container, '<p class="lc-loading">正在读取媒体库…</p>'); return; }
+  const [, label, english] = overviewGroupType(result.by);
+  if (!result.all?.count) {
+    patchChildren(container, `<div class="library-empty lc-empty-state"><span aria-hidden="true">▤</span><h3>收藏从第一部影片开始</h3><p>添加刮削任务，完成后就能在这里按${escapeHtml(label)}浏览封面和影片资料。</p><button class="button primary" data-go="scrape">添加影片</button></div>`);
+    return;
+  }
+  const everything = { key: '__all__', name: '全部影片', count: result.all.count, covers: result.all.covers, template: 'tilted' };
+  const groups = (result.offset === 0 && !state.overviewGroupQuery ? [everything] : []).concat(result.groups);
+  const pages = Math.max(1, Math.ceil(result.total / result.limit));
+  const cards = groups.length
+    ? `<div class="lc-library-grid">${groups.map((group) => libraryCard(group, group.key === '__all__' ? 'ALL MOVIES' : english)).join('')}</div>`
+    : `<div class="library-empty lc-empty-state"><span aria-hidden="true">⌕</span><h3>没有找到“${escapeHtml(state.overviewGroupQuery)}”</h3><p>换个${escapeHtml(label)}名称试试。</p></div>`;
+  const pagination = pages > 1 ? `<div class="overview-pagination"><span>第 ${state.overviewGroupPage} / ${pages} 页</span><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage - 1}"${state.overviewGroupPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage + 1}"${state.overviewGroupPage >= pages ? ' disabled' : ''}>下一页</button></div>` : '';
+  patchChildren(container, `<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><span>${result.total} 个分类 · ${result.all.count} 部影片</span></div>${cards}${pagination}`);
+}
+
+function libraryCard(group, english) {
+  return `<button type="button" class="lc-library-card" data-overview-open-group="${escapeHtml(group.key)}" aria-label="${escapeHtml(`${group.name}，${group.count} 部影片`)}">${libraryCover(group, english)}<span class="lc-library-meta"><strong title="${escapeHtml(group.name)}">${escapeHtml(group.name)}</strong><small><i></i>${group.count} 部影片</small></span></button>`;
+}
+
+function coverHash(text) {
+  let hash = 2166136261;
+  for (const char of String(text)) { hash ^= char.codePointAt(0); hash = Math.imul(hash, 16777619); }
+  return hash >>> 0;
+}
+
+// Library covers follow LibraryCoverStudio's 1920×1080 templates, drawn with live posters.
+function libraryCover(group, english) {
+  const covers = (group.covers || []).map((cover) => `/api/tasks/${encodeURIComponent(cover.id)}/cover/0?thumbnail=true&v=${encodeURIComponent(cover.v || '')}`);
+  const seed = coverHash(`${english}:${group.key}`);
+  const pickSeed = Math.imul(seed ^ (seed >>> 15), 2246822507) >>> 13;
+  const template = group.template || (covers.length >= 5 ? ['tilted', 'upright', 'fan', 'strip'][pickSeed % 4] : covers.length ? ['stacked', 'diagonal', 'fan'][pickSeed % 3] : 'plain');
+  const pick = (count) => Array.from({ length: count }, (_, index) => covers.length ? covers[index % covers.length] : '');
+  const image = (src) => src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async">` : '<i class="lc-blank"></i>';
+  const posters = (list, extra = '') => list.map((src, index) => `<span class="lc-poster${extra}" style="--i:${index}">${image(src)}</span>`).join('');
+  const backdrop = covers.length ? `<span class="lc-backdrop">${image(covers[0])}</span>` : '';
+  const [first, second, third, fourth, fifth] = pick(5);
+  const layers = {
+    tilted: `${backdrop}<span class="lc-tilt">${posters(pick(9))}</span>`,
+    upright: `<span class="lc-wall">${posters(pick(12))}</span>`,
+    fan: `<span class="lc-fan">${posters([fourth, second, first, third, fifth])}</span>`,
+    strip: `${backdrop}<span class="lc-strip">${posters(pick(5))}</span>`,
+    stacked: `<span class="lc-stack">${posters([first, first])}<span class="lc-poster lc-main">${image(first)}</span></span>`,
+    diagonal: `<span class="lc-diagonal">${image(first)}</span>`,
+    plain: '',
+  }[template];
+  const length = [...String(group.name || '')].length;
+  const scale = length <= 2 ? 1 : length <= 4 ? .82 : length <= 6 ? .64 : length <= 9 ? .5 : .38;
+  return `<span class="lc-cover lc-tpl-${template}" style="--hue:${seed % 360};--title-scale:${scale}">${layers}<span class="lc-cover-title"><b>${escapeHtml(group.name)}</b><em>${escapeHtml(english)}</em></span></span>`;
+}
+
+function openOverviewGroup(key) {
+  const result = state.overviewGroups;
+  const group = key === '__all__'
+    ? { key, name: '全部影片', count: result?.all?.count || 0, covers: result?.all?.covers || [], template: 'tilted' }
+    : result?.groups.find((item) => item.key === key);
+  if (!group) return;
+  state.overviewGroup = { ...group, by: result.by };
+  state.overviewPage = 1;
+  state.overviewQuery = '';
+  state.overviewSelectionMode = false;
+  state.selectedOverviewTasks.clear();
+  state.tasks = [];
+  state.taskTotal = 0;
+  state.tasksSignature = '';
+  renderOverview();
+  $('[data-panel="overview"]')?.scrollIntoView({ block: 'start' });
+  loadTasks();
+}
+
+function closeOverviewGroup(type = state.overviewGroupBy) {
+  if (type !== state.overviewGroupBy) {
+    state.overviewGroupBy = type;
+    state.overviewGroupPage = 1;
+    state.overviewGroupQuery = '';
+    state.overviewGroups = null;
+    localStorage.setItem('javsp-web.overview-group-by', type);
+  }
+  state.overviewGroup = null;
+  state.overviewSelectionMode = false;
+  state.selectedOverviewTasks.clear();
+  state.tasksSignature = '';
+  renderOverview();
+  loadTasks();
 }
 
 function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const images = task.progress?.images || {};
   const coverReady = Number(task.cover_count) > 0;
-  const total = Number(images.fanart_total) || Number(task.fanart_count) || 0;
-  const fanart = Math.min(Number(task.fanart_count) || 0, total || Number(task.fanart_count) || 0);
   const metadata = task.progress?.metadata || {};
   const identifier = metadata.dvdid || task.file_name || task.name || '';
   const actress = Array.isArray(metadata.actress) ? metadata.actress.join(' / ') : (metadata.actress || '');
@@ -2106,7 +2259,34 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const selected = taskIds.every((id) => state.selectedOverviewTasks.has(id));
   const selector = state.overviewSelectionMode ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
   const feedback = taskIds.some((id) => state.overviewSelectionFeedback.has(id));
-  return `<article class="overview-cover-card${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<button class="overview-cover" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="library-artwork">${artwork}<span class="library-open-hint" aria-hidden="true">查看影片 ↗</span>${metadata.publish_date ? `<span class="library-year">${escapeHtml(String(metadata.publish_date).slice(0,4))}</span>` : ''}${taskCount > 1 ? `<small class="library-record-count">${taskCount} 条记录</small>` : ''}</span><span class="library-id">${escapeHtml(identifier)}</span><span class="library-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small class="library-caption">${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
+  const year = String(metadata.publish_date || '').slice(0, 4);
+  const badges = `${/^\d{4}$/.test(year) ? `<span class="lc-chip">${escapeHtml(year)}</span>` : ''}${taskCount > 1 ? `<span class="lc-chip">${taskCount} 条记录</span>` : ''}${task.status === 'failed' ? '<span class="lc-chip lc-chip-danger">未完成</span>' : ''}`;
+  return `<article class="lc-film${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<div class="lc-film-art"><button class="lc-film-cover" type="button" data-task-detail="${escapeHtml(task.id)}" aria-label="${escapeHtml(`查看 ${identifier} 详情`)}">${artwork}<span class="lc-film-badges">${badges}</span></button>${state.overviewSelectionMode ? '' : playButton(task.id)}</div><button class="lc-film-caption" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="lc-film-id">${escapeHtml(identifier)}</span><span class="lc-film-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small>${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
+}
+
+function playButton(taskId) {
+  return `<button type="button" class="library-play" data-play-task="${escapeHtml(taskId)}" title="在媒体库播放" aria-label="在媒体库播放"><img src="/assets/play.svg" alt="" aria-hidden="true"></button>`;
+}
+
+async function playTask(button) {
+  const player = window.open('about:blank', '_blank');
+  if (player) player.opener = null;
+  button.disabled = true;
+  try {
+    const result = await api(`/api/tasks/${encodeURIComponent(button.dataset.playTask)}/playback`, { timeoutMs: 90000 });
+    const links = result.links.filter(link => /^https?:\/\//i.test(link.url));
+    if (!links.length) throw new Error('未找到外部播放地址');
+    if (links.length === 1 && player) { player.location.replace(links[0].url); return; }
+    player?.close();
+    let dialog = $('#playback-dialog');
+    if (!dialog) {
+      document.body.insertAdjacentHTML('beforeend', '<dialog id="playback-dialog" class="app-dialog"><div class="panel-heading"><h2>选择媒体库</h2><button type="button" class="icon-button" data-dialog-close aria-label="关闭">×</button></div><div class="playback-options"></div></dialog>');
+      dialog = $('#playback-dialog');
+    }
+    dialog.querySelector('.playback-options').innerHTML = links.map(link => `<a class="button primary" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>`).join('');
+    dialog.showModal();
+  } catch (error) { player?.close(); showToast(error.message, 'error'); }
+  finally { button.disabled = false; }
 }
 
 function artworkPlaceholder(className, label) {
@@ -2965,6 +3145,8 @@ document.addEventListener('click', async (event) => {
     toggle.setAttribute('aria-expanded', String(!expanded));
     toggle.title = expanded ? '展开任务' : '收起任务';
   }
+  const play = event.target.closest('[data-play-task]');
+  if (play) { event.preventDefault(); playTask(play); return; }
   const overviewSelect = event.target.closest('[data-overview-select-ids]');
   if (overviewSelect) {
     toggleOverviewSelection(overviewTaskIds(overviewSelect.dataset.overviewSelectIds));
@@ -2989,6 +3171,20 @@ document.addEventListener('click', async (event) => {
       state.overviewSelectionFeedback.add(id);
     });
     renderOverview();
+    return;
+  }
+  const dynamicGo = event.target.closest('#overview-tasks [data-go]');
+  if (dynamicGo) { showView(dynamicGo.dataset.go); return; }
+  const openGroup = event.target.closest('[data-overview-open-group]');
+  if (openGroup) { openOverviewGroup(openGroup.dataset.overviewOpenGroup); return; }
+  const groupType = event.target.closest('[data-overview-group-by]');
+  if (groupType) { closeOverviewGroup(groupType.dataset.overviewGroupBy); return; }
+  if (event.target.closest('[data-overview-back]')) { closeOverviewGroup(); return; }
+  const groupPage = event.target.closest('[data-overview-group-page]');
+  if (groupPage && !groupPage.disabled) {
+    state.overviewGroupPage = Math.max(1, Number(groupPage.dataset.overviewGroupPage) || 1);
+    state.tasksSignature = '';
+    loadTasks();
     return;
   }
   const detail = event.target.closest('[data-task-detail]');

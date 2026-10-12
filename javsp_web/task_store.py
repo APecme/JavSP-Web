@@ -212,10 +212,117 @@ def run_counts(runs):
     return result
 
 
+# One representative record per film folder; shared by the overview wall and its groups.
+_ELIGIBLE = """WITH eligible AS (SELECT id,created_at,summary,status,group_key, json_group_array(id) OVER (PARTITION BY group_key) AS task_ids, row_number() OVER (
+    PARTITION BY group_key ORDER BY (status='succeeded') DESC,created_at DESC,id) AS rank
+    FROM tasks WHERE status IN ('succeeded','failed','cancelled') AND
+    (json_extract(summary,'$.cover_count')>0 OR json_extract(summary,'$.fanart_count')>0 OR json_extract(summary,'$.has_artwork_sources')=1)) """
+_YEAR_SQL = ("CASE WHEN substr(trim(coalesce(json_extract(summary,'$.progress.metadata.publish_date'),'')),1,4) GLOB '[0-9][0-9][0-9][0-9]' "
+             "THEN substr(trim(coalesce(json_extract(summary,'$.progress.metadata.publish_date'),'')),1,4) ELSE '' END")
+_SAVE_DIR_SQL = "rtrim(casefold(replace(coalesce(json_extract(summary,'$.progress.output.save_dir'),''),'\\','/')),'/') || '/'"
+GROUP_FIELDS = ('library', 'actress', 'producer', 'year')
+_UNKNOWN_GROUP = {'actress': '未知女优', 'producer': '未知片商', 'year': '未知年份'}
+
+
+def normalize_path(value) -> str:
+    return str(value or '').replace('\\', '/').rstrip('/').casefold()
+
+
+def _metrics(db):
+    metrics = dict(db.execute("SELECT count(*) AS total, coalesce(sum(status IN ('queued','running')),0) AS running FROM tasks").fetchone())
+    latest = db.execute('SELECT status FROM tasks ORDER BY created_at DESC,id LIMIT 1').fetchone()
+    metrics['latest_status'] = latest[0] if latest else ''
+    return metrics
+
+
+def _group_condition(group_by, group, roots):
+    """SQL condition (on a summary column) that keeps one overview group."""
+    group = str(group or '').strip()
+    if group_by == 'actress':
+        if not group:
+            return "NOT EXISTS (SELECT 1 FROM json_each(summary,'$.progress.metadata.actress') WHERE trim(value)<>'')", []
+        return "EXISTS (SELECT 1 FROM json_each(summary,'$.progress.metadata.actress') WHERE trim(value)=?)", [group]
+    if group_by == 'producer':
+        return "trim(coalesce(json_extract(summary,'$.progress.metadata.producer'),''))=?", [group]
+    if group_by == 'year':
+        return _YEAR_SQL + '=?', [group]
+    if group_by == 'library':
+        prefixes = [normalize_path(root) + '/' for root in roots or [] if normalize_path(root)]
+        if not prefixes:
+            return '0', []
+        return '(' + ' OR '.join(f'instr({_SAVE_DIR_SQL},?)=1' for _ in prefixes) + ')', prefixes
+    return '', []
+
+
+def _group_values(summary, group_by, libraries):
+    metadata = (summary.get('progress') or {}).get('metadata') or {}
+    if group_by == 'actress':
+        value = metadata.get('actress')
+        names = [str(item).strip() for item in (value if isinstance(value, list) else [value]) if str(item or '').strip()]
+        return list(dict.fromkeys(names)) or ['']
+    if group_by == 'producer':
+        return [str(metadata.get('producer') or '').strip()]
+    if group_by == 'year':
+        year = str(metadata.get('publish_date') or '').strip()[:4]
+        return [year if len(year) == 4 and year.isdigit() else '']
+    if group_by == 'library':
+        folder = normalize_path(((summary.get('progress') or {}).get('output') or {}).get('save_dir')) + '/'
+        return [library['key'] for library in libraries or []
+                if any(folder.startswith(normalize_path(root) + '/') for root in library.get('roots') or [] if normalize_path(root))]
+    return []
+
+
+def _cover_ref(summary):
+    return {'id': summary.get('id'), 'v': str(summary.get('updated_at') or summary.get('finished_at') or '')}
+
+
+def overview_groups(group_by='actress', offset=0, limit=24, query='', libraries=None):
+    """Aggregate film representatives into cover groups, newest covers first."""
+    names = {library['key']: library['name'] for library in libraries or []}
+    groups, everything = {}, {'count': 0, 'covers': []}
+    with connection() as db:
+        db.execute('BEGIN')
+        metrics = _metrics(db)
+        rows = db.execute(_ELIGIBLE + 'SELECT summary FROM eligible WHERE rank=1 ORDER BY created_at DESC,id').fetchall()
+    for row in rows:
+        summary = json.loads(row[0])
+        has_cover = int(summary.get('cover_count') or 0) > 0
+        everything['count'] += 1
+        if has_cover and len(everything['covers']) < 9:
+            everything['covers'].append(_cover_ref(summary))
+        for key in _group_values(summary, group_by, libraries):
+            entry = groups.setdefault(key, {'key': key, 'name': names.get(key) or key or _UNKNOWN_GROUP.get(group_by, '未分类'), 'count': 0, 'covers': []})
+            entry['count'] += 1
+            if has_cover and len(entry['covers']) < 9:
+                entry['covers'].append(_cover_ref(summary))
+    items = list(groups.values())
+    if group_by == 'library':
+        known = {key for key in names}
+        items += [{'key': key, 'name': name, 'count': 0, 'covers': []} for key, name in names.items() if key not in groups]
+        order = list(names)
+        items.sort(key=lambda item: order.index(item['key']) if item['key'] in known else len(order))
+    elif group_by == 'year':
+        items.sort(key=lambda item: item['key'] or '0000', reverse=True)
+    else:
+        items.sort(key=lambda item: (not item['key'], -item['count'], item['name'].casefold()))
+    if query:
+        needle = str(query).casefold()
+        items = [item for item in items if needle in item['name'].casefold()]
+    total = len(items)
+    offset = min(max(0, offset), max(0, ((total - 1) // limit) * limit)) if total else 0
+    return {'by': group_by, 'groups': items[offset:offset + limit], 'total': total, 'offset': offset, 'limit': limit,
+            'all': everything, 'metrics': metrics}
+
+
 def page(limit=50, offset=0, view='all', query='', field='all', status='', size_min=None,
-         size_max=None, date_from='', date_to='', sort='created_at', direction='desc'):
+         size_max=None, date_from='', date_to='', sort='created_at', direction='desc',
+         group_by='', group='', group_roots=None):
     # All SQL fragments come from this fixed vocabulary; user values are bound.
     conditions, params = [], []
+    if view == 'overview' and group_by in GROUP_FIELDS:
+        condition, values = _group_condition(group_by, group, group_roots)
+        conditions.append(condition)
+        params.extend(values)
     if view == 'manual':
         conditions.append("(coalesce(json_extract(summary,'$.source'),'manual')='manual' OR json_extract(summary,'$.image_retry_started_at') IS NOT NULL)")
     if status:
@@ -238,14 +345,9 @@ def page(limit=50, offset=0, view='all', query='', field='all', status='', size_
     where = ' WHERE ' + ' AND '.join(conditions) if conditions else ''
     with connection() as db:
         db.execute('BEGIN')
-        metrics = dict(db.execute("SELECT count(*) AS total, coalesce(sum(status IN ('queued','running')),0) AS running FROM tasks").fetchone())
-        latest = db.execute('SELECT status FROM tasks ORDER BY created_at DESC,id LIMIT 1').fetchone()
-        metrics['latest_status'] = latest[0] if latest else ''
+        metrics = _metrics(db)
         if view == 'overview':
-            cte = """WITH eligible AS (SELECT id,created_at,summary,status,group_key, json_group_array(id) OVER (PARTITION BY group_key) AS task_ids, row_number() OVER (
-                PARTITION BY group_key ORDER BY (status='succeeded') DESC,created_at DESC,id) AS rank
-                FROM tasks WHERE status IN ('succeeded','failed','cancelled') AND
-                (json_extract(summary,'$.cover_count')>0 OR json_extract(summary,'$.fanart_count')>0 OR json_extract(summary,'$.has_artwork_sources')=1)) """
+            cte = _ELIGIBLE
             # Filter the displayed representative after grouping so searches and
             # pagination keep the complete set of task IDs for each film.
             library_where = ' WHERE rank=1' + (' AND ' + ' AND '.join(conditions) if conditions else '')

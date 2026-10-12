@@ -1,0 +1,24 @@
+TEST: test_ai_translation_client.cjs
+AI translation client checks passed: exclusive translation mode, disabled engine fields, explicit recovery, preset round trip and shared AI settings.
+TEST: test_web_client.cjs
+Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.
+TEST: test_scan_client.cjs
+Scan client checks passed: directory, single batch, edited paths, duplicate clicks, retry, native multiselect and progress rendering.
+TEST: test_mount_batch_client.cjs
+PR #14 helper checks passed: batch manifests, queue locking, cancellation, legacy server rejection, targeted cleanup, pagination and aliases.
+TEST: test_demo.cjs
+✔ demo uses the current application assets and all documentation links resolve (88.6209ms)
+✔ task pagination, filtering and cancellation survive pending timers (39.5229ms)
+✔ old chapter bookmarks redirect to the matching topic page (14.6639ms)
+✔ AI conversation lifecycle and unsupported actions (4.2827ms)
+✔ settings and skills can be explored without storing credentials (7.1903ms)
+✔ AI translation follows the shared AI switch and preserves preset translation settings (3.8985ms)
+✔ preset forms, schedules, path mappings and demo exit (2.8815ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 172.7065

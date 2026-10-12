@@ -465,6 +465,8 @@ def _capture_task_artwork_event(task: dict, line: str) -> bool:
             "original_files": [str(path) for path in event.get("original_files") or [] if path],
             "organized_files": [str(path) for path in event.get("organized_files") or [] if path],
             "generated_files": [str(path) for path in event.get("generated_files") or [] if path],
+            "preexisting_output": bool(event.get("preexisting_output")),
+            "replaced_existing": bool(event.get("replaced_existing")),
         }
         return True
     return False
@@ -480,6 +482,8 @@ def _progress_event_message(event: dict) -> str | None:
             files = "、".join(event.get("files") or [])
             return f"开始刮削 {event.get('index', 0)}/{event.get('total', 0)}: {files}".rstrip(": ")
         if status == "completed":
+            if event.get("retained_existing"):
+                return "保留已有影片及资料，本次整理已跳过，源影片未移动"
             title = event.get("title") or ""
             return f"影片刮削完成{': ' + title if title else ''}"
         if status == "failed":
@@ -645,7 +649,9 @@ def _decorate_task(item: dict) -> dict:
     item["fanart_count"] = int(image_progress.get("images", {}).get("fanart_done") or 0)
     item.update(_artwork_availability(item, output))
     organizer = item.get("file_organizer") if isinstance(item.get("file_organizer"), dict) else {}
-    item["restore_available"] = bool(organizer.get("original_files") and organizer.get("organized_files"))
+    item["restore_available"] = bool(organizer.get("original_files") and organizer.get("organized_files")
+                                     and not organizer.get("preexisting_output") and not organizer.get("replaced_existing")
+                                     and organizer.get("original_files") != organizer.get("organized_files"))
     return item
 
 
@@ -699,7 +705,8 @@ def _stored_task_summary(item: dict) -> dict:
         "cover_count": cover_count,
         "fanart_count": int(item.get("fanart_count") or 0),
         "image_retry_available": False,
-        "restore_available": bool((item.get("file_organizer") or {}).get("original_files") and (item.get("file_organizer") or {}).get("organized_files")),
+        "restore_available": bool((item.get("file_organizer") or {}).get("original_files") and (item.get("file_organizer") or {}).get("organized_files")
+                                  and not (item.get("file_organizer") or {}).get("preexisting_output") and not (item.get("file_organizer") or {}).get("replaced_existing")),
         "has_artwork_sources": bool(cover_count or item.get("fanart_count") or image_sources.get("cover_urls") or image_sources.get("preview_pics")),
         "progress": {
             "stages": {
@@ -829,9 +836,13 @@ def update_task_metadata(task_id: str, values: dict[str, object], apply_to_folde
 
 def _restore_plan(task: dict) -> dict | None:
     organizer = task.get("file_organizer") if isinstance(task.get("file_organizer"), dict) else {}
+    if organizer.get("preexisting_output") or organizer.get("replaced_existing"):
+        return None
     original_files = [Path(path) for path in organizer.get("original_files") or []]
     organized_files = [Path(path) for path in organizer.get("organized_files") or []]
     generated_files = [Path(path) for path in organizer.get("generated_files") or []]
+    if original_files == organized_files:
+        return None
     if not original_files or len(original_files) != len(organized_files) or any(not path.is_file() for path in organized_files):
         return None
     if all(not path.exists() for path in original_files):

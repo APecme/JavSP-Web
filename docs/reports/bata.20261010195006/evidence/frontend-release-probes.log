@@ -1,0 +1,4 @@
+CONFIRMED interrupted download survives healthy restart: status= downloading ; reapply= ���и�������ִ��
+CONFIRMED new base image bata.20261010195006 launches persisted old app bata.20260924044117
+CONFIRMED unlabeled build: expected= '' healthy API version= 1.1.38 ; rejected after 45 polls
+CONFIRMED updater worker exits with code 75 without rechecking newly active tasks; ensure_not_updating has zero repository callers

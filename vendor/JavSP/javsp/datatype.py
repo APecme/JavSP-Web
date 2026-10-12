@@ -168,13 +168,71 @@ class Movie:
             expression = f"('{self.dvdid}')"
         return __class__.__name__ + expression
 
-    def rename_files(self, use_hardlink: bool = False) -> None:
+    def organization_paths(self) -> list[str]:
+        numbers = self.part_numbers or (list(range(1, len(self.files) + 1)) if len(self.files) > 1 else [None])
+        return [os.path.join(self.save_dir, self.basename + (f'-CD{number}' if number is not None else '') + os.path.splitext(path)[1])
+                for number, path in zip(numbers, self.files)]
+
+    def organization_conflicts(self, destination: str) -> list[str]:
+        extensions = {'.3gp', '.avi', '.f4v', '.flv', '.iso', '.m2ts', '.m4v', '.mkv', '.mov', '.mp4',
+                      '.mpeg', '.rm', '.rmvb', '.ts', '.vob', '.webm', '.wmv', '.strm', '.mpg'}
+        stem = os.path.splitext(os.path.basename(destination))[0].casefold()
+        matches = [destination] if os.path.lexists(destination) else []
+        if os.path.isdir(self.save_dir):
+            for name in os.listdir(self.save_dir):
+                name_stem, ext = os.path.splitext(name)
+                path = os.path.join(self.save_dir, name)
+                if name_stem.casefold() == stem and ext.casefold() in extensions and path not in matches:
+                    matches.append(path)
+        return matches
+
+    def prepare_organization(self, policy: str = 'never', include_assets: bool = True) -> bool:
+        if policy not in ('never', 'always', 'larger', 'newer'):
+            raise ValueError('Invalid existing file policy')
+        destinations = self.organization_paths()
+        self.organization_replaced = False
+        if include_assets or not hasattr(self, 'organization_preexisting'):
+            self.organization_preexisting = os.path.isdir(self.save_dir) and bool(os.listdir(self.save_dir))
+        for src, dst in zip(self.files, destinations):
+            for existing_path in self.organization_conflicts(dst):
+                if not os.path.isfile(existing_path) or os.path.islink(existing_path):
+                    raise FileExistsError(f'File exists: {os.path.abspath(existing_path)}')
+                if os.path.samefile(src, existing_path):
+                    continue
+                incoming, existing = os.stat(src), os.stat(existing_path)
+                replace = (policy == 'always' or (policy == 'larger' and incoming.st_size > existing.st_size)
+                           or (policy == 'newer' and incoming.st_mtime_ns > existing.st_mtime_ns))
+                if not replace:
+                    self.new_paths = destinations
+                    logger.info(f'保留已有影片，跳过本次整理（{policy}）: {existing_path}')
+                    return False
+                self.organization_replaced = True
+        if include_assets and policy == 'never':
+            assets = [path for path in (self.nfo_file, self.fanart_file, self.poster_file) if path]
+            image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.avif'}
+            for artwork in (self.fanart_file, self.poster_file):
+                if artwork and os.path.isdir(os.path.dirname(artwork)):
+                    stem = os.path.splitext(os.path.basename(artwork))[0].casefold()
+                    assets.extend(os.path.join(os.path.dirname(artwork), name) for name in os.listdir(os.path.dirname(artwork))
+                                  if os.path.splitext(name)[0].casefold() == stem and os.path.splitext(name)[1].casefold() in image_extensions)
+            stills = os.path.join(self.save_dir, 'extrafanart')
+            if os.path.isdir(stills):
+                assets.extend(os.path.join(stills, name) for name in os.listdir(stills)
+                              if os.path.splitext(name)[1].casefold() in image_extensions)
+            if any(os.path.lexists(path) for path in assets):
+                self.new_paths = destinations
+                logger.info('保留已有资料与图片，跳过本次整理（never）')
+                return False
+        return True
+
+    def rename_files(self, use_hardlink: bool = False, policy: str = 'never') -> None:
         """根据命名规则移动（重命名）影片文件"""
         def move_file(src:str, dst:str):
             """移动（重命名）文件并记录信息到日志"""
             abs_dst = os.path.abspath(dst)
-            # shutil.move might overwrite dst file
-            if os.path.exists(abs_dst):
+            if os.path.exists(abs_dst) and os.path.samefile(src, abs_dst):
+                return
+            if os.path.lexists(abs_dst):
                 raise FileExistsError(f'File exists: {abs_dst}')
             if (use_hardlink):
                 os.link(src, abs_dst)
@@ -186,21 +244,39 @@ class Movie:
             # 目前StreamHandler并未设置filter，为了避免显示中出现重复的日志，这里暂时只能用debug级别
             filemove_logger.debug(f'移动（重命名）文件: \n  原路径: "{src}"\n  新路径: "{abs_dst}"')
 
-        new_paths = []
+        new_paths = self.organization_paths()
         dir = os.path.dirname(self.files[0])
-        numbers = self.part_numbers or (list(range(1, len(self.files) + 1)) if len(self.files) > 1 else [None])
-        for number, fullpath in zip(numbers, self.files):
-            ext = os.path.splitext(fullpath)[1]
-            suffix = f'-CD{number}' if number is not None else ''
-            new_paths.append(os.path.join(self.save_dir, self.basename + suffix + ext))
-        # Check every destination before moving the first part.
-        for newpath in new_paths:
-            if os.path.exists(newpath):
-                raise FileExistsError(f'File exists: {os.path.abspath(newpath)}')
-        for fullpath, newpath in zip(self.files, new_paths):
-            move_file(fullpath, newpath)
+        if not self.prepare_organization(policy, include_assets=False):
+            return
+        # Keep replaced videos until every part is successfully organized.
+        import tempfile
+        backups, moved = [], []
+        try:
+            for fullpath, newpath in zip(self.files, new_paths):
+                if os.path.exists(newpath) and os.path.samefile(fullpath, newpath):
+                    continue
+                for existing_path in self.organization_conflicts(newpath):
+                    if os.path.samefile(fullpath, existing_path):
+                        continue
+                    fd, backup = tempfile.mkstemp(prefix='.javsp-backup-', dir=self.save_dir)
+                    os.close(fd)
+                    os.replace(existing_path, backup)
+                    backups.append((backup, existing_path))
+                move_file(fullpath, newpath)
+                moved.append((fullpath, newpath))
+        except Exception:
+            for original, organized in reversed(moved):
+                if use_hardlink:
+                    os.unlink(organized)
+                else:
+                    shutil.move(organized, original)
+            for backup, destination in reversed(backups):
+                os.replace(backup, destination)
+            raise
+        for backup, _ in backups:
+            os.unlink(backup)
         self.new_paths = new_paths
-        if len(os.listdir(dir)) == 0:
+        if os.path.isdir(dir) and len(os.listdir(dir)) == 0:
             #如果移动文件后目录为空则删除该目录
             os.rmdir(dir)
 

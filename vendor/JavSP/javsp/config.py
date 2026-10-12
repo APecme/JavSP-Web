@@ -238,6 +238,7 @@ class Summarizer(BaseConfig):
     censor_options_representation: list[str]
     title: TitleSummarize
     move_files: bool = True
+    existing_file_policy: Literal['never', 'always', 'larger', 'newer'] = 'never'
     path: PathSummarize
     nfo: NFOSummarize
     cover: CoverSummarize

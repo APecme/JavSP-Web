@@ -1,0 +1,17 @@
+{
+  "dns_calls": [
+    {
+      "hostname": "audit-rebind.invalid",
+      "port": null
+    },
+    {
+      "hostname": "audit-rebind.invalid",
+      "port": 80
+    }
+  ],
+  "local_service_requests": [
+    "/synthetic-private-service"
+  ],
+  "private_response_returned": "SYNTHETIC_LOCAL_ONLY_SERVICE_RESPONSE",
+  "note": "DNS resolver simulated public IP at validation and loopback at real HTTP connection; requests transport is real and proxy env disabled only for deterministic local test."
+}

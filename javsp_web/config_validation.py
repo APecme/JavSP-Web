@@ -19,7 +19,7 @@ _FIELD_LABELS = {
     "ai_enabled": "启用 AI", "ai_fallback_only": "仅刮削失败时使用 AI", "selection": "爬虫列表", "required_keys": "抓取成功必需字段",
     "hardworking": "深度抓取", "respect_site_avid": "使用网站返回的番号", "fc2fan_local_path": "FC2Fan 本地目录",
     "sleep_after_scraping": "每部影片刮削后等待时间", "use_javdb_cover": "JavDB 封面策略", "normalize_actress_name": "统一演员艺名",
-    "move_files": "移动文件到整理目录", "path": "文件路径", "output_folder_pattern": "整理输出目录模板", "basename_pattern": "文件名模板",
+    "move_files": "移动文件到整理目录", "existing_file_policy": "已有影片覆盖方式", "path": "文件路径", "output_folder_pattern": "整理输出目录模板", "basename_pattern": "文件名模板",
     "length_maximum": "最大文件路径长度", "length_by_byte": "按字节计算长度", "max_actress_count": "最多包含的演员人数", "hard_link": "使用硬链接",
     "title": "标题", "remove_trailing_actor_name": "移除标题末尾演员名", "default": "缺失信息替代文本", "actress": "演员",
     "series": "系列", "director": "导演", "producer": "制作商", "publisher": "发行商", "nfo": "NFO 文件",

@@ -5,7 +5,7 @@ import re
 import threading
 import time
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -132,13 +132,13 @@ def list_models(config):
     if config["provider"] not in ("ollama", "compatible") and not config.get("api_key"):
         raise AIError("请先填写 API 密钥")
     base = config["base_url"].rstrip("/")
-    for suffix in ("/chat/completions", "/messages", "/models"):
+    for suffix in ("/chat/completions", "/responses", "/messages", "/models"):
         if base.endswith(suffix):
             base = base[:-len(suffix)]
             break
     native_ollama = config["provider"] == "ollama" and not base.endswith("/v1")
     endpoint = (base.removesuffix("/api") + "/api/tags") if native_ollama else base + "/models"
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", "User-Agent": "JavSP-Web/1.0 (OpenAI-compatible client)"}
     anthropic = config["provider"] == "anthropic"
     if anthropic:
         headers.update({"x-api-key": config.get("api_key", ""), "anthropic-version": "2023-06-01"})
@@ -146,11 +146,32 @@ def list_models(config):
         headers["Authorization"] = "Bearer " + config["api_key"]
     names, params = set(), {}
     deadline = time.monotonic() + config.get("timeout", 60)
+    redirects = retries = 0
     try:
         for _ in range(20):
             chunks, size = [], 0
             with requests.get(endpoint, headers=headers, params=params, timeout=(10, config.get("timeout", 60)),
                               allow_redirects=False, stream=True) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("Location")
+                    target = urljoin(endpoint, location) if isinstance(location, str) else ""
+                    original, redirected = urlsplit(endpoint), urlsplit(target)
+                    if (redirects >= 3 or not target or redirected.scheme != original.scheme
+                            or redirected.netloc != original.netloc or redirected.username or redirected.password):
+                        raise AIError("模型列表地址重定向到其他服务，请填写最终 API 地址后重试")
+                    endpoint = target
+                    redirects += 1
+                    continue
+                if response.status_code == 429 and retries < 2:
+                    retry_after = response.headers.get("Retry-After", "1")
+                    try:
+                        delay = max(1, float(retry_after))
+                    except (TypeError, ValueError):
+                        delay = 1
+                    if delay <= 5 and time.monotonic() + delay < deadline:
+                        retries += 1
+                        time.sleep(delay)
+                        continue
                 if response.status_code != 200:
                     reason = {401: "API 密钥无效", 403: "没有访问权限", 404: "服务未提供模型列表，请手动填写模型名称",
                               429: "请求过于频繁，请稍后再试"}.get(response.status_code, "请检查服务地址或手动填写模型名称")
@@ -161,14 +182,16 @@ def list_models(config):
                         raise AIError("模型列表过大或请求超时，请手动填写模型名称")
                     chunks.append(chunk)
             data = json.loads(b"".join(chunks))
-            entries = data.get("models" if native_ollama else "data")
+            entries = data if isinstance(data, list) else data.get("models" if native_ollama else "data", data.get("models"))
+            if isinstance(entries, dict):
+                entries = entries.get("data", entries.get("models"))
             if not isinstance(entries, list):
                 raise AIError("服务未返回有效的模型列表，请手动填写模型名称")
             for entry in entries:
-                name = entry.get("name" if native_ollama else "id") if isinstance(entry, dict) else None
+                name = entry.get("name" if native_ollama else "id", entry.get("name")) if isinstance(entry, dict) else entry
                 if isinstance(name, str) and name.strip() and len(name) <= 200:
                     names.add(name.strip())
-            if not anthropic or not data.get("has_more"):
+            if not anthropic or not isinstance(data, dict) or not data.get("has_more"):
                 if not names:
                     raise AIError("没有找到可用模型，请检查密钥权限或手动填写模型名称")
                 return sorted(names, key=str.casefold)

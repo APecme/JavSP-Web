@@ -29,7 +29,7 @@
           <tr><td>Anthropic</td><td><code>https://api.anthropic.com/v1</code></td><td>选择“Anthropic”，填写服务商提供的模型名称和密钥。</td></tr>
         </tbody></table></div>
         <p>模型请求超时默认 60 秒，可设 10～120 秒。容器中的 <code>127.0.0.1</code> 指向容器自身，外部模型服务需填写容器能访问的地址。</p>
-        <p>填写 API 地址和密钥后，点击“获取模型列表”，即可在“模型名称”中选择或输入模型 ID，无需先保存配置。支持 OpenAI 兼容服务、DeepSeek、Ollama 和 Anthropic；服务未提供模型列表时，可手动填写。列表中出现的模型不一定支持工具调用，选好后仍需测试连接。</p>
+        <p>填写 API 地址和密钥后，点击“获取模型列表”，即可在“模型名称”中选择或输入模型 ID，无需先保存配置。支持 OpenAI 兼容服务、DeepSeek、Ollama 和 Anthropic；兼容网关的数组、嵌套列表与名称字段。遇到 HTTP 429 时最多自动重试两次；持续限流时仍需等待服务端恢复。列表中出现的模型不一定支持工具调用，选好后仍需测试连接。服务未提供列表时可手动填写模型名称。</p>
         <figure class="doc-figure"><a href="assets/guide/ai-settings.webp" target="_blank"><img src="assets/guide/ai-settings.webp" width="1265" height="1260" loading="lazy" alt="AI 接入设置：启用 AI 刮削，填写模型服务商、API 地址、模型名称与密钥"></a><figcaption>填写模型连接信息，打开“启用 AI 刮削”并保存。图中地址仅为示例。</figcaption></figure>
         <h3>开始对话</h3><p>进入“AI 刮削”，点击“新建对话”，输入你要处理的问题。例如：</p><pre class="doc-example"><code>查看最近失败的刮削任务，简要说明原因，并告诉我先处理哪一项。</code></pre><p>回复中的“工具记录”可以查看 AI 查询过的任务和资料。需要继续追问时，在同一会话发送消息；换一个问题时可以新建对话。左侧历史列表可搜索、重命名和删除会话，手机端点击会话列表按钮打开。</p><p>点击“停止生成”可结束当前回复。已经确认执行的操作仍会生效，删除会话也不会删除刮削任务。</p>
         <figure class="doc-figure"><a href="assets/guide/ai-chat.webp" target="_blank"><img src="assets/guide/ai-chat.webp" width="1440" height="1050" loading="lazy" alt="AI 会话列表、回复、思考区域和消息输入框"></a><figcaption>在输入框描述问题，收到回复后可继续追问（演示数据）。</figcaption></figure>

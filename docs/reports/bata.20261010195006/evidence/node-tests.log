@@ -1,0 +1,4 @@
+v24.13.0
+PR #14 helper checks passed: batch manifests, queue locking, cancellation, legacy server rejection, targeted cleanup, pagination and aliases.
+Scan client checks passed: directory, single batch, edited paths, duplicate clicks, retry, native multiselect and progress rendering.
+Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.

@@ -109,6 +109,8 @@ crawler:
 # path_pattern, nfo_title_pattern和name_pattern中可以使用变量来引用影片的数据，支持的变量列表见下面的地址:
 # https://github.com/Yuukiy/JavSP/wiki/NamingRule-%7C-%E5%91%BD%E5%90%8D%E8%A7%84%E5%88%99
 summarizer:
+  # Existing movies: never, always, larger (size), newer (modification time).
+  existing_file_policy: never
   # 整理时是否移动文件: true-移动所有文件到新文件夹; false-数据保存到同级文件夹，不移动文件
   move_files: true
 

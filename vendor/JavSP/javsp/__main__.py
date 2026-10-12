@@ -582,6 +582,12 @@ def RunNormalMode(all_movies):
 
             generate_names(movie)
             check_step(movie.save_dir, '无法按命名规则生成目标文件夹')
+            policy = Cfg().summarizer.existing_file_policy
+            if Cfg().summarizer.move_files and not movie.prepare_organization(policy):
+                progress_event('output', save_dir=os.path.abspath(movie.save_dir), fanart_file=os.path.abspath(movie.fanart_file), poster_file=os.path.abspath(movie.poster_file))
+                return_movies.append(movie)
+                progress_event('movie', status='completed', index=movie_index, total=len(all_movies), title=movie.info.title, retained_existing=True)
+                continue
             if not os.path.exists(movie.save_dir):
                 os.makedirs(movie.save_dir)
             progress_event('output', save_dir=os.path.abspath(movie.save_dir), fanart_file=os.path.abspath(movie.fanart_file), poster_file=os.path.abspath(movie.poster_file))
@@ -662,9 +668,9 @@ def RunNormalMode(all_movies):
             check_step(True)
             if Cfg().summarizer.move_files:
                 inner_bar.set_description('移动影片文件')
-                movie.rename_files(Cfg().summarizer.path.hard_link)
+                movie.rename_files(Cfg().summarizer.path.hard_link, policy)
                 check_step(True)
-                progress_event('file_organizer', original_files=list(movie.files), organized_files=list(getattr(movie, 'new_paths', []) or []), generated_files=[movie.nfo_file, movie.fanart_file, movie.poster_file])
+                progress_event('file_organizer', original_files=list(movie.files), organized_files=list(getattr(movie, 'new_paths', []) or []), generated_files=[movie.nfo_file, movie.fanart_file, movie.poster_file], preexisting_output=movie.organization_preexisting, replaced_existing=movie.organization_replaced)
                 logger.info(f'整理完成，相关文件已保存到: {movie.save_dir}\n')
             else:
                 logger.info(f'刮削完成，相关文件已保存到: {movie.nfo_file}\n')

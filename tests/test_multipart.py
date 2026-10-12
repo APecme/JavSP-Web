@@ -163,9 +163,92 @@ class MultipartTests(unittest.TestCase):
         output.mkdir()
         movie.save_dir, movie.basename = str(output), movie.dvdid
         (output / 'FC2-4953812-CD2.mp4').write_bytes(b'existing')
-        with self.assertRaises(FileExistsError):
-            movie.rename_files()
+        movie.rename_files()
         self.assertTrue(all(path.exists() for path in paths))
+        self.assertFalse((output / 'FC2-4953812-CD1.mp4').exists())
+        self.assertEqual((output / 'FC2-4953812-CD2.mp4').read_bytes(), b'existing')
+
+    def test_existing_movie_policies_and_equal_versions(self):
+        for policy, size, newer, replaced in [('never', 5, True, False), ('always', 40, False, True),
+                                              ('larger', 5, False, True), ('larger', 40, True, False),
+                                              ('larger', 20, True, False), ('newer', 40, True, True),
+                                              ('newer', 5, False, False)]:
+            with self.subTest(policy=policy, size=size, newer=newer):
+                source = self.files('incoming/ABC-123.mp4')[0]
+                movie = scan_movies(str(source))[0]
+                output = self.root / 'organized'
+                output.mkdir(exist_ok=True)
+                target = output / 'ABC-123.mp4'
+                target.write_bytes(b'o' * size)
+                os.utime(source, (200, 200))
+                os.utime(target, (100 if newer else 300, 100 if newer else 300))
+                movie.save_dir, movie.basename = str(output), 'ABC-123'
+                movie.rename_files(policy=policy)
+                self.assertEqual(target.read_bytes(), b'x' * 20 if replaced else b'o' * size)
+                self.assertEqual(source.exists(), not replaced)
+
+    def test_overwrite_failure_restores_all_parts_and_existing_videos(self):
+        paths = self.files('incoming/FC2-4953812-1.mp4', 'incoming/FC2-4953812-2.mp4')
+        movie = scan_movies(str(paths[0].parent))[0]
+        output = self.root / 'organized'
+        output.mkdir()
+        targets = [output / f'FC2-4953812-CD{number}.mp4' for number in (1, 2)]
+        for target in targets:
+            target.write_bytes(b'original')
+        movie.save_dir, movie.basename = str(output), movie.dvdid
+        import shutil
+        real_move = shutil.move
+        def move(src, dst):
+            if str(src) == str(paths[1]):
+                raise OSError('simulated failure')
+            return real_move(src, dst)
+        with patch('javsp.datatype.shutil.move', side_effect=move), self.assertRaises(OSError):
+            movie.rename_files(policy='always')
+        self.assertTrue(all(path.read_bytes() == b'x' * 20 for path in paths))
+        self.assertTrue(all(path.read_bytes() == b'original' for path in targets))
+        self.assertFalse(list(output.glob('.javsp-backup-*')))
+
+    def test_never_preserves_existing_artwork_before_downloads(self):
+        source = self.files('incoming/ABC-123.mp4')[0]
+        movie = scan_movies(str(source))[0]
+        output = self.root / 'organized'
+        output.mkdir()
+        poster = output / 'poster.jpg'
+        poster.write_bytes(b'original image')
+        movie.save_dir, movie.basename, movie.poster_file = str(output), 'ABC-123', str(poster)
+        self.assertFalse(movie.prepare_organization('never'))
+        self.assertEqual(poster.read_bytes(), b'original image')
+        self.assertTrue(source.exists())
+
+    def test_existing_version_with_different_extension_is_compared(self):
+        source = self.files('incoming/ABC-123.mp4')[0]
+        movie = scan_movies(str(source))[0]
+        output = self.root / 'organized'
+        output.mkdir()
+        old = output / 'ABC-123.mkv'
+        old.write_bytes(b'o' * 40)
+        movie.save_dir, movie.basename = str(output), 'ABC-123'
+        movie.rename_files(policy='larger')
+        self.assertTrue(source.exists())
+        self.assertFalse((output / 'ABC-123.mp4').exists())
+        movie.rename_files(policy='always')
+        self.assertFalse(old.exists())
+        self.assertEqual((output / 'ABC-123.mp4').read_bytes(), b'x' * 20)
+
+    def test_never_preserves_alternate_cover_formats_and_stills(self):
+        source = self.files('incoming/ABC-123.mp4')[0]
+        for asset in ('poster.png', 'extrafanart/0.png'):
+            with self.subTest(asset=asset):
+                movie = scan_movies(str(source))[0]
+                output = self.root / asset.replace('/', '-')
+                existing = output / asset
+                existing.parent.mkdir(parents=True)
+                existing.write_bytes(b'original image')
+                movie.save_dir, movie.basename = str(output), 'ABC-123'
+                movie.poster_file = str(output / 'poster.jpg')
+                self.assertFalse(movie.prepare_organization('never'))
+                self.assertEqual(existing.read_bytes(), b'original image')
+                self.assertTrue(source.exists())
 
     def test_existing_extrafanart_reaches_organization(self):
         paths = self.files('FC2-4953812-1.mp4', 'FC2-4953812-2.mp4')

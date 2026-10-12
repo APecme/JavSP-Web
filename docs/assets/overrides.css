@@ -745,3 +745,6 @@ html[data-privacy-mode="1"] .overview-cover:hover .library-artwork img,html[data
 #profile-form{min-width:0}.profile-comments{margin-top:24px}
 .user-avatar,.profile-avatar,.picker-avatar{object-position:center}
 @media(max-width:560px){.avatar-picker-actions{bottom:-16px}}
+
+/* Comment identity actions: keep [hidden] working. */
+.identity-actions:not([hidden]) { display: flex; flex-wrap: wrap; gap: 8px; }

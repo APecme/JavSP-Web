@@ -6,4 +6,6 @@ video
 dist
 build
 tmp
+comments-service
+debug.log
 *.spec

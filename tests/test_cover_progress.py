@@ -25,10 +25,12 @@ class CoverProgressTests(unittest.TestCase):
         movie = SimpleNamespace(files=[str(folder / 'TEST-001.mp4')], dvdid='TEST-001', cid=None,
                                 data_src='normal', info=info, save_dir=str(folder),
                                 fanart_file=str(folder / 'fanart.jpg'), poster_file=str(folder / 'poster.jpg'),
-                                nfo_file=str(folder / 'movie.nfo'), new_paths=[], rename_files=Mock())
+                                nfo_file=str(folder / 'movie.nfo'), new_paths=[], rename_files=Mock(),
+                                prepare_organization=Mock(return_value=True), organization_preexisting=False,
+                                organization_replaced=False)
         config = SimpleNamespace(translator=SimpleNamespace(engine=None),
                                  summarizer=SimpleNamespace(cover=SimpleNamespace(highres=False),
-                                     extra_fanarts=SimpleNamespace(enabled=False), move_files=move_files,
+                                     extra_fanarts=SimpleNamespace(enabled=False), move_files=move_files, existing_file_policy='never',
                                      path=SimpleNamespace(hard_link=False)),
                                  crawler=SimpleNamespace(selection={'normal': []}))
         events = []

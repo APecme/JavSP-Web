@@ -15,9 +15,15 @@ data/task-logs/
 data/ai-settings.json
 data/ai-skills.json
 data/ai-conversations/
+data/crawlers/
 data/RELEASE_NOTES_*.md
 data/*.tmp
 video/
 logo-preview.png
 exe-icon-preview.png
 !JavSPWeb.spec
+
+# Local audit work, database backups, and the independent comments repository
+/tmp/
+/debug.log
+/comments-service/

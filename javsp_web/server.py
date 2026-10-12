@@ -73,11 +73,11 @@ from .storage import (
     write_config,
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
-from .media import list_media_libraries, sync_media_server
+from .media import connection_error, list_media_libraries, overview_libraries, playback_links, sync_media_server
 from .tasks import NoScrapeTasksError, active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_task_summaries, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
 from .artwork import image_response
-from .task_store import run_counts, start_artwork_path_repair
+from .task_store import overview_groups as load_overview_groups, run_counts, start_artwork_path_repair
 from . import updater
 
 
@@ -1261,16 +1261,39 @@ def tasks(request: Request, limit: int | None = Query(default=None, ge=1, le=500
           field: Literal['all', 'path', 'title', 'dvdid', 'actress'] = 'all', status: str = '',
           size_min: float | None = Query(default=None, ge=0), size_max: float | None = Query(default=None, ge=0),
           date_from: str = '', date_to: str = '', sort: Literal['created_at', 'publish_date'] = 'created_at',
-          direction: Literal['asc', 'desc'] = 'desc', _: dict = Depends(current_user)) -> Response:
+          direction: Literal['asc', 'desc'] = 'desc', group_by: Literal['', 'library', 'actress', 'producer', 'year'] = '',
+          group: str = Query(default='', max_length=500), _: dict = Depends(current_user)) -> Response:
+    filters = {}
+    if view == 'overview' and group_by:
+        roots = []
+        if group_by == 'library':
+            roots = next((library['roots'] for library in overview_libraries() if library['key'] == group), [])
+        filters = {'group_by': group_by, 'group': group, 'group_roots': roots}
     result = list_task_summaries(limit, offset, view=view, query=query, field=field, status=status,
                                size_min=size_min, size_max=size_max, date_from=date_from,
-                               date_to=date_to, sort=sort, direction=direction)
+                               date_to=date_to, sort=sort, direction=direction, **filters)
+    return _etag_json(request, result)
+
+
+def _etag_json(request: Request, result: dict) -> Response:
     payload = json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     etag = 'W/"' + hashlib.sha256(payload).hexdigest() + '"'
     headers = {'ETag': etag, 'Cache-Control': 'private, no-cache'}
     if request.headers.get('if-none-match') == etag:
         return Response(status_code=304, headers=headers)
     return Response(payload, media_type='application/json', headers=headers)
+
+
+@app.get("/api/tasks/overview-groups")
+def task_overview_groups(request: Request, by: Literal['library', 'actress', 'producer', 'year'] = 'actress',
+                         offset: int = Query(default=0, ge=0), limit: int = Query(default=24, ge=1, le=120),
+                         query: str = Query(default='', max_length=200), _: dict = Depends(current_user)) -> Response:
+    libraries = overview_libraries()
+    if by == 'library' and not libraries:
+        by = 'actress'
+    result = load_overview_groups(by, offset, limit, query.strip(), libraries)
+    result['libraries_available'] = bool(libraries)
+    return _etag_json(request, result)
 
 
 @app.post("/api/tasks", status_code=202)
@@ -1289,6 +1312,20 @@ def task(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not item:
         raise HTTPException(status_code=404, detail="任务不存在")
     return item
+
+
+@app.get("/api/tasks/{task_id}/playback")
+def task_playback(task_id: str, _: dict = Depends(current_user)) -> dict:
+    item = get_task(task_id)
+    if not item:
+        raise HTTPException(404, "任务不存在")
+    try:
+        links = playback_links(item)
+    except Exception as exc:
+        raise HTTPException(400, "媒体库读取失败：" + connection_error(exc)) from exc
+    if not links:
+        raise HTTPException(404, "未在绑定媒体库中找到影片，请确认外部播放地址、媒体库路径及扫描状态")
+    return {"links": links}
 
 
 @app.patch("/api/tasks/{task_id}/metadata")
@@ -1348,7 +1385,7 @@ def _validate_media_server(server: dict, require_library: bool = True) -> None:
     try:
         libraries = list_media_libraries(server)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"媒体服务器连接失败: {exc}") from exc
+        raise HTTPException(status_code=400, detail="媒体服务器连接失败: " + connection_error(exc)) from exc
     available = {item["id"] for item in libraries}
     selected = set(server.get("libraries") or [])
     if require_library and available and not selected:
@@ -1412,7 +1449,7 @@ def sync_configured_media_server(server_id: str, _: dict = Depends(require_admin
     try:
         return sync_media_server(server)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"媒体库同步失败: {exc}") from exc
+        raise HTTPException(status_code=400, detail="媒体库同步失败: " + connection_error(exc)) from exc
 
 
 @app.post("/api/media-servers/libraries")
@@ -1425,7 +1462,7 @@ def probe_media_server_libraries(body: MediaServerBody, _: dict = Depends(requir
     try:
         return {"libraries": list_media_libraries(server)}
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"媒体服务器连接失败: {exc}") from exc
+        raise HTTPException(status_code=400, detail="媒体服务器连接失败: " + connection_error(exc)) from exc
 
 
 def _public_qbittorrent_settings(settings: dict) -> dict:
