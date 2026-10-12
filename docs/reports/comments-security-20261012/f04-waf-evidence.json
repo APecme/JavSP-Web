@@ -1,49 +1,8 @@
 {
-  "credential_type": "wrangler_oauth",
-  "scopes": [
-    "user:read",
-    "offline_access",
-    "k2.read",
-    "k2.write",
-    "account:read",
-    "workers:write",
-    "workers_kv:write",
-    "workers_routes:write",
-    "workers_scripts:write",
-    "workers_tail:read",
-    "d1:write",
-    "pages:write",
-    "zone:read",
-    "ssl_certs:write",
-    "ai:write",
-    "ai-search:write",
-    "ai-search:run",
-    "agent-memory:write",
-    "queues:write",
-    "pipelines:write",
-    "secrets_store:write",
-    "artifacts:write",
-    "flagship:write",
-    "containers:write",
-    "cloudchamber:write",
-    "connectivity:admin",
-    "email_routing:write",
-    "email_sending:write",
-    "browser:write",
-    "challenge-widgets.write"
-  ],
+  "credential_type": "api_token",
+  "scopes": [],
   "host": "comments.rtioo.com",
-  "applied": false,
-  "zone_id": "968cb0de5fe26e75e8337e7649c51d92",
-  "blocked": true,
-  "failed_operation": "GET /zones/968cb0de5fe26e75e8337e7649c51d92/rulesets",
-  "http_status": 403,
-  "errors": [
-    {
-      "code": 10000,
-      "message": "Authentication error"
-    }
-  ],
+  "applied": true,
   "desired_rule": {
     "action": "block",
     "expression": "(http.host eq \"comments.rtioo.com\")",
@@ -58,5 +17,10 @@
       "requests_per_period": 60,
       "mitigation_timeout": 10
     }
-  }
+  },
+  "zone_id": "968cb0de5fe26e75e8337e7649c51d92",
+  "existing_rate_rules": 0,
+  "verified": true,
+  "rule_id": "d0a5fccfbe4d46d2b27dd82e88ea43d3",
+  "ruleset_id": "c14243b5bb864fa3b43cab6de20f4d8a"
 }

@@ -1,0 +1,47 @@
+{
+  "checked_at": "2026-10-13T01:34:41.333142+08:00",
+  "url": "https://comments.rtioo.com/health",
+  "request_cap": 74,
+  "database_free": true,
+  "baseline": {
+    "status": 200,
+    "seconds": 0.595,
+    "colo": "NRT",
+    "cloudflare": true,
+    "worker_health": true
+  },
+  "verified": true,
+  "burst_requests": 70,
+  "burst_seconds": 1.483,
+  "status_counts": {
+    "200": 59,
+    "429": 11
+  },
+  "colos": [
+    "NRT"
+  ],
+  "edge_429_count": 11,
+  "recovery": [
+    {
+      "status": 200,
+      "seconds": 0.105,
+      "colo": "NRT",
+      "cloudflare": true,
+      "worker_health": true
+    },
+    {
+      "status": 200,
+      "seconds": 0.104,
+      "colo": "NRT",
+      "cloudflare": true,
+      "worker_health": true
+    },
+    {
+      "status": 200,
+      "seconds": 0.104,
+      "colo": "NRT",
+      "cloudflare": true,
+      "worker_health": true
+    }
+  ]
+}

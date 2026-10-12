@@ -11,7 +11,7 @@
 | 1 | F01 共享挂载与密钥暴露 | 验收通过（GitHub 令牌由用户确认保留） | 私有目录隔离、权限与 ACL、旧后台密钥失效和服务健康均通过；GitHub 令牌只存放在 Ubuntu 管理服务器私有目录，未下发主应用，计划用于把旧评论归档到私有仓库 |
 | 2 | F02 主应用旧会话复用 | 验收通过 | 改密、删除、同名重建、权限变更后旧会话失效；HTTP/WebSocket 共用认证验证通过 |
 | 3 | F03 普通用户读取敏感配置 | 验收通过 | 普通账号无法从原始及派生配置字段取回秘密；管理员配置和普通用户任务流程正常 |
-| 4 | F04 公开读取消耗数据库额度 | 代码验收通过；按 IP 的边缘限流需在 Cloudflare 控制台添加 WAF 规则（待用户） | 数据库前限流；公共缓存无用户状态串用；异常番号和健康检查成本受控 |
+| 4 | F04 公开读取消耗数据库额度 | 验收通过（2026-10-13 补齐 WAF 并实测拦截/恢复） | 数据库前限流；公共缓存无用户状态串用；异常番号和健康检查成本受控 |
 | 5 | F05 换 IP 绕过写入额度 | 验收通过 | 同身份跨 IP 冷却/额度生效；并发准入原子；正常用户与点赞幂等性通过 |
 | 6 | F06 举报响应无限膨胀 | 验收通过 | 大量举报下列表与详情分页正常；响应有界；代理不返回截断成功 JSON |
 | 7 | F07 用户名定向锁定 | 验收通过 | 同名身份互不锁死；注册/登录分离；仍保留有效的防爆破机制 |
@@ -83,7 +83,7 @@
 - 测试：新增 6 项（共 23 项全部通过），覆盖健康检查不访问 D1、按 IP 限流在查询前拒绝、缓存命中不查库且不含个人状态、未知番号重复读取命中缓存、发表评论清除缓存、全局预算耗尽时缓存页仍可读、绑定失效时的实例内兜底和缓存状态头。旧代码运行新增的 F04 测试全部失败。
 - 生产验收（从 Ubuntu 服务器发起，出口 NRT）：`/health` 返回 `{"ok":true}`，`/health/db` 无凭据 401，`/api/config` 与评论列表正常；同一番号第 1 次 `X-Comments-Cache: MISS`，随后 HIT，15 秒后重新 MISS。
 - 发现的限制：在本账户上，Workers Rate Limiting 绑定不执行限制——单独部署的探针 Worker（上限 5 次/分钟）连续 12 次请求全部放行，探针已删除。实例内计数在生产上也拦不住分散到多个实例的请求（同 IP 顺序 300 次请求全部 200）。因此代码层面能保证：D1 每次未命中缓存的读取行数有上限，在 Workers 免费额度（10 万请求/天）耗尽前无法耗尽 D1 读取额度（500 万行/天）；但无法在 Worker 前严格按 IP 限流，Worker 请求额度仍可能被大量请求耗尽。
-- 待用户：在 Cloudflare 控制台 rtioo.com → 安全性 → WAF → 速率限制规则中新增一条（免费计划含 1 条）：匹配 `http.host eq "comments.rtioo.com"`，按 IP 计数，10 秒内超过 60 次请求则阻止 10 秒。当前 OAuth 登录只有 zone:read，无法代为创建。
+- 初次验收后的待办为补齐 Cloudflare WAF 规则，原 Wrangler OAuth 只有 zone:read，无法创建。2026-10-13 已使用用户提供的专用 API Token 完成，配置与生产验收见下方“F04 WAF 最终验收”。
 
 ## F05 实施记录
 
@@ -140,7 +140,7 @@
 
 - 主应用最新镜像为 `javsp-web-security:f10`，仍为带安全补丁的 bata 版本；官方在线更新前需先把安全改动合并到正式版本，否则会丢失补丁。本次重启清空了主应用已有登录，用户需重新登录。
 - Worker 保持 `a26000c4`，管理后台保持 F09 配置。本次没有变更二者。
-- F04 的 Cloudflare WAF 规则仍待用户在控制台添加：`http.host eq "comments.rtioo.com"`，按 IP 计数，10 秒内超过 60 次阻止 10 秒；不能将其标为全部完成。
+- F04 的 Cloudflare WAF 规则已启用并通过生产验收：`http.host eq "comments.rtioo.com"`，按 IP 计数，10 秒内超过 60 次阻止 10 秒。
 - 已按安全修复范围拆分本地提交；无关媒体库、AI、文件整理和界面改动保留在工作区。提交源码不等于发布官方镜像，尚未推送或触发正式版本发布。
 
 ## 剩余事项收尾（2026-10-13）
@@ -148,6 +148,14 @@
 - **部署权限已清理**：`retire_remediation_key.py` 先预检再删除 `authorized_keys` 中唯一标记 `claude-javsp-remediation-20261012` 的行，其他行逐字保留；通过原有 Ubuntu SSH 凭据重新建立连接成功。指纹和删除结果见 [公钥清理证据](key-retirement-evidence.json)。没有删除其他公钥，也没有撤销用户明确要求保留的 GitHub 令牌。
 - **当前数据库已有本地可恢复副本**：通过现有 Wrangler OAuth 导出 D1 到 `comments-service/data/backups/20261013/d1-current.sql`，4118 字节，SHA-256 `144b602a56ea9c9a496c0f494b2946fb2061a37a7da958e342c93ae1f4884d56`。在独立内存 SQLite 完整导入并通过 `PRAGMA integrity_check`；备份由 comments-service 的 `data/` 规则排除，不包含在任何提交中。
 - **历史快照尚未找回**：用户提供的聊天 `01a12f2f-8caa-71e1-9b16-b673cda33fee` 的可读取记录及对应本地日志只有早期 F01/F02 内容，没有 F04/F08 两份导出文件位置。已检查本机 Claude/临时目录以及服务器 `/srv/javsp-comments`、`/home/apecme`、`/tmp` 的 SQL 文件名，未找到该两份快照。发现原有 `comments-service/data/before-identity-20261012.sql`（3285 字节），同样完整恢复并通过一致性检查，但它不是 F04/F08 快照，当前备份也不能冒充历史快照。文件清单和校验结果见 [备份证据](backup-evidence.json)。
-- **F04 权限已实测**：现有 Wrangler OAuth 可刷新登录并导出 D1，拥有 `zone:read`，没有 Zone WAF 编辑权限。调用 `/zones/968cb0de5fe26e75e8337e7649c51d92/rulesets` 返回 HTTP 403、错误码 10000（Authentication error）。已提供只添加指定规则、保留其他规则并回读验证的 `configure_f04_waf.py`；可从 Wrangler、环境变量或被忽略的 `comments-service/.env.waf` 读取凭据，不输出令牌。用户选择登录控制台后继续配置；规则当前仍未创建，不能关闭 F04。见 [WAF 权限证据](f04-waf-evidence.json)。
+- **F04 授权缺口已解决**：原 Wrangler OAuth 读取 zone rulesets 实测返回 403，普通 `wrangler login` 无法补充 WAF 权限；用户随后提供具备所需权限的 API Token，保存在被 Git 忽略的 `comments-service/.env.waf`。通过 `configure_f04_waf.py` 创建并回读验证成功，未输出令牌；见 [WAF 配置证据](f04-waf-evidence.json)。
 - **源码提交**：comments-service 安全修复提交为 `ca4a066`，13 个文件；原有 `javcom-logo.png` 保持未提交。主应用以原 HEAD `3cae32e` 生成独立候选快照，只移入 F02/F03/F07/F08/F10 的代码、测试和安全报告，并使用基线版本的生成器同步演示页面。没有通过覆盖文件或 stash 改动用户工作区。
 - **提交内容验证**：主应用候选快照 32 项 Python 安全/资料回归、8 个前端测试脚本全部通过；Worker 36 项、后台 13 项全部通过。生成补丁和 comments-service 暂存区通过真实已知凭据及常见密钥格式检查，SQL 备份和凭据文件均未提交。此次收尾不重启服务。
+
+## F04 WAF 最终验收（2026-10-13）
+
+- 已为 `rtioo.com` 创建并启用 `http_ratelimit` 区域规则集 `c14243b5bb864fa3b43cab6de20f4d8a`，规则 ID `d0a5fccfbe4d46d2b27dd82e88ea43d3`。创建前该区域无现有限流规则，没有替换其他规则。
+- 表达式 `(http.host eq "comments.rtioo.com")`；动作 `block`；计数维度 `cf.colo.id` 与 `ip.src`；周期 10 秒、阈值 60 次、阻止 10 秒。创建后通过 Cloudflare API 回读并逐项验证启用状态及上述设置。[配置证据](f04-waf-evidence.json)。
+- 本机连接评论域名失败，未开始本机突发测试；改从已授权 Ubuntu 服务器执行 `verify_f04_waf.py`，NRT 出口。基线 `/health` 返回 200；随后一轮 70 个请求在 1.483 秒内完成，其中 59 个 200、11 个 Cloudflare 429。加上基线，正好 60 个正常请求后被拦截；等待 12 秒后三次恢复请求均为 200。[生产验收证据](f04-waf-acceptance.json)。
+- 该脚本最多 74 个请求，只测试无 D1 查询且绕过 Worker 内部读取限流的 `/health`，因此 429 来自边缘规则，不是应用内计数器；未执行评论读写或生产压测。
+- F04 此前缺少的边缘限流已补齐。本次不修改 Worker、主应用或后台运行版本，不重启服务。WAF 凭据文件及 D1 备份继续排除在 Git 之外。主应用安全源码提交为 `09413a4`，评论服务安全源码提交为 `ca4a066`；本次另行提交 WAF 验收资料。
