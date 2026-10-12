@@ -7,13 +7,13 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
   <title>交互示例 | JavSP WEB</title>
   <style>html[data-initial-view] [data-panel]{display:none}.view.active{display:block}html[data-initial-view="overview"] [data-panel="overview"],html[data-initial-view="scrape"] [data-panel="scrape"],html[data-initial-view="auto-scrape"] [data-panel="auto-scrape"],html[data-initial-view="downloads"] [data-panel="downloads"],html[data-initial-view="crawler-config"] [data-panel="crawler-config"],html[data-initial-view="presets"] [data-panel="presets"],html[data-initial-view="settings"] [data-panel="settings"]{display:block}</style>
-    <link rel="stylesheet" href="assets/app.css?v=6221535b1eae">
-  <link rel="stylesheet" href="assets/overrides.css?v=6221535b1eae">
-<link rel="stylesheet" href="demo.css?v=6221535b1eae">
+    <link rel="stylesheet" href="assets/app.css?v=8dc6b062fe8e">
+  <link rel="stylesheet" href="assets/overrides.css?v=8dc6b062fe8e">
+<link rel="stylesheet" href="demo.css?v=8dc6b062fe8e">
 </head>
 <body class="demo-mode">
-<script src="demo-seed.js?v=6221535b1eae"></script>
-<script src="demo-mock.js?v=6221535b1eae"></script>
+<script src="demo-seed.js?v=8dc6b062fe8e"></script>
+<script src="demo-mock.js?v=8dc6b062fe8e"></script>
   <script>(function(){try{var v=localStorage.getItem('javsp-web.active-view');if(v)document.documentElement.dataset.initialView=v;if(localStorage.getItem('javsp-web.privacy-mode')==='1')document.documentElement.dataset.privacyMode='1';}catch(e){}})();</script>
   <div class="app-shell">
     <aside class="sidebar">
@@ -32,7 +32,7 @@
       </nav>
       <div class="sidebar-footer"><span class="status-dot"></span>服务已连接</div>
     </aside>
-    <main class="main"><aside class="demo-notice" role="note"><strong>交互示例 · demo.6221535b1eae</strong><span>使用当前程序界面与模拟数据，不连接模型、不访问影片文件。更改仅保留到刷新；请勿填写真实密钥。</span><a href="docs.html">使用教程 ↗</a></aside>
+    <main class="main"><aside class="demo-notice" role="note"><strong>交互示例 · demo.8dc6b062fe8e</strong><span>使用当前程序界面与模拟数据，不连接模型、不访问影片文件。更改仅保留到刷新；请勿填写真实密钥。</span><a href="docs.html">使用教程 ↗</a></aside>
       <header class="topbar"><div><p class="eyebrow" id="section-eyebrow">工作区</p><h1 id="section-title">概览</h1></div><div class="account"><span id="app-version" class="app-version" data-update-status="checking" title="正在检查更新">读取版本…</span><button class="account-profile" type="button" data-open-profile title="个人中心" aria-label="打开个人中心"><span id="current-avatar"></span><span id="current-user"></span></button><button class="icon-button" id="logout" title="退出登录">退出</button></div></header>
 
       <section class="view active" data-panel="overview">
@@ -100,7 +100,7 @@
 
   <dialog id="profile-dialog" class="profile-dialog" aria-labelledby="profile-title">
     <div class="panel-heading"><div><h2 id="profile-title">个人中心</h2><p class="muted">设置你的头像和用户名，查看自己留下的评论。</p></div><button type="button" class="icon-button" data-dialog-close aria-label="关闭个人中心">×</button></div>
-    <div class="profile-form"><div class="profile-identity"><button type="button" id="avatar-edit" class="avatar-edit" aria-label="更换头像" title="更换头像"><span id="profile-avatar-preview"></span><span class="avatar-pencil"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15v5Z"/></svg></span></button><span id="profile-avatar-name" class="muted"></span></div><div class="stack"><strong id="profile-handle"></strong><p class="muted">JavSP 登录账号：<span id="profile-login-name"></span></p><button id="identity-switch" type="button" class="button secondary" hidden>切换评论身份</button><form id="profile-form" class="stack"><label>评论身份<select id="identity-mode"><option value="create">创建评论身份</option><option value="login">登录已有身份</option></select></label><label>用户名<input id="profile-name" required maxlength="24" autocomplete="username" placeholder="例如 apecme"></label><label>6 位数字 PIN<input id="profile-pin" required type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" placeholder="请输入 6 位数字"></label><label id="pin-confirm-label">再次输入 PIN<input id="profile-pin-confirm" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required></label><p class="muted">用户名不区分大小写。请记住用户名和 PIN，在其他设备登录后即可查看自己的评论。PIN 不公开，也无法找回。</p><div><button id="profile-save" class="button primary" type="submit">创建评论身份</button><button id="identity-cancel" class="button secondary" type="button" hidden>取消</button></div></form></div><p id="profile-message" class="muted" role="status"></p></div>
+    <div class="profile-form"><div class="profile-identity"><button type="button" id="avatar-edit" class="avatar-edit" aria-label="更换头像" title="更换头像"><span id="profile-avatar-preview"></span><span class="avatar-pencil"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15v5Z"/></svg></span></button><span id="profile-avatar-name" class="muted"></span></div><div class="stack"><strong id="profile-handle"></strong><p class="muted">JavSP 登录账号：<span id="profile-login-name"></span></p><div id="identity-actions" class="identity-actions" hidden><button id="identity-switch" type="button" class="button secondary">切换或管理评论身份</button><button id="identity-logout" type="button" class="button secondary">退出评论身份</button><button id="identity-logout-all" type="button" class="button secondary" title="让这个评论身份在所有设备上退出">退出所有设备</button></div><form id="profile-form" class="stack"><label>评论身份<select id="identity-mode"><option value="create">创建评论身份</option><option value="login">登录已有身份</option><option value="pin">修改 PIN</option></select></label><label>用户名<input id="profile-name" required maxlength="29" autocomplete="username" placeholder="例如 apecme；登录时可填完整标识 apecme#A1B2"></label><label>6 位数字 PIN<input id="profile-pin" required type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" placeholder="请输入 6 位数字"></label><label id="pin-new-label" hidden>新的 6 位数字 PIN<input id="profile-pin-new" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password"></label><label id="pin-confirm-label">再次输入 PIN<input id="profile-pin-confirm" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required></label><p class="muted">用户名不区分大小写。请记住用户名和 PIN，在其他设备登录后即可查看自己的评论。PIN 不公开，也无法找回。</p><div><button id="profile-save" class="button primary" type="submit">创建评论身份</button><button id="identity-cancel" class="button secondary" type="button" hidden>取消</button></div></form></div><p id="profile-message" class="muted" role="status"></p></div>
     <section class="profile-comments"><div class="comments-heading"><div><h3>我的评论</h3><p id="my-comments-count" class="muted"></p></div><button id="my-comments-refresh" class="button secondary" type="button">刷新</button></div><p class="muted">在其他设备输入相同的用户名和 PIN，即可继续使用这个评论身份。</p><p id="my-comments-message" class="muted" role="status"></p><div id="my-comments-list" class="comments-list"></div><button id="my-comments-more" type="button" class="button secondary" hidden>加载更多</button></section>
   </dialog>
   <dialog id="avatar-picker-dialog" class="profile-dialog avatar-picker-dialog" aria-labelledby="avatar-picker-title"><div class="panel-heading"><h2 id="avatar-picker-title">更换头像</h2><button type="button" class="icon-button" data-dialog-close aria-label="关闭头像选择">×</button></div><div class="avatar-picker-tools"><label>搜索女优名字<input id="avatar-search" type="search" placeholder="输入名字或部分文字" autocomplete="off"></label><button type="button" id="avatar-default" class="button secondary">使用默认头像</button></div><div id="avatar-grid" class="avatar-grid"></div><div class="overview-pagination"><span id="avatar-count" role="status"></span><button id="avatar-prev" type="button" class="button secondary">上一页</button><button id="avatar-next" type="button" class="button secondary">下一页</button></div><p id="avatar-message" class="muted" role="status"></p><div class="avatar-picker-actions"><button type="button" class="button secondary" data-dialog-close>取消</button><button type="button" id="avatar-save" class="button primary">使用这个头像</button></div></dialog>
@@ -124,9 +124,9 @@
       <button id="update-overlay-close" class="button secondary" type="button" hidden>关闭提示</button>
     </div>
   </div>
-  <script src="assets/community.js?v=6221535b1eae"></script>
-  <script src="assets/demo-app.js?v=6221535b1eae"></script>
-  <script src="assets/ai-markdown.js?v=6221535b1eae"></script>
-  <script src="assets/ai.js?v=6221535b1eae"></script>
+  <script src="assets/community.js?v=8dc6b062fe8e"></script>
+  <script src="assets/demo-app.js?v=8dc6b062fe8e"></script>
+  <script src="assets/ai-markdown.js?v=8dc6b062fe8e"></script>
+  <script src="assets/ai.js?v=8dc6b062fe8e"></script>
 </body>
 </html>

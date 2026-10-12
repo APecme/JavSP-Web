@@ -1,0 +1,34 @@
+{
+  "item": "f10",
+  "image": "javsp-web-security:f10",
+  "previous_image": "javsp-web-security:f08",
+  "health_status": 200,
+  "anonymous_status": 401,
+  "image_matches": true,
+  "ports_preserved": true,
+  "mounts_preserved": true,
+  "deployed_files_match": {
+    "javsp_web/server.py": true,
+    "javsp_web/login_security.py": true
+  },
+  "server_process_roots": [
+    "/app"
+  ],
+  "acceptance": {
+    "ok": true,
+    "trusted_proxy_exact": true,
+    "https_login": 200,
+    "https_cookie_flags": true,
+    "https_session_works": true,
+    "https_logout": true,
+    "logout_revokes_session": true,
+    "loopback_spoof_ignored": true,
+    "direct_http_session_works": true,
+    "ten_failures_are_401": true,
+    "eleventh_before_hash_limit": true,
+    "username_limit_across_proxy": true,
+    "other_user_can_login": true,
+    "probe_users_removed": true
+  },
+  "accepted": true
+}

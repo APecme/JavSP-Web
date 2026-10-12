@@ -106,20 +106,57 @@ window.JavspCommunity = (() => {
     if (changed) { historyVersion++; historyLoading = false; historyItems = []; historyCursor = null; el('my-comments-list').innerHTML = ''; el('my-comments-count').textContent = ''; }
     selectedAvatar = profile.avatar_id; renderAccount();
   }
-  function clearPin() { el('profile-pin').value = ''; el('profile-pin-confirm').value = ''; }
+  function clearPin() { el('profile-pin').value = ''; el('profile-pin-confirm').value = ''; if (el('profile-pin-new')) el('profile-pin-new').value = ''; }
   function renderMode() {
-    const creating = el('identity-mode').value === 'create';
-    el('pin-confirm-label').hidden = !creating; el('profile-pin-confirm').required = creating;
+    const mode = el('identity-mode').value, creating = mode === 'create', changing = mode === 'pin';
+    const confirming = creating || changing;
+    el('pin-confirm-label').hidden = !confirming; el('profile-pin-confirm').required = confirming;
+    el('pin-new-label').hidden = !changing; el('profile-pin-new').required = changing;
+    el('pin-confirm-label').firstChild.textContent = changing ? '再次输入新 PIN' : '再次输入 PIN';
+    el('profile-pin').closest('label').firstChild.textContent = changing ? '当前 PIN' : '6 位数字 PIN';
+    el('profile-name').readOnly = changing;
+    if (changing && profile?.identity_ready) el('profile-name').value = profile.display_name;
     el('profile-pin').autocomplete = creating ? 'new-password' : 'current-password';
-    el('profile-save').textContent = creating ? '创建评论身份' : '登录评论身份';
+    el('profile-save').textContent = creating ? '创建评论身份' : changing ? '修改 PIN' : '登录评论身份';
+    // Creating takes only the name; the #TAG suffix is assigned by the service.
+    if (creating) el('profile-name').value = el('profile-name').value.replace(/#[0-9A-Za-z]{4}$/, '');
   }
   function renderIdentity(edit = !profile?.identity_ready) {
     el('profile-handle').textContent = profile.identity_ready ? profile.display_name : '设置你的评论身份';
-    el('profile-form').hidden = !edit; el('identity-switch').hidden = edit;
+    el('profile-form').hidden = !edit; el('identity-actions').hidden = edit || !profile.identity_ready;
+    el('identity-mode').querySelector('[value="pin"]').hidden = !profile.identity_ready;
     el('identity-cancel').hidden = !profile.identity_ready;
-    el('profile-name').value = profile.comment_username || profile.display_name;
+    // Logging in with the full handle keeps failed attempts isolated to this identity.
+    el('profile-name').value = profile.identity_ready ? profile.display_name : (profile.comment_username || profile.display_name);
     el('identity-mode').value = profile.identity_ready ? 'login' : 'create';
     clearPin(); renderMode();
+  }
+  // Changing the PIN signs this identity out everywhere and returns a fresh session.
+  async function changePin(pin) {
+    const button = el('profile-save'), new_pin = el('profile-pin-new').value;
+    if (!/^[0-9]{6}$/.test(new_pin)) { el('profile-message').textContent = '新 PIN 必须是 6 位数字。'; return; }
+    if (new_pin !== el('profile-pin-confirm').value) { el('profile-message').textContent = '两次输入的新 PIN 不一致。'; return; }
+    button.disabled = true;
+    try {
+      const turnstile_token = await verify('identity');
+      await remember(await service('/api/me/pin', {method:'POST',body:JSON.stringify({pin,new_pin,turnstile_token})}));
+      renderIdentity(); renderPreview();
+      el('profile-message').textContent = 'PIN 已修改，其他设备上的评论身份已退出。';
+    } catch (error) { el('profile-message').textContent = error.message; }
+    finally { clearPin(); button.disabled = false; }
+  }
+  // Sign out locally even if the service session has already expired.
+  async function signOut(all) {
+    if (all && !confirm('让这个评论身份在所有设备上退出？之后需要重新输入用户名和 PIN 登录。')) return;
+    const message = el('profile-message');
+    try { await service(all ? '/api/me/logout-all' : '/api/me/logout', {method:'POST',body:'{}'}); }
+    catch (error) { if (error.status !== 401) { message.textContent = error.message; return; } }
+    try {
+      profile = await api('/api/profile/community', {method:'DELETE'});
+      historyVersion++; historyItems = []; historyCursor = null; el('my-comments-list').innerHTML = ''; el('my-comments-count').textContent = '';
+      selectedAvatar = profile.avatar_id; renderAccount(); renderIdentity(); renderPreview();
+      message.textContent = all ? '已在所有设备退出评论身份。' : '已退出评论身份。';
+    } catch (error) { message.textContent = error.message; }
   }
   async function requireIdentity() {
     if (!profile?.identity_ready) { await open(); throw new Error('请先在个人中心创建或登录评论身份，评论草稿已保留。'); }
@@ -162,6 +199,8 @@ window.JavspCommunity = (() => {
     if (event.target.closest('[data-open-profile]')) open();
     if (event.target.closest('#avatar-edit')) openAvatars();
     if (event.target.closest('#identity-switch')) renderIdentity(true);
+    if (event.target.closest('#identity-logout')) signOut(false);
+    if (event.target.closest('#identity-logout-all')) signOut(true);
     if (event.target.closest('#identity-cancel')) renderIdentity(false);
     const button = event.target.closest('[data-avatar-id]');
     if (button) { selectedAvatar = button.dataset.avatarId; renderAvatars(); }
@@ -190,6 +229,7 @@ window.JavspCommunity = (() => {
     const pin = el('profile-pin').value, mode = el('identity-mode').value;
     if (!/^[0-9]{6}$/.test(pin)) { el('profile-message').textContent = 'PIN 必须是 6 位数字。'; return; }
     if (mode === 'create' && pin !== el('profile-pin-confirm').value) { el('profile-message').textContent = '两次输入的 PIN 不一致。'; return; }
+    if (mode === 'pin') return changePin(pin);
     const username = el('profile-name').value.trim(); button.disabled = true;
     try {
       const turnstile_token = await verify('identity');

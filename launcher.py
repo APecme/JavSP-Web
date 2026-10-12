@@ -68,6 +68,7 @@ def main() -> None:
             port=8090,
             log_config=None,
             access_log=False,
+            proxy_headers=False,
         )
     )
     thread = threading.Thread(target=server.run, daemon=True)

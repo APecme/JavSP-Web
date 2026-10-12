@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-13",
+  "historical_f04_f08_found": false,
+  "backups": [
+    {
+      "path": "comments-service/data/backups/20261013/d1-current.sql",
+      "bytes": 4118,
+      "sha256": "144b602a56ea9c9a496c0f494b2946fb2061a37a7da958e342c93ae1f4884d56",
+      "sqlite_restore": true,
+      "integrity_check": "ok",
+      "tables": [
+        "comments",
+        "d1_migrations",
+        "identities",
+        "identity_sessions",
+        "likes",
+        "rate_limits",
+        "reports",
+        "settings",
+        "sqlite_sequence"
+      ],
+      "kind": "current"
+    },
+    {
+      "path": "comments-service/data/before-identity-20261012.sql",
+      "bytes": 3285,
+      "sha256": "22d02402dcefb7e2ebfcb62d5785210c7cefa7fe8908ab44a34d20dfd6b00902",
+      "sqlite_restore": true,
+      "integrity_check": "ok",
+      "tables": [
+        "comments",
+        "likes",
+        "rate_limits",
+        "reports",
+        "settings",
+        "sqlite_sequence"
+      ],
+      "kind": "pre_identity_existing"
+    }
+  ]
+}

@@ -79,6 +79,16 @@ def ensure_seed_data() -> None:
                 USERS_FILE,
                 [{"username": "admin", "password": hash_password("admin"), "role": "admin", "created_at": now_iso()}],
             )
+        # Stable IDs distinguish a recreated username from the deleted account.
+        users = _read_json(USERS_FILE, [])
+        migrated = False
+        for user in users:
+            for field in ("user_id", "auth_version"):
+                if not isinstance(user.get(field), str) or not user[field]:
+                    user[field] = secrets.token_hex(16)
+                    migrated = True
+        if migrated:
+            _write_json(USERS_FILE, users)
         if not CONFIG_FILE.exists():
             source = VENDOR_DIR / "config.yml"
             if source.exists():
@@ -147,7 +157,7 @@ def list_users() -> list[dict[str, Any]]:
         return [{k: v for k, v in item.items() if k in {"username", "role", "created_at", "display_name", "avatar_id"}} for item in users]
 
 
-def user_profile(username: str, changes: dict | None = None, *, community: dict | None = None) -> dict:
+def user_profile(username: str, changes: dict | None = None, *, community: dict | None = None, clear_community: bool = False) -> dict:
     """Keep the comment identity private to its local account across browser sessions."""
     ensure_seed_data()
     with _lock:
@@ -167,6 +177,11 @@ def user_profile(username: str, changes: dict | None = None, *, community: dict 
         if community is not None:
             user.update({key: community[key] for key in ("comment_token", "display_name", "avatar_id", "comment_username")})
             user["identity_ready"] = True
+            changed = True
+        if clear_community:
+            # Forget the cached comment session; the user name stays as a login hint.
+            user.update(comment_token=secrets.token_urlsafe(32), identity_ready=False,
+                        display_name="匿名用户-" + secrets.token_hex(3).upper())
             changed = True
         if changed:
             _write_json(USERS_FILE, users)
@@ -189,13 +204,22 @@ def upsert_user(username: str, password: str | None, role: str = "operator", old
         users = _read_json(USERS_FILE, [])
         existing = next((u for u in users if u.get("username") == (old_username or username)), None)
         if existing is None:
-            users.append({"username": username, "password": hash_password(password or ""), "role": role, "created_at": now_iso()})
+            users.append({"username": username, "password": hash_password(password or ""), "role": role, "created_at": now_iso(),
+                          "user_id": secrets.token_hex(16), "auth_version": secrets.token_hex(16)})
         else:
+            if password or existing["username"] != username or existing.get("role", "operator") != role:
+                existing["auth_version"] = secrets.token_hex(16)
             existing["username"] = username
             existing["role"] = role
             if password:
                 existing["password"] = hash_password(password)
         _write_json(USERS_FILE, users)
+
+
+def find_user_by_id(user_id: str) -> dict[str, Any] | None:
+    ensure_seed_data()
+    with _lock:
+        return next((user for user in _read_json(USERS_FILE, []) if user.get("user_id") == user_id), None)
 
 
 def delete_user(username: str) -> bool:

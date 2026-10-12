@@ -62,6 +62,10 @@ docker compose up -d
 
 访问 `http://服务器地址:8090/login`，使用 `admin` / `admin` 登录并修改密码。容器内路径应填写映射后的路径，例如宿主机 `/mnt/media` 对应 `/video`。
 
+通过反向代理提供 HTTPS 时，在环境变量 `JAVSP_WEB_TRUSTED_PROXIES` 中配置代理连接到应用时的实际源 IP（多个 IP 用逗号分隔；默认不信任代理）。代理必须覆盖客户端传入的 `X-Real-IP` 和 `X-Forwarded-Proto`，分别填写真实客户端 IP 和外部协议。应用仅信任这些指定来源，并为 HTTPS 登录设置 Secure Cookie；直接 HTTP 登录仍可用。使用自定义 Uvicorn 启动命令时，须加 `--no-proxy-headers`，以保留应用校验所需的真实连接来源。
+
+登录失败限制为每 5 分钟每 IP 30 次、每用户名 10 次，超限返回 429 和 `Retry-After`。成功登录不消耗失败额度，计数保存在当前进程内，重启会清零；当前单进程部署适用，多进程或多副本部署须先改用共享限流存储。
+
 ## 贡献
 
 欢迎提交 Issue、改进文档、补充测试或提交 Pull Request。请先搜索已有 Issue，并在反馈中附上版本、部署方式、复现步骤和脱敏日志；不要上传密钥、Cookie 或完整数据目录。

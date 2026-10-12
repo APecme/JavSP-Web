@@ -1403,7 +1403,9 @@ function editPreset(id) {
   renderConfigFields();
   setPresetTab('scanner');
   renderPresetMode();
-  $('#delete-preset').disabled = id === 'default';
+  $('#delete-preset').disabled = id === 'default' || !!preset.redacted;
+  $('#save-preset').disabled = !!preset.redacted;
+  $('#preset-message').textContent = preset.redacted ? '密码、密钥和 Cookie 等敏感字段已隐藏；仅管理员可查看完整配置和保存预设。' : '';
   renderPresetList();
 }
 

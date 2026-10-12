@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 import yaml
@@ -27,6 +27,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from . import __version__
 from .auth import SESSION_COOKIE, create_session, current_user, remove_session, require_admin
+from .login_security import login_context, login_limiter
 from .config_validation import load_base_config, validate_config_data, yaml_error_message
 from .cookiecloud import CookieCloudError, cookiecloud_summary, fetch_cookiecloud, get_synced_cookies, sync_status, start_scheduler as start_cookiecloud_scheduler
 from .storage import (
@@ -488,18 +489,21 @@ def favicon() -> FileResponse:
 
 
 @app.post("/api/auth/login")
-def login(body: LoginBody, response: Response) -> dict:
-    user = find_user(body.username)
-    if not user or not verify_password(body.password, user["password"]):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
-    response.set_cookie(SESSION_COOKIE, create_session(user["username"]), httponly=True, samesite="lax", max_age=43200)
+def login(body: LoginBody, response: Response, request: Request) -> dict:
+    client_ip, secure = login_context(request)
+    with login_limiter.attempt(client_ip, body.username) as attempt:
+        user = find_user(body.username)
+        if not user or not verify_password(body.password, user["password"]):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+        attempt.success = True
+    response.set_cookie(SESSION_COOKIE, create_session(user), httponly=True, secure=secure, samesite="lax", max_age=43200)
     return {"username": user["username"], "role": user.get("role", "operator")}
 
 
 @app.post("/api/auth/logout")
-def logout(response: Response, cookie_token: str | None = Cookie(default=None, alias=SESSION_COOKIE)) -> dict:
+def logout(response: Response, request: Request, cookie_token: str | None = Cookie(default=None, alias=SESSION_COOKIE)) -> dict:
     remove_session(cookie_token)
-    response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(SESSION_COOKIE, httponly=True, secure=login_context(request)[1], samesite="lax")
     return {"ok": True}
 
 
@@ -534,6 +538,14 @@ def save_community_session(body: CommunitySessionBody, response: Response, user:
         raise HTTPException(status_code=422, detail="请从头像库选择头像")
     response.headers["Cache-Control"] = "no-store"
     return user_profile(user["username"], community=body.model_dump())
+
+
+@app.delete("/api/profile/community")
+def clear_community_session(response: Response, user: dict = Depends(current_user)) -> dict:
+    """Drop this account's cached comment session after signing out of the comment service."""
+    from .storage import user_profile
+    response.headers["Cache-Control"] = "no-store"
+    return user_profile(user["username"], clear_community=True)
 
 
 @app.get("/api/profile")
@@ -593,12 +605,23 @@ def remove_user(username: str, user: dict = Depends(require_admin)) -> dict:
 
 
 @app.get("/api/presets")
-def presets(_: dict = Depends(current_user)) -> list[dict]:
-    return [_public_preset(item) for item in list_presets()]
+def presets(user: dict = Depends(current_user)) -> list[dict]:
+    if user.get("role") == "admin":
+        return [_public_preset(item) for item in list_presets()]
+    return [_operator_preset(_public_preset(item)) for item in list_presets()]
 
 
 @app.post("/api/presets/convert")
-def convert_preset(body: PresetConvertBody, _: dict = Depends(current_user)) -> dict:
+def convert_preset(body: PresetConvertBody, user: dict = Depends(current_user)) -> dict:
+    result = _convert_preset(body)
+    if user.get("role") == "admin":
+        return result
+    if "form" in result:
+        return {"form": _redact_config(result["form"])}
+    return {"content": _redacted_yaml(result.get("content") or "")}
+
+
+def _convert_preset(body: PresetConvertBody) -> dict:
     base = _base_config()
     if body.mode == "yaml":
         if not body.content:
@@ -798,6 +821,74 @@ def _public_preset(preset: dict) -> dict:
     return result
 
 
+# Operators may run tasks with a preset but never read the credentials inside it.
+_SENSITIVE_CONFIG_KEY = re.compile(
+    r"pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|app[_-]?(?:id|key|secret)|"
+    r"cookies?|authori[sz]ation|credential|private[_-]?key|session|signature|uuid",
+    re.IGNORECASE,
+)
+_REDACTED = "********"
+
+
+def _redact_url(value: str) -> str:
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return value
+    if not parts.scheme or not parts.netloc:
+        return value
+    netloc = parts.netloc
+    if "@" in netloc:
+        netloc = _REDACTED + "@" + netloc.rsplit("@", 1)[1]
+    query = parts.query
+    if query:
+        query = "&".join(
+            (pair.split("=", 1)[0] + "=" + _REDACTED) if "=" in pair and _SENSITIVE_CONFIG_KEY.search(pair.split("=", 1)[0]) else pair
+            for pair in query.split("&")
+        )
+    return urlunsplit((parts.scheme, netloc, parts.path, query, parts.fragment))
+
+
+def _redact_config(value, key: str = "", inherited: bool = False):
+    sensitive = inherited or bool(key and _SENSITIVE_CONFIG_KEY.search(key))
+    if isinstance(value, dict):
+        return {k: _redact_config(v, str(k), sensitive) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_config(item, key, sensitive) for item in value]
+    if sensitive and value is not None and value != "" and not isinstance(value, bool):
+        return _REDACTED
+    if isinstance(value, str):
+        return _redact_url(value)
+    return value
+
+
+def _redacted_yaml(content: str) -> str:
+    try:
+        parsed = yaml.safe_load(content) if content else {}
+    except yaml.YAMLError:
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    return yaml.safe_dump(_redact_config(parsed), allow_unicode=True, sort_keys=False) if parsed else ""
+
+
+def _operator_preset(preset: dict) -> dict:
+    """Allow-list the preset fields an operator needs; secrets are masked."""
+    result = {key: preset[key] for key in ("id", "name", "mode", "task_concurrency", "created_at", "updated_at") if key in preset}
+    form = _redact_config(preset.get("form") or {})
+    result["form"] = form
+    result["form_values"] = _redact_config(preset.get("form_values") or {})
+    result["content"] = _redacted_yaml(preset.get("content") or "")
+    source = form if preset.get("mode") == "form" else (yaml.safe_load(result["content"]) if result["content"] else {})
+    result["form_text"] = {
+        section: yaml.safe_dump(value or {}, allow_unicode=True, sort_keys=False)
+        for section, value in (source or {}).items()
+        if isinstance(value, dict)
+    }
+    result["redacted"] = True
+    return result
+
+
 _JAPAN_RESTRICTED_CRAWLERS = {
     "mgstage": ("MGStage", "mgstage.com"),
     "prestige": ("Prestige", "prestige-av.com"),
@@ -952,7 +1043,7 @@ def remove_preset(preset_id: str, _: dict = Depends(require_admin)) -> dict:
 
 # Kept as a compatibility API for integrations. The web UI uses presets instead.
 @app.get("/api/config")
-def get_config(_: dict = Depends(current_user)) -> dict:
+def get_config(_: dict = Depends(require_admin)) -> dict:
     content = read_config()
     try:
         parsed = yaml.safe_load(content) or {}
@@ -1019,7 +1110,7 @@ def get_crawler_config_names(_: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/api/crawler-config/{name}")
-def get_crawler_source(name: str, _: dict = Depends(current_user)) -> dict:
+def get_crawler_source(name: str, _: dict = Depends(require_admin)) -> dict:
     crawler = _crawler_source(name)
     if not crawler:
         raise HTTPException(status_code=404, detail="爬虫不存在或已移除")
@@ -2060,13 +2151,28 @@ async def google_cover_browser(task_id: str, websocket: WebSocket) -> None:
         while payload := await reader.read(65536):
             await websocket.send_bytes(payload)
 
+    async def check_session() -> None:
+        # Existing browser connections must also lose access after revocation.
+        while True:
+            await asyncio.sleep(1)
+            try:
+                current_user(websocket.cookies.get(SESSION_COOKIE))
+            except HTTPException:
+                await websocket.close(code=1008)
+                return
+
     client_task = asyncio.create_task(client_to_vnc())
     vnc_task = asyncio.create_task(vnc_to_client())
-    done, pending = await asyncio.wait({client_task, vnc_task}, return_when=asyncio.FIRST_COMPLETED)
-    for task in pending:
-        task.cancel()
-    writer.close()
-    await writer.wait_closed()
+    session_task = asyncio.create_task(check_session())
+    tasks = {client_task, vnc_task, session_task}
+    try:
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        writer.close()
+        await writer.wait_closed()
 
 
 @app.post("/api/tasks/{task_id}/cover/select")
@@ -2100,6 +2206,7 @@ def run() -> None:
         host=os.environ.get("JAVSP_WEB_HOST", "127.0.0.1"),
         port=int(os.environ.get("JAVSP_WEB_PORT", "8090")),
         reload=False,
+        proxy_headers=False,  # Preserve the socket peer for our explicit proxy allowlist.
     )
 
 

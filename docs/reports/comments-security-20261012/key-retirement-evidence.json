@@ -1,0 +1,11 @@
+{
+  "marker": "claude-javsp-remediation-20261012",
+  "matched": 1,
+  "fingerprints": [
+    "SHA256:9uryXSzi6Vqc7/lEWDqcJ7G7+CmLB9fJJ7yKleFvfnE"
+  ],
+  "applied": true,
+  "marker_remaining": false,
+  "other_lines_preserved": true,
+  "normal_ssh_reconnected": true
+}

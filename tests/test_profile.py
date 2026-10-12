@@ -11,9 +11,10 @@ class ProfileTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         folder = Path(directory.name)
         self.temp = folder
+        previous = storage.DATA_DIR
         for name, value in list(vars(storage).items()):
-            if isinstance(value, Path) and value.is_relative_to(storage.ROOT_DIR / 'data'):
-                self.enterContext(patch.object(storage, name, folder / value.relative_to(storage.ROOT_DIR / 'data')))
+            if isinstance(value, Path) and value.is_relative_to(previous):
+                self.enterContext(patch.object(storage, name, folder / value.relative_to(previous)))
         storage.upsert_user('alice', 'test-password', 'operator')
         storage.upsert_user('bob', 'test-password', 'operator')
         self.client = TestClient(server.app)
@@ -67,5 +68,23 @@ class ProfileTests(unittest.TestCase):
         self.assertNotEqual(self.client.get('/api/profile').json()['comment_token'],'s'*64)
         for change in [{'comment_token':'bad'}, {'display_name':'forged#AB12'}, {'avatar_id':'../../secret'}]:
             self.assertEqual(self.client.put('/api/profile/community',json={**body,**change}).status_code,422)
+
+    def test_clearing_comment_session_forgets_token_for_this_account_only(self):
+        body = {'display_name':'apecme#AB12','comment_username':'apecme','avatar_id':'','comment_token':'s'*64}
+        self.assertEqual(self.client.delete('/api/profile/community').status_code,401)
+        for name in ('alice','bob'):
+            self.as_user(name)
+            self.client.put('/api/profile/community',json={**body,'comment_token':name[0]*64})
+        self.as_user('alice')
+        cleared = self.client.delete('/api/profile/community')
+        self.assertEqual(cleared.status_code,200)
+        self.assertEqual(cleared.headers['cache-control'],'no-store')
+        data = cleared.json()
+        self.assertFalse(data['identity_ready'])
+        self.assertNotEqual(data['comment_token'],'a'*64)
+        self.assertNotIn('#',data['display_name'])
+        self.assertEqual(data['comment_username'],'apecme')
+        self.as_user('bob')
+        self.assertEqual(self.client.get('/api/profile').json()['comment_token'],'b'*64)
 
 if __name__ == '__main__': unittest.main()

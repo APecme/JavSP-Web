@@ -1,0 +1,20 @@
+{
+  "item": "f10",
+  "base": "javsp-web-security:f08",
+  "trusted_proxy": "192.168.0.1",
+  "tests_passed": true,
+  "test_modules": [
+    "tests.test_auth_sessions",
+    "tests.test_config_access",
+    "tests.test_login_security",
+    "tests.test_profile"
+  ],
+  "image_hashes_match": {
+    "javsp_web/server.py": true,
+    "javsp_web/login_security.py": true
+  },
+  "test_summary": [
+    "Ran 32 tests in 20.220s",
+    "OK"
+  ]
+}
