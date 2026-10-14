@@ -3,8 +3,9 @@ window.JavspCommunity = (() => {
   let avatarPage = 0, historyLoading = false, challengeActive = false;
   const el = id => document.getElementById(id);
   const esc = value => escapeHtml(value ?? '');
+  const avatarURL = id => catalog?.find(item => item.id === id)?.url || (document.body.classList.contains('demo-mode') ? `${assetRoot()}avatars/${id}.webp` : `/api/avatars/${id}`);
   const avatar = (id, name = '', className = 'user-avatar') => /^[a-f0-9]{16}$/.test(id || '')
-    ? `<img class="${className}" src="${assetRoot()}avatars/${id}.webp" alt="${esc(name)}" loading="lazy">`
+    ? `<img class="${className}" src="${esc(avatarURL(id))}" alt="${esc(name)}" loading="lazy" referrerpolicy="no-referrer">`
     : `<span class="${className} avatar-fallback" aria-hidden="true">${esc((name || '匿').slice(0, 1))}</span>`;
   // The same assets are also used by the project site's subdirectory demo.
   const assetRoot = () => new URL('avatars/', document.querySelector('script[src*="community.js"]').src).href.replace(/avatars\/$/, '');
@@ -85,7 +86,7 @@ window.JavspCommunity = (() => {
   }
   function renderAvatars() {
     const query = el('avatar-search').value.normalize('NFKC').trim().toLocaleLowerCase();
-    const items = (catalog || []).filter(item => item.name.normalize('NFKC').toLocaleLowerCase().includes(query));
+    const items = (catalog || []).filter(item => item.source === 'gfriends' && item.name.normalize('NFKC').toLocaleLowerCase().includes(query));
     const pages = Math.max(1, Math.ceil(items.length / 24));
     avatarPage = Math.min(avatarPage, pages - 1);
     el('avatar-grid').innerHTML = items.slice(avatarPage * 24, (avatarPage + 1) * 24).map(item => `<button type="button" class="avatar-option${selectedAvatar === item.id ? ' selected' : ''}" data-avatar-id="${item.id}" aria-pressed="${selectedAvatar === item.id}" title="${esc(item.name)}">${avatar(item.id, item.name, 'picker-avatar')}<span>${esc(item.name)}</span></button>`).join('') || '<p class="muted">没有找到这个名字，试试其他写法。</p>';

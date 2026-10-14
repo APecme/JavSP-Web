@@ -3,3 +3,6 @@
 .demo-notice span { grid-column: 1; }
 .demo-notice a { grid-column: 2; grid-row: 1 / 3; align-self: center; }
 @media (max-width: 640px) { .demo-notice { display: block; } .demo-notice > * { display: block; } .demo-notice a { margin-top: 6px; } }
+
+:root[data-theme="dark"] .demo-notice { background: var(--accent-soft); border-color: var(--accent-border); color: var(--text-secondary); }
+:root[data-theme="dark"] .demo-notice a { color: var(--accent-text); }

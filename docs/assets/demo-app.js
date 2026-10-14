@@ -4,10 +4,10 @@ const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-pa
 state.overviewPage = 1;
 state.overviewPageSize = OVERVIEW_PAGE_SIZES.includes(savedOverviewPageSize) ? savedOverviewPageSize : 24;
 // Overview groups: [type, Chinese label, English cover subtitle].
-const OVERVIEW_GROUP_TYPES = [['library', '媒体库', 'LIBRARY'], ['actress', '女优', 'ACTRESS'], ['producer', '片商', 'STUDIO'], ['year', '年份', 'YEAR']];
+const OVERVIEW_GROUP_TYPES = [['all', '全部影片', 'ALL MOVIES'], ['actress', '女优', 'ACTRESS'], ['producer', '片商', 'STUDIO'], ['library', '媒体库', 'LIBRARY'], ['year', '年份', 'YEAR']];
 const OVERVIEW_GROUP_PAGE_SIZE = 12;
 const savedOverviewGroupBy = localStorage.getItem('javsp-web.overview-group-by');
-state.overviewGroupBy = OVERVIEW_GROUP_TYPES.some(([type]) => type === savedOverviewGroupBy) ? savedOverviewGroupBy : 'library';
+state.overviewGroupBy = OVERVIEW_GROUP_TYPES.some(([type]) => type === savedOverviewGroupBy) ? savedOverviewGroupBy : 'all';
 state.overviewGroup = null;
 state.overviewGroups = null;
 state.overviewGroupPage = 1;
@@ -924,13 +924,13 @@ function taskPageRequest() {
   const size = view === 'overview' ? state.overviewPageSize : state.taskPageSize;
   const page = view === 'overview' ? state.overviewPage - 1 : state.taskPage;
   params.set('limit', size); params.set('offset', page * size);
-  if (view === 'overview' && !state.overviewGroup) {
+  if (view === 'overview' && !state.overviewGroup && state.overviewGroupBy !== 'all') {
     const groups = new URLSearchParams({ by: state.overviewGroupBy, limit: String(OVERVIEW_GROUP_PAGE_SIZE), offset: String((state.overviewGroupPage - 1) * OVERVIEW_GROUP_PAGE_SIZE) });
     if (state.overviewGroupQuery) groups.set('query', state.overviewGroupQuery);
     return `/api/tasks/overview-groups?${groups}`;
   }
   if (view === 'overview') {
-    if (state.overviewGroup.key !== '__all__') { params.set('group_by', state.overviewGroup.by); params.set('group', state.overviewGroup.key); }
+    if (state.overviewGroup && state.overviewGroup.key !== '__all__') { params.set('group_by', state.overviewGroup.by); params.set('group', state.overviewGroup.key); }
     params.set('sort', state.overviewSort.key); params.set('direction', state.overviewSort.direction);
     if (state.overviewQuery) params.set('query', state.overviewQuery);
   } else {
@@ -959,6 +959,7 @@ async function loadTasks() {
       const signature = JSON.stringify(result);
       const view = document.querySelector('.view.active')?.dataset.panel;
       state.taskMetrics = result.metrics || {};
+      state.mediaWarnings = result.warnings || [];
       if (Array.isArray(result.groups)) {
         state.overviewGroups = result;
         state.overviewGroupBy = result.by || state.overviewGroupBy;
@@ -970,7 +971,7 @@ async function loadTasks() {
       } else {
         state.tasks = result.items || [];
         state.taskTotal = Number(result.total || 0);
-        if (view === 'overview' && state.overviewGroup?.key === '__all__' && !state.overviewQuery) state.overviewFilmCount = state.taskTotal;
+        if (view === 'overview' && (state.overviewGroupBy === 'all' || state.overviewGroup?.key === '__all__') && !state.overviewQuery) state.overviewFilmCount = state.taskTotal;
       }
       if (view === 'overview') { if (!Array.isArray(result.groups)) state.overviewPage = Math.floor(result.offset / result.limit) + 1; }
       else state.taskPage = Math.floor(result.offset / result.limit);
@@ -1577,13 +1578,13 @@ document.addEventListener('click', (event) => { const button = event.target.clos
 $('#library-search-form')?.addEventListener('submit', (event) => {
   event.preventDefault();
   const value = $('#library-search').value.trim();
-  if (state.overviewGroup) { state.overviewQuery = value; state.overviewPage = 1; }
+  if (state.overviewGroup || state.overviewGroupBy === 'all') { state.overviewQuery = value; state.overviewPage = 1; }
   else { state.overviewGroupQuery = value; state.overviewGroupPage = 1; }
   state.tasksSignature = '';
   loadTasks();
 });
 $('#library-search-form')?.addEventListener('reset', () => {
-  if (state.overviewGroup) { state.overviewQuery = ''; state.overviewPage = 1; }
+  if (state.overviewGroup || state.overviewGroupBy === 'all') { state.overviewQuery = ''; state.overviewPage = 1; }
   else { state.overviewGroupQuery = ''; state.overviewGroupPage = 1; }
   state.tasksSignature = '';
   loadTasks();
@@ -1784,7 +1785,7 @@ document.addEventListener('click', async (event) => {
     state.taskMetadataEditing = false;
     await loadTasks();
     showToast(payload.apply_to_folder ? '影片资料和文件夹 NFO 已保存' : '影片资料已保存');
-    requestMetadataRefresh();
+    if (state.detailTask?.task_type !== 'media') requestMetadataRefresh();
   } catch (error) {
     button.disabled = false;
     showToast(error.message, 'error');
@@ -1988,6 +1989,8 @@ async function openTaskDetail(taskId, background = false) {
   if (state.activeTaskDetail !== taskId || !dialog.open || detailRequestId !== state.detailRequestId || (background && (state.taskMetadataEditing || state.taskDetailLogSelecting || hasTaskDetailLogSelection()))) return;
   state.detailTask = task;
   document.querySelector('.film-navigation').hidden = task.task_type === 'scan';
+  const editButton = document.querySelector('#task-detail-dialog > .film-detail-shell > .panel-heading [data-edit-task-metadata]');
+  if (editButton) editButton.hidden = task.task_type === 'scan' || state.taskMetadataEditing;
   document.querySelector('[data-detail-section="task-comments"]').hidden = !task.progress?.metadata?.dvdid || !state.runtime?.comments_url;
   if (task.task_type === 'scan') {
     $('#task-detail-content').innerHTML = '<p role="status">' + escapeHtml(task.scan?.message || '') + '</p><p class="muted">扫描完成后，影片任务会出现在任务队列中。停止扫描仅停止继续创建任务。</p><pre class="task-log">' + escapeHtml((task.log_tail || []).join('\n')) + '</pre>';
@@ -1995,14 +1998,14 @@ async function openTaskDetail(taskId, background = false) {
   }
   const metadata = task.progress?.metadata || {};
   const posterImage = task.cover_count ? `<img class="detail-poster" src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" alt="${escapeHtml(taskDisplayName(task))}">` : artworkPlaceholder('detail-poster detail-poster-empty', task.progress?.images?.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
-  const poster = `<div class="detail-poster-wrap">${posterImage}${playButton(task.id)}</div>`;
+  const poster = `<div class="detail-poster-wrap">${posterImage}</div>`;
   const backdropSource = task.fanart_count ? `/api/tasks/${encodeURIComponent(task.id)}/fanart/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}` : (task.cover_count ? `/api/tasks/${encodeURIComponent(task.id)}/cover/0?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}` : '');
   const backdrop = backdropSource ? `<span class="lc-film-backdrop" aria-hidden="true"><img src="${backdropSource}" alt=""></span>` : '';
   const actressNames = (Array.isArray(metadata.actress) ? metadata.actress : [metadata.actress]).map((name) => String(name || '').trim()).filter(Boolean);
   const actressChips = actressNames.length ? `<div class="lc-actress">${actressNames.map((name) => `<span>${escapeHtml(name)}</span>`).join('')}</div>` : '';
   const facts = [['导演', metadata.director], ['制作商', metadata.producer], ['发行商', metadata.publisher], ['发行时间', metadata.publish_date]].map(([label, value]) => `<div><dt>${label}</dt><dd>${escapeHtml(value || '-')}</dd></div>`).join('');
   const actressInput = Array.isArray(metadata.actress) ? metadata.actress.join('\n') : (metadata.actress || '');
-  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div><label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label><div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="lc-film-hero">${backdrop}${poster}<div class="lc-film-copy"><div class="lc-film-badges"><span class="lc-chip lc-chip-accent">${escapeHtml(metadata.dvdid || '未识别番号')}</span>${metadata.publish_date ? `<span class="lc-chip">${escapeHtml(metadata.publish_date)}</span>` : ''}${task.fanart_count ? `<span class="lc-chip">${Number(task.fanart_count)} 张剧照</span>` : ''}</div><h3 class="film-title">${escapeHtml(metadata.title || taskDisplayName(task))}</h3>${actressChips}<dl class="lc-facts">${facts}</dl><div class="lc-film-actions"><button class="button primary" type="button" data-play-task="${escapeHtml(task.id)}"><img src="/assets/play.svg" alt="">播放影片</button><button class="button secondary" type="button" data-edit-task-metadata>编辑资料</button></div></div></section>`;
+  const metadataEditor = state.taskMetadataEditing ? `<section id="task-metadata-editor" class="task-metadata-editor" data-task-id="${escapeHtml(task.id)}"><div class="task-metadata-editor-heading"><h3>修改影片资料</h3><button class="icon-button" type="button" data-cancel-task-metadata>取消</button></div><div class="task-metadata-fields"><label>番号<input name="dvdid" maxlength="160" value="${escapeHtml(metadata.dvdid || '')}"></label><label>标题<input name="title" maxlength="1000" value="${escapeHtml(metadata.title || '')}"></label><label>女优<textarea name="actress" rows="3" maxlength="3000">${escapeHtml(actressInput)}</textarea></label><label>导演<input name="director" maxlength="300" value="${escapeHtml(metadata.director || '')}"></label><label>制作商<input name="producer" maxlength="300" value="${escapeHtml(metadata.producer || '')}"></label><label>发行商<input name="publisher" maxlength="300" value="${escapeHtml(metadata.publisher || '')}"></label><label>发行时间<input name="publish_date" maxlength="32" placeholder="YYYY-MM-DD" value="${escapeHtml(metadata.publish_date || '')}"></label></div>${artworkEditor(task)}${task.task_type === 'media' ? '<p class="muted">资料和图片将保存到绑定媒体服务器。</p>' : '<label class="check-label task-metadata-folder"><input name="apply_to_folder" type="checkbox" checked>同步写入整理文件夹中的 NFO</label>'}<div class="detail-image-actions"><button class="button primary" type="button" data-save-task-metadata>保存资料</button></div></section>` : `<section class="lc-film-hero">${backdrop}${poster}<div class="lc-film-copy"><div class="lc-film-badges"><span class="lc-chip lc-chip-accent">${escapeHtml(metadata.dvdid || '未识别番号')}</span>${metadata.publish_date ? `<span class="lc-chip">${escapeHtml(metadata.publish_date)}</span>` : ''}${task.fanart_count ? `<span class="lc-chip">${Number(task.fanart_count)} 张剧照</span>` : ''}</div><h3 class="film-title">${escapeHtml(metadata.title || taskDisplayName(task))}</h3>${actressChips}<dl class="lc-facts">${facts}</dl><div class="lc-film-actions"><button class="button primary" type="button" data-play-task="${escapeHtml(task.id)}"><img src="/assets/play.svg" alt="">播放影片</button></div></div></section>`;
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
@@ -2017,7 +2020,7 @@ async function openTaskDetail(taskId, background = false) {
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const fileInfo = [['文件名', task.file_name || task.name], ['原始路径', task.input_directory], ['整理路径', task.progress?.output?.save_dir]].map(([name,value]) => `<div class="detail-data-row"><dt>${name}</dt><dd>${escapeHtml(value || '—')}</dd></div>`).join('');
   const taskLog = taskLogMarkup(task, `detail-${task.id}`, 'task-detail-log');
-  const googleCover = !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
+  const googleCover = task.task_type !== 'media' && !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
   $('#task-detail-title').textContent = metadata.dvdid || '影片详情';
   $('#task-detail-subtitle').textContent = ['影片详情', task.preset_name, metadata.publish_date].filter(Boolean).join(' · ');
@@ -2025,6 +2028,50 @@ async function openTaskDetail(taskId, background = false) {
   patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
   window.JavspComments?.open(identifier, state.runtime?.comments_url || '');
 }
+
+function artworkEditor(task) {
+  return `<section class="artwork-editor"><h3>封面与剧照</h3>${['cover', 'fanart'].map(kind => {
+    const label = kind === 'cover' ? '封面' : '剧照';
+    const count = Number(kind === 'cover' ? task.cover_count : task.fanart_count) || 0;
+    return `<h4>${label}</h4><div class="artwork-edit-strip">${Array.from({ length: count }, (_, index) => `<article><img src="/api/tasks/${encodeURIComponent(task.id)}/${kind}/${index}?v=${encodeURIComponent(task.updated_at || '')}" alt="${label} ${index + 1}"><label class="button secondary">替换<input type="file" hidden accept="image/jpeg,image/png,image/webp" data-artwork-upload="${kind}" data-image-index="${index}"></label><button class="button danger" type="button" data-artwork-delete="${kind}" data-image-index="${index}">删除</button></article>`).join('')}<label class="button secondary artwork-add">添加${label}<input type="file" hidden accept="image/jpeg,image/png,image/webp" data-artwork-upload="${kind}" data-image-index="-1"${kind === 'fanart' ? ' multiple' : ''}></label></div>`;
+  }).join('')}<p class="muted" role="status" id="artwork-edit-message"></p></section>`;
+}
+
+async function refreshArtworkEditor() {
+  const task = await api(`/api/tasks/${encodeURIComponent(state.activeTaskDetail)}`);
+  state.detailTask = task;
+  const editor = $('#task-metadata-editor .artwork-editor');
+  if (editor) editor.outerHTML = artworkEditor(task);
+}
+
+document.addEventListener('change', async event => {
+  const input = event.target.closest('[data-artwork-upload]');
+  if (!input || !input.files?.length || state.artworkSaving) return;
+  state.artworkSaving = true;
+  input.disabled = true;
+  try {
+    for (const file of input.files) {
+      if (file.size > 16 * 1024 * 1024) throw new Error('图片不能超过 16 MB');
+      const form = new FormData(); form.append('file', file);
+      const response = await fetch(`/api/tasks/${encodeURIComponent(state.activeTaskDetail)}/artwork/${input.dataset.artworkUpload}/${input.dataset.imageIndex}`, { method: 'PUT', credentials: 'include', body: form });
+      if (!response.ok) throw new Error((await response.json()).detail || '图片保存失败');
+    }
+    await refreshArtworkEditor();
+    showToast('图片已保存', 'success');
+  } catch (error) { showToast(error.message, 'error'); }
+  finally { state.artworkSaving = false; input.disabled = false; input.value = ''; }
+});
+
+document.addEventListener('click', async event => {
+  const button = event.target.closest('[data-artwork-delete]');
+  if (!button || state.artworkSaving) return;
+  state.artworkSaving = true; button.disabled = true;
+  try {
+    await api(`/api/tasks/${encodeURIComponent(state.activeTaskDetail)}/artwork/${button.dataset.artworkDelete}/${button.dataset.imageIndex}`, { method: 'DELETE' });
+    await refreshArtworkEditor();
+  } catch (error) { showToast(error.message, 'error'); }
+  finally { state.artworkSaving = false; button.disabled = false; }
+});
 
 function cookiecloudPayload() {
   return {
@@ -2131,30 +2178,30 @@ function renderOverviewChrome() {
   $('#metric-result').textContent = ({ succeeded: '成功', failed: '失败', running: '运行中', queued: '排队中', cancelled: '已取消' }[metrics.latest_status] || '-');
   if ($('#metric-films')) $('#metric-films').textContent = state.overviewFilmCount ?? '-';
   const tabs = $('#overview-group-tabs');
-  if (tabs) patchChildren(tabs, OVERVIEW_GROUP_TYPES.filter(([type]) => type !== 'library' || state.overviewLibrariesAvailable)
-    .map(([type, label]) => `<button type="button" role="tab" data-overview-group-by="${type}" aria-selected="${!state.overviewGroup && state.overviewGroupBy === type}"${state.overviewGroupBy === type ? ' class="active"' : ''}>${label}</button>`).join(''));
+  if (tabs) patchChildren(tabs, OVERVIEW_GROUP_TYPES
+    .map(([type, label]) => `<button type="button" role="tab" data-overview-group-by="${type}" aria-selected="${state.overviewGroupBy === type}"${state.overviewGroupBy === type ? ' class="active"' : ''}>${label}</button>`).join(''));
   const search = $('#library-search');
   if (search && document.activeElement !== search) {
-    search.value = state.overviewGroup ? state.overviewQuery : state.overviewGroupQuery;
-    search.placeholder = state.overviewGroup ? '搜索番号、片名或女优' : `搜索${overviewGroupType()[1]}名称`;
+    search.value = (state.overviewGroup || state.overviewGroupBy === 'all') ? state.overviewQuery : state.overviewGroupQuery;
+    search.placeholder = (state.overviewGroup || state.overviewGroupBy === 'all') ? '搜索番号、片名或女优' : `搜索${overviewGroupType()[1]}名称`;
   }
 }
 
 function renderOverview() {
   renderOverviewChrome();
-  if (!state.overviewGroup) { renderOverviewGroups(); return; }
-  const group = state.overviewGroup;
+  if (!state.overviewGroup && state.overviewGroupBy !== 'all') { renderOverviewGroups(); return; }
+  const group = state.overviewGroup || { key: '__all__', name: '全部影片', by: 'all' };
   const cards = state.tasks.map((task) => ({ task, taskCount: task.task_ids?.length || 1, taskIds: task.task_ids || [task.id] }));
   const totalPages = Math.max(1, Math.ceil(state.taskTotal / state.overviewPageSize));
-  const pageIds = new Set(cards.flatMap((entry) => entry.taskIds));
+  const pageIds = new Set(cards.filter(entry => entry.task.task_type !== 'media').flatMap((entry) => entry.taskIds));
   const allSelected = pageIds.size > 0 && [...pageIds].every((id) => state.selectedOverviewTasks.has(id));
   const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
   const [, typeLabel, english] = group.key === '__all__' ? ['', '全部', 'ALL MOVIES'] : overviewGroupType(group.by);
-  const header = `<header class="lc-group-head"><div class="lc-group-art">${libraryCover(group, english)}</div><div class="lc-group-info"><button class="lc-back" type="button" data-overview-back><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>返回${escapeHtml(overviewGroupType(group.by)[1])}分类</button><p class="lc-eyebrow">${escapeHtml(typeLabel)} · ${escapeHtml(english)}</p><h2>${escapeHtml(group.name)}</h2><p class="lc-group-count"><i></i>${state.taskTotal} 部影片${state.overviewQuery ? ` · 搜索“${escapeHtml(state.overviewQuery)}”` : ''}</p></div></header>`;
+  const header = group.key === '__all__' ? '' : `<div class="lc-section-head"><button class="lc-back" type="button" data-overview-back>返回${escapeHtml(overviewGroupType(group.by)[1])}分类</button><span>${escapeHtml(group.name)} · ${state.taskTotal} 部影片</span></div>`;
   const wall = cards.length ? `${toolbar}<div class="lc-film-grid">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : `<div class="library-empty lc-empty-state"><span aria-hidden="true">▤</span><h3>${state.overviewQuery ? '没有找到符合条件的影片' : '这个分类还没有影片'}</h3><p>${state.overviewQuery ? '试试其他番号、片名或女优名字。' : '刮削完成的影片会自动出现在这里。'}</p></div>`;
   const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}>下一页</button></div>` : '';
-  patchChildren($('#overview-tasks'), header + wall + pagination);
+  patchChildren($('#overview-tasks'), (state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('') + header + wall + pagination);
   if (state.overviewSelectionFeedback.size) window.setTimeout(() => state.overviewSelectionFeedback.clear(), 260);
 }
 
@@ -2163,18 +2210,18 @@ function renderOverviewGroups() {
   const container = $('#overview-tasks');
   if (!result) { patchChildren(container, '<p class="lc-loading">正在读取媒体库…</p>'); return; }
   const [, label, english] = overviewGroupType(result.by);
-  if (!result.all?.count) {
+  if (!result.all?.count && !result.groups?.length) {
     patchChildren(container, `<div class="library-empty lc-empty-state"><span aria-hidden="true">▤</span><h3>收藏从第一部影片开始</h3><p>添加刮削任务，完成后就能在这里按${escapeHtml(label)}浏览封面和影片资料。</p><button class="button primary" data-go="scrape">添加影片</button></div>`);
     return;
   }
   const everything = { key: '__all__', name: '全部影片', count: result.all.count, covers: result.all.covers, template: 'tilted' };
-  const groups = (result.offset === 0 && !state.overviewGroupQuery ? [everything] : []).concat(result.groups);
+  const groups = result.by === 'all' ? [everything] : result.groups;
   const pages = Math.max(1, Math.ceil(result.total / result.limit));
   const cards = groups.length
     ? `<div class="lc-library-grid">${groups.map((group) => libraryCard(group, group.key === '__all__' ? 'ALL MOVIES' : english)).join('')}</div>`
     : `<div class="library-empty lc-empty-state"><span aria-hidden="true">⌕</span><h3>没有找到“${escapeHtml(state.overviewGroupQuery)}”</h3><p>换个${escapeHtml(label)}名称试试。</p></div>`;
   const pagination = pages > 1 ? `<div class="overview-pagination"><span>第 ${state.overviewGroupPage} / ${pages} 页</span><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage - 1}"${state.overviewGroupPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage + 1}"${state.overviewGroupPage >= pages ? ' disabled' : ''}>下一页</button></div>` : '';
-  patchChildren(container, `<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><span>${result.total} 个分类 · ${result.all.count} 部影片</span></div>${cards}${pagination}`);
+  patchChildren(container, `${(state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('')}<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><span>${result.total} 个分类 · ${result.all.count} 部影片</span></div>${cards}${pagination}`);
 }
 
 function libraryCard(group, english) {
@@ -2240,6 +2287,8 @@ function closeOverviewGroup(type = state.overviewGroupBy) {
     localStorage.setItem('javsp-web.overview-group-by', type);
   }
   state.overviewGroup = null;
+  state.overviewPage = 1;
+  state.overviewQuery = '';
   state.overviewSelectionMode = false;
   state.selectedOverviewTasks.clear();
   state.tasksSignature = '';
@@ -2257,11 +2306,11 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
     ? `<img src="/api/tasks/${encodeURIComponent(task.id)}/cover/0?thumbnail=true&amp;v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="${escapeHtml(taskDisplayName(task))}">`
     : artworkPlaceholder('overview-cover-placeholder', images.cover_status === 'failed' ? '封面下载失败' : '封面未下载');
   const selected = taskIds.every((id) => state.selectedOverviewTasks.has(id));
-  const selector = state.overviewSelectionMode ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
+  const selector = state.overviewSelectionMode && task.task_type !== 'media' ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
   const feedback = taskIds.some((id) => state.overviewSelectionFeedback.has(id));
   const year = String(metadata.publish_date || '').slice(0, 4);
   const badges = `${/^\d{4}$/.test(year) ? `<span class="lc-chip">${escapeHtml(year)}</span>` : ''}${taskCount > 1 ? `<span class="lc-chip">${taskCount} 条记录</span>` : ''}${task.status === 'failed' ? '<span class="lc-chip lc-chip-danger">未完成</span>' : ''}`;
-  return `<article class="lc-film${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${escapeHtml(taskIds.join(','))}">${selector}<div class="lc-film-art"><button class="lc-film-cover" type="button" data-task-detail="${escapeHtml(task.id)}" aria-label="${escapeHtml(`查看 ${identifier} 详情`)}">${artwork}<span class="lc-film-badges">${badges}</span></button>${state.overviewSelectionMode ? '' : playButton(task.id)}</div><button class="lc-film-caption" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="lc-film-id">${escapeHtml(identifier)}</span><span class="lc-film-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small>${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
+  return `<article class="lc-film${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${task.task_type === 'media' ? '' : escapeHtml(taskIds.join(','))}">${selector}<div class="lc-film-art"><button class="lc-film-cover" type="button" data-task-detail="${escapeHtml(task.id)}" aria-label="${escapeHtml(`查看 ${identifier} 详情`)}">${artwork}<span class="lc-film-badges">${badges}</span></button>${state.overviewSelectionMode ? '' : playButton(task.id)}</div><button class="lc-film-caption" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="lc-film-id">${escapeHtml(identifier)}</span><span class="lc-film-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small>${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
 }
 
 function playButton(taskId) {
@@ -3190,7 +3239,7 @@ document.addEventListener('click', async (event) => {
   const detail = event.target.closest('[data-task-detail]');
   if (detail) {
     const overviewCard = detail.closest('[data-overview-task]');
-    if (state.overviewSelectionMode && overviewCard) {
+    if (state.overviewSelectionMode && overviewCard && overviewCard.dataset.overviewTaskIds) {
       toggleOverviewSelection(overviewTaskIds(overviewCard.dataset.overviewTaskIds));
       renderOverview();
       return;

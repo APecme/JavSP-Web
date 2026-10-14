@@ -648,6 +648,12 @@ def _decorate_task(item: dict) -> dict:
     output = image_progress.get("output") or {}
     item["fanart_count"] = int(image_progress.get("images", {}).get("fanart_done") or 0)
     item.update(_artwork_availability(item, output))
+    overrides = item.get('artwork_override') or {}
+    for kind, field in [('cover', 'cover_count'), ('fanart', 'fanart_count')]:
+        if kind in overrides:
+            item[field] = sum(Path(path).is_file() for path in overrides[kind])
+    if 'fanart' in overrides:
+        image_progress['images'].update(fanart_total=item['fanart_count'], fanart_done=item['fanart_count'], fanart_failures=[])
     organizer = item.get("file_organizer") if isinstance(item.get("file_organizer"), dict) else {}
     item["restore_available"] = bool(organizer.get("original_files") and organizer.get("organized_files")
                                      and not organizer.get("preexisting_output") and not organizer.get("replaced_existing")
@@ -670,7 +676,7 @@ def _task_list_summary(item: dict) -> dict:
             "task_type", "scan",
         )
     } | {
-        "has_artwork_sources": bool(image_sources.get("cover_urls") or image_sources.get("preview_pics")),
+        "has_artwork_sources": bool(image_sources.get("cover_urls") or image_sources.get("preview_pics") or item.get('artwork_override')),
         "progress": {
             "stages": progress.get("stages") or {},
             "crawlers": progress.get("crawlers") or {},
@@ -910,6 +916,9 @@ def get_cover_path(task_id: str, index: int) -> Path | None:
     task = get_task_record(task_id, logs=False)
     if not task or index < 0:
         return None
+    if 'cover' in (task.get('artwork_override') or {}):
+        paths = [Path(p) for p in task['artwork_override']['cover'] if Path(p).is_file()]
+        return paths[index] if index < len(paths) else None
     output = task.get("image_output") or {}
     if not output:
         legacy = get_task_record(task_id) or task
@@ -926,12 +935,65 @@ def get_fanart_path(task_id: str, index: int) -> Path | None:
     task = get_task_record(task_id, logs=False)
     if not task or index < 0:
         return None
+    if 'fanart' in (task.get('artwork_override') or {}):
+        paths = [Path(p) for p in task['artwork_override']['fanart'] if Path(p).is_file()]
+        return paths[index] if index < len(paths) else None
     output = task.get("image_output") or {}
     if not output:
         legacy = get_task_record(task_id) or task
         output = _task_progress(legacy, legacy.get("log_tail") or []).get("output") or {}
     paths = _fanart_paths(task.get("input_directory", ""), output)
     return paths[index] if index < len(paths) else None
+
+
+def edit_task_artwork(task_id, kind, index, content=None, delete=False):
+    """Keep a complete explicit image list after a manual edit, including removals."""
+    if kind not in ('cover', 'fanart') or index < -1 or (delete and index < 0):
+        raise ValueError('图片位置无效')
+    with _lock:
+        task = get_task_record(task_id)
+        if not task or task.get('status') in ('queued', 'running') or task.get('image_retry_running'):
+            raise ValueError('任务不存在或仍在运行中')
+        get_path = get_cover_path if kind == 'cover' else get_fanart_path
+        paths = []
+        for number in range(1000):
+            path = get_path(task_id, number)
+            if path is None:
+                break
+            paths.append(path)
+        if index >= len(paths):
+            raise ValueError('图片不存在，请刷新后重试')
+        if delete:
+            # Retain the removed file in a hidden backup for recoverability.
+            path = paths.pop(index)
+            backup = path.parent / '.javsp-artwork-backup'
+            backup.mkdir(exist_ok=True)
+            shutil.copy2(path, backup / (uuid.uuid4().hex + path.suffix))
+            path.unlink()
+        else:
+            if not content or len(content) > 16 * 1024 * 1024:
+                raise ValueError('图片为空或超过 16 MB')
+            with Image.open(io.BytesIO(content)) as image:
+                image.verify()
+            folder = _metadata_folder(task)
+            if index >= 0:
+                destination = paths[index]
+                backup = destination.parent / '.javsp-artwork-backup'
+                backup.mkdir(exist_ok=True)
+                shutil.copy2(destination, backup / (uuid.uuid4().hex + destination.suffix))
+                # Always write JPEG bytes to a JPEG path.
+                if destination.suffix.lower() not in ('.jpg', '.jpeg'):
+                    old = destination
+                    destination = old.with_name(old.stem + '-edited-' + uuid.uuid4().hex[:8] + '.jpg')
+                    paths[index] = destination
+            else:
+                destination = folder / ('poster-' + uuid.uuid4().hex[:8] + '.jpg') if kind == 'cover' else folder / 'extrafanart' / ('manual-' + uuid.uuid4().hex + '.jpg')
+                paths.append(destination)
+            _write_selected_cover(content, destination)
+        task.setdefault('artwork_override', {})[kind] = list(map(str, paths))
+        task['fanart_count' if kind == 'fanart' else 'cover_count'] = len(paths)
+        _persist(task)
+        return True
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

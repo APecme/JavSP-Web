@@ -83,7 +83,7 @@
 - 原始测量：[`web-performance-audit-2026-09-23.json`](web-performance-audit-2026-09-23.json)
 - 分片回归：[`../tests/test_multipart.py`](../tests/test_multipart.py)
 
-安装项目依赖及测试所需的 `httpx` 后，在仓库根目录使用 Python 3.12：
+安装项目依赖及测试所需的 `httpx2` 后，在仓库根目录使用 Python 3.12：
 
 ```sh
 python -m unittest discover -s tests -p 'test*.py' -v

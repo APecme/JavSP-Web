@@ -1,6 +1,6 @@
 """Reproducible local audit using synthetic history in a temporary data directory.
 
-Run with Python 3.12 and project dependencies plus httpx. Never imports the server
+Run with Python 3.12 and project dependencies plus httpx2. Never imports the server
 against the real data directory, starts workers, or contacts a crawler/downloader.
 """
 import argparse

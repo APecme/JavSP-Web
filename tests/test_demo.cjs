@@ -24,7 +24,7 @@ function demo() {
 }
 
 test('demo uses the current application assets and all documentation links resolve', () => {
-  for (const name of ['community.js', 'app.js', 'app.css', 'overrides.css', 'ai.js', 'ai-markdown.js']) {
+  for (const name of ['theme.css', 'theme.js', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'ai.js', 'ai-markdown.js']) {
     assert.equal(read(`docs/assets/${name === 'app.js' ? 'demo-app.js' : name}`), read(`javsp_web/web/assets/${name}`));
   }
   const pages = ['docs.html', ...fs.readdirSync(path.join(root, 'docs')).filter(file => /^guide-.*\.html$/.test(file))];

@@ -241,7 +241,11 @@ class Movie:
                 os.link(src, abs_dst)
             else:
                 shutil.move(src, abs_dst)
-            src_rel = os.path.relpath(src)
+            try:
+                src_rel = os.path.relpath(src)
+            except ValueError:
+                # Windows paths on another drive have no relative form.
+                src_rel = os.path.abspath(src)
             dst_name = os.path.basename(dst)
             logger.info(f"重命名文件: '{src_rel}' -> '...{os.sep}{dst_name}'")
             # 目前StreamHandler并未设置filter，为了避免显示中出现重复的日志，这里暂时只能用debug级别

@@ -100,6 +100,35 @@ class MultipartTests(unittest.TestCase):
         for number, original in enumerate(paths, 1):
             self.assertTrue(os.path.samefile(original, output / f'FC2-4953812-CD{number}.strm'))
 
+    def test_cross_drive_log_path_does_not_abort_file_organization(self):
+        for hard_link in (False, True):
+            with self.subTest(hard_link=hard_link):
+                incoming = f'incoming-{hard_link}'
+                paths = self.files(f'{incoming}/FC2-4953812-1.mp4',
+                                   f'{incoming}/FC2-4953812-2.mp4')
+                movie = scan_movies(str(paths[0].parent))[0]
+                output = self.root / f'output-{hard_link}'
+                output.mkdir()
+                movie.save_dir, movie.basename = str(output), movie.dvdid
+                destinations = [output / f'FC2-4953812-CD{number}.mp4'
+                                for number in (1, 2)]
+                for destination in destinations:
+                    destination.write_bytes(b'old video')
+                # Windows cannot make a C: path relative to an F: cwd.
+                # Simulate only that logging boundary; keep file I/O real.
+                with patch('javsp.datatype.os.path.relpath', side_effect=ValueError(
+                        "path is on mount 'C:', start on mount 'F:'")), \
+                     self.assertLogs('javsp.datatype', level='INFO') as logs:
+                    movie.rename_files(use_hardlink=hard_link, policy='always')
+                self.assertEqual(movie.new_paths, list(map(str, destinations)))
+                for source, destination in zip(paths, destinations):
+                    self.assertEqual(destination.read_bytes(), b'x' * 20)
+                    self.assertEqual(source.exists(), hard_link)
+                    if hard_link:
+                        self.assertTrue(os.path.samefile(source, destination))
+                    self.assertTrue(any(str(source) in line for line in logs.output))
+                self.assertFalse(list(output.glob('.javsp-backup-*')))
+
     def test_manifest_excludes_siblings_and_keeps_small_tail(self):
         paths = self.files('FC2-4953812-1.mp4', 'FC2-4953812-2.mp4', 'ABC-123.mp4')
         paths[1].write_bytes(b'x')

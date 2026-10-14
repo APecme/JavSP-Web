@@ -173,7 +173,7 @@ class TaskStoreTests(unittest.TestCase):
             self.assertEqual({item['id'] for item in items}, {'0', '1'})
         with patch.object(self.server, 'overview_libraries', return_value=[]):
             payload = client.get('/api/tasks/overview-groups', params={'by': 'library'}).json()
-            self.assertEqual((payload['by'], payload['libraries_available']), ('actress', False))
+            self.assertEqual((payload['by'], payload['libraries_available']), ('library', False))
 
     def test_metadata_update_and_detail_touch_one_record(self):
         storage.save_tasks([self.item('one'), self.item('two')])

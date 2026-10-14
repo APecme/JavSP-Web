@@ -5,6 +5,9 @@ import os
 import socket
 import struct
 import re
+import hashlib
+import threading
+from urllib.parse import quote
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
@@ -135,8 +138,7 @@ def overview_libraries() -> list[dict]:
             if selected and library["id"] not in selected:
                 continue
             roots = [local for root in library.get("locations") or [] for local in _local_roots(root, mappings)]
-            if roots:
-                result.append({"key": f"{server['id']}:{library['id']}", "name": library["name"], "server": server.get("name", ""), "roots": roots})
+            result.append({"key": f"{server['id']}:{library['id']}", "name": library["name"], "server": server.get("name", ""), "roots": roots})
     return result
 
 
@@ -147,13 +149,17 @@ def playback_links(task: dict) -> list[dict]:
     identifier = str(((task.get("progress") or {}).get("metadata") or {}).get("dvdid") or "")
     normalize = lambda value: str(value).replace("\\", "/").rstrip("/").casefold()
     paths = [normalize(folder)]
+    for value in (task.get('file_organizer') or {}).get('organized_files') or []:
+        parent = normalize(value).rsplit('/', 1)[0]
+        if parent:
+            paths.append(parent)
     for mapping in list_path_mappings():
         local, remote = normalize(mapping.get("target_path")), normalize(mapping.get("source_path"))
         if local and (paths[0] == local or paths[0].startswith(local + "/")):
             paths.append(remote + paths[0][len(local):])
     links = []
     for server in list_media_servers():
-        external = urlsplit(str(server.get("external_url") or "").strip())
+        external = urlsplit(str(server.get("external_url") or server.get('url') or "").strip())
         if external.scheme not in ("http", "https") or not external.netloc:
             continue
         base_path = external.path.rstrip("/")
@@ -167,18 +173,26 @@ def playback_links(task: dict) -> list[dict]:
         matched = [library for library in libraries if (not selected or library["id"] in selected)
                    and any(path == normalize(root) or path.startswith(normalize(root) + "/")
                            for path in paths for root in library.get("locations", []) if root)]
-        if not matched:
+        reference = task.get('media_reference') or {}
+        if reference and reference.get('server_id') != server['id']:
             continue
+        if not matched and identifier:
+            matched = [library for library in libraries if not selected or library['id'] in selected]
+        if reference:
+            matched = [library for library in libraries if library['id'] == reference.get('library_id') and (not selected or library['id'] in selected)]
         for library in matched:
-            response = requests.get(f"{_service_url(server)}/Items", headers=_headers(server),
+            if reference:
+                items = [{'Id': reference['item_id'], 'Path': folder + '/video'}]
+            else:
+                response = requests.get(f"{_service_url(server)}/Items", headers=_headers(server),
                                     params={"ParentId": library["id"], "Recursive": "true", "IncludeItemTypes": "Movie", "SearchTerm": identifier,
                                             "Fields": "Path,ProviderIds", "Limit": 100}, timeout=20)
-            response.raise_for_status()
-            items = response.json().get("Items", [])
+                response.raise_for_status()
+                items = response.json().get("Items", [])
             exact = [item for item in items if normalize(item.get("Path") or "").rsplit("/", 1)[0] in paths]
             if not exact and identifier:
-                token = re.compile(r"(?<![a-z0-9])" + re.escape(identifier) + r"(?![a-z0-9])", re.I)
-                exact = [item for item in items if token.search(str(item.get("Path") or item.get("Name") or ""))]
+                token = re.compile(r"(?<![a-z0-9])" + re.escape(identifier).replace(r'\-', r'[-_ ]?') + r"(?![a-z0-9])", re.I)
+                exact = [item for item in items if token.search(str(item.get("Path") or '') + ' ' + str(item.get('Name') or ''))]
             if len(exact) != 1 or not exact[0].get("Id"):
                 continue
             info = requests.get(f"{_service_url(server)}/System/Info", headers=_headers(server), timeout=20)
@@ -190,6 +204,139 @@ def playback_links(task: dict) -> list[dict]:
                 url = base + "/web/index.html#!/item?" + query
             links.append({"name": server["name"] + " · " + library["name"], "url": url})
     return links
+
+
+_FILM_CACHE = {}
+_FILM_LOCK = threading.RLock()
+
+
+def clear_catalog_cache():
+    with _FILM_LOCK:
+        _FILM_CACHE.clear()
+        _LIBRARY_CACHE.clear()
+
+
+def _movie_summary(server, library, item):
+    path = str(item.get('Path') or '').replace('\\', '/')
+    title = str(item.get('Name') or '')
+    identifier_text = path.rsplit('/', 1)[-1] + ' ' + title + ' ' + path.rsplit('/', 2)[-2] if '/' in path else path + ' ' + title
+    match = re.search(r'(?<![A-Za-z0-9])([A-Za-z]{2,12})[-_ ]?(\d{2,8})(?!\d)', identifier_text)
+    identifier = str((item.get('ProviderIds') or {}).get('JavSPDVDID') or ((match[1].upper() + '-' + match[2]) if match else ''))
+    fc2 = re.search(r'\bFC2[-_ ]*(?:PPV[-_ ]*)?(\d{4,9})\b', identifier_text, re.I)
+    if fc2 and not (item.get('ProviderIds') or {}).get('JavSPDVDID'):
+        identifier = 'FC2-' + fc2[1]
+    metadata = {'dvdid': identifier, 'title': title,
+                'actress': [p['Name'] for p in item.get('People') or [] if p.get('Type') == 'Actor' and p.get('Name')],
+                'director': ' / '.join(p['Name'] for p in item.get('People') or [] if p.get('Type') == 'Director' and p.get('Name')),
+                'producer': ' / '.join(s['Name'] for s in item.get('Studios') or [] if s.get('Name')),
+                'publisher': str((item.get('ProviderIds') or {}).get('JavSPPublisher') or ''), 'publish_date': str(item.get('PremiereDate') or item.get('ProductionYear') or '')[:10]}
+    key = hashlib.sha256((str(server['id']) + ':' + str(item['Id'])).encode()).hexdigest()[:24]
+    return {'id': 'media-' + key, 'name': title, 'title': title, 'file_name': path.rsplit('/', 1)[-1] or title,
+            'input_directory': path, 'status': 'succeeded', 'source': 'media', 'task_type': 'media',
+            'created_at': item.get('DateCreated') or '', 'updated_at': item.get('DateLastSaved') or '',
+            'preset_name': server.get('name', '') + ' · ' + library['name'],
+            'cover_count': int(bool((item.get('ImageTags') or {}).get('Primary'))),
+            'fanart_count': len(item.get('BackdropImageTags') or []), 'log_entries': [], 'log_tail': [],
+            'media_reference': {'server_id': server['id'], 'library_id': library['id'], 'item_id': str(item['Id'])},
+            'library_keys': [str(server['id']) + ':' + library['id']],
+            'progress': {'metadata': metadata, 'output': {'save_dir': path.rsplit('/', 1)[0] if '/' in path else ''}, 'images': {}}}
+
+
+def catalog_movies():
+    """Read every bound library, including films never scraped by this app."""
+    movies, errors = [], []
+    with _FILM_LOCK:
+        for server in list_media_servers():
+            if not server.get('url') or not server.get('api_key'):
+                continue
+            key = (server['id'], server['url'], server['api_key'], tuple(map(str, server.get('libraries') or [])))
+            cached = _FILM_CACHE.get(key)
+            if cached and cached[0] > time.monotonic():
+                movies.extend(cached[1]); errors.extend(cached[2]); continue
+            records, failures = [], []
+            try:
+                selected = set(map(str, server.get('libraries') or []))
+                for library in list_media_libraries(server):
+                    if selected and library['id'] not in selected:
+                        continue
+                    offset = 0
+                    while True:
+                        response = requests.get(f'{_service_url(server)}/Items', headers=_headers(server), timeout=30,
+                            params={'ParentId': library['id'], 'Recursive': 'true', 'IncludeItemTypes': 'Movie',
+                                    'Fields': 'Path,People,Studios,DateCreated,DateLastSaved,ProviderIds',
+                                    'StartIndex': offset, 'Limit': 1000, 'EnableTotalRecordCount': 'true'})
+                        response.raise_for_status()
+                        data = response.json()
+                        batch = data.get('Items') or []
+                        records.extend(_movie_summary(server, library, item) for item in batch if item.get('Id'))
+                        offset += len(batch)
+                        if not batch or ('TotalRecordCount' in data and offset >= int(data['TotalRecordCount'])) or ('TotalRecordCount' not in data and len(batch) < 1000):
+                            break
+            except (OSError, ValueError, requests.RequestException) as exc:
+                failures.append(server.get('name', '媒体服务器') + '：' + connection_error(exc))
+                records = cached[1] if cached else []
+            _FILM_CACHE[key] = (time.monotonic() + (60 if failures else 300), records, failures)
+            movies.extend(records); errors.extend(failures)
+    return movies, errors
+
+
+def catalog_task(task_id):
+    if not task_id.startswith('media-'):
+        return None
+    return next((item for item in catalog_movies()[0] if item['id'] == task_id), None)
+
+
+def _catalog_target(task_id):
+    task = catalog_task(task_id)
+    if not task:
+        raise ValueError('媒体库影片不存在或已取消绑定')
+    ref = task['media_reference']
+    server = next(item for item in list_media_servers() if item['id'] == ref['server_id'])
+    return task, server, f"{_service_url(server)}/Items/{quote(ref['item_id'], safe='')}"
+
+
+def catalog_image(task_id, kind, index=0, content=None, delete=False):
+    task, server, base = _catalog_target(task_id)
+    role = 'Primary' if kind == 'cover' else 'Backdrop'
+    url = base + '/Images/' + role
+    if content is None:
+        url += '/' + str(index)
+    headers = _headers(server)
+    if delete:
+        response = requests.delete(url, headers=headers, timeout=20)
+    elif content is not None:
+        headers['Content-Type'] = 'image/jpeg'
+        response = requests.post(url + ('/' + str(index) if index >= 0 else ''), headers=headers,
+                                 data=content, timeout=30)
+    else:
+        response = requests.get(url, headers=headers, params={'MaxWidth': 1200}, timeout=20)
+    response.raise_for_status()
+    if delete or content is not None:
+        clear_catalog_cache()
+    return response
+
+
+def update_catalog_metadata(task_id, values):
+    task, server, url = _catalog_target(task_id)
+    response = requests.get(f'{_service_url(server)}/Items', headers=_headers(server), timeout=20,
+                            params={'Ids': task['media_reference']['item_id'], 'Fields': 'People,Studios,ProviderIds,Overview,Genres,Tags,PremiereDate'})
+    response.raise_for_status()
+    items = response.json().get('Items') or []
+    if len(items) != 1:
+        raise ValueError('媒体库影片不存在')
+    item = items[0]
+    people = [p for p in item.get('People') or [] if p.get('Type') not in ('Actor', 'Director')]
+    people += [{'Name': name, 'Type': 'Actor'} for name in values.get('actress') or []]
+    if values.get('director'):
+        people.append({'Name': values['director'], 'Type': 'Director'})
+    item.update(Name=values.get('title', ''), People=people,
+                Studios=[{'Name': values['producer']}] if values.get('producer') else [],
+                PremiereDate=values.get('publish_date') or None)
+    item.setdefault('ProviderIds', {}).update(JavSPDVDID=values.get('dvdid') or '', JavSPPublisher=values.get('publisher') or '')
+    response = requests.post(url, headers=_headers(server), json=item, timeout=30)
+    response.raise_for_status()
+    clear_catalog_cache()
+    return {'metadata': values, 'nfo_path': ''}
 
 
 def auto_sync_media_servers() -> None:

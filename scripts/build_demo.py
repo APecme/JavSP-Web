@@ -15,7 +15,7 @@ DOCS = ROOT / 'docs'
 
 
 def build():
-    assets = ['community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js']
+    assets = ['theme.css', 'theme.js', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js']
     inputs = [WEB / 'index.html', WEB / 'assets' / 'avatar-catalog.json', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
               ROOT / 'vendor' / 'JavSP' / 'config.yml', DOCS / 'demo-mock.js', DOCS / 'demo.css',
               Path(__file__), *sorted((ROOT / 'javsp_web' / 'skills').glob('*/SKILL.md'))]
