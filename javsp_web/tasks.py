@@ -620,7 +620,7 @@ def _decorate_task(item: dict) -> dict:
     image_progress = item["progress"]
     item["title"] = item["progress"]["metadata"].get("title") or ""
     item["name"] = item["title"] if item.get("status") == "succeeded" and item["title"] else item["file_name"]
-    item["log_entries"] = build_log_entries(cleaned_logs, item.get("status", ""), item.get("error") or "", bool(item.get("image_retry_running")))[-_MAX_DISPLAY_LOG_LINES:]
+    item["log_entries"] = build_log_entries(cleaned_logs, item.get("status", ""), item.get("error") or "", bool(item.get("image_retry_running")), organizer=item.get("file_organizer"))[-_MAX_DISPLAY_LOG_LINES:]
     item["log_tail"] = log_text(item["log_entries"])
     for detail in item["progress"].get("crawler_details", {}).values():
         if detail.get("reason"):

@@ -8,6 +8,7 @@ from functools import cached_property
 
 from javsp.config import Cfg
 from javsp.lib import resource_path, detect_special_attr
+from javsp.progress import emit as progress_event
 
 
 logger = logging.getLogger(__name__)
@@ -205,6 +206,7 @@ class Movie:
                 if not replace:
                     self.new_paths = destinations
                     logger.info(f'保留已有影片，跳过本次整理（{policy}）: {existing_path}')
+                    progress_event('organization', status='skipped', policy=policy, reason='existing_video')
                     return False
                 self.organization_replaced = True
         if include_assets and policy == 'never':
@@ -222,6 +224,7 @@ class Movie:
             if any(os.path.lexists(path) for path in assets):
                 self.new_paths = destinations
                 logger.info('保留已有资料与图片，跳过本次整理（never）')
+                progress_event('organization', status='skipped', policy='never', reason='existing_assets')
                 return False
         return True
 
