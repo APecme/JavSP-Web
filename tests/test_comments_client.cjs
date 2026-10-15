@@ -6,7 +6,7 @@ const source = fs.readFileSync(require('node:path').join(__dirname, '../javsp_we
 const moduleSource = source.slice(source.indexOf('window.JavspComments ='), source.indexOf('\nfunction formatLocalDateTime'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness() {
-  const nodes = new Map(), events = {}, requests = [], saved = new Map();
+  const nodes = new Map(), events = {}, requests = [], saved = new Map(), played = [];
   const node = key => {
     if (!nodes.has(key)) nodes.set(key, { value: '', textContent: '', innerHTML: '', hidden: false, disabled: false, focus() {}, addEventListener() {} });
     return nodes.get(key);
@@ -15,17 +15,19 @@ function harness() {
   section.querySelector = node;
   const form = { elements: { nickname: node('[name=nickname]'), body: node('body') }, querySelector: node, closest: selector => selector === '#task-comments form' ? form : null };
   const context = vm.createContext({
-    window: { JavspCommunity: { configure() {}, headers: () => ({ 'X-User-Token': 'test-user' }), identity: () => ({nickname:'tester',avatar_id:''}), avatar: () => '', requireIdentity: async () => {}, verify: async () => 'verified', withChallenge: async (_action, send) => send('verified') } }, document: { addEventListener: (event, fn) => { events[event] = fn; } },
+    window: { markdownit: require('../javsp_web/web/assets/markdown-it.min.js'), JavspCommunity: { configure() {}, headers: () => ({ 'X-User-Token': 'test-user' }), identity: () => ({nickname:'tester',avatar_id:''}), avatar: () => '', requireIdentity: async () => {}, verify: async () => 'verified', withChallenge: async (_action, send) => send('verified') } }, document: { addEventListener: (event, fn) => { events[event] = fn; } },
     $: selector => selector === '#task-comments' ? section : node(selector),
     escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
     localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     AbortController, setTimeout, clearTimeout,
+    playTask: async (button, seconds) => played.push({id:button.dataset.playTask,seconds}),
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve: (data, status = 200) => resolve({ ok: status < 400, status, json: async () => data }), reject })),
   });
+  vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../javsp_web/web/assets/comment-markdown.js'),'utf8'),context);
   vm.runInContext(moduleSource, context);
   const click = selector => events.click({ target: { closest: value => value === '#task-comments ' + selector ? node(selector) : null } });
   const submit = () => events.submit({ target: form, preventDefault() {} });
-  return { api: context.window.JavspComments, community: context.window.JavspCommunity, requests, node, section, form, click, submit, saved };
+  return { api: context.window.JavspComments, community: context.window.JavspCommunity, requests, node, section, form, click, submit, saved, played };
 }
 test('same movie refresh preserves drafts; closing aborts requests and ignores stale responses', async () => {
   const h = harness(); h.api.open('ABC-001', 'https://comments.test');
@@ -42,12 +44,12 @@ test('same movie refresh preserves drafts; closing aborts requests and ignores s
 test('pagination appends escaped comments and retry keeps existing results', async () => {
   const h = harness(); h.api.open('ABC-001', 'https://comments.test');
   h.requests[0].resolve({ items: [{ id: 3, body: '<script>bad</script>', nickname: '<img>' }], next_cursor: 3 }); await tick();
-  assert.match(h.node('.comments-list').innerHTML, /&lt;script>/); assert.doesNotMatch(h.node('.comments-list').innerHTML, /<img>/);
+  assert.match(h.node('.comments-list').innerHTML, /&lt;script&gt;/); assert.doesNotMatch(h.node('.comments-list').innerHTML, /<img>/);
   assert.equal(h.node('[data-comment-more]').hidden, false);
   const loading = h.click('[data-comment-more]');
   assert.match(h.requests[1].url, /before=3/);
   h.requests[1].resolve({ detail: '暂时不可用' }, 503); await loading;
-  assert.match(h.node('.comments-list').innerHTML, /&lt;script>/);
+  assert.match(h.node('.comments-list').innerHTML, /&lt;script&gt;/);
   const retry = h.click('[data-comment-more]');
   h.requests[2].resolve({ items: [{ id: 2, body: 'older comment' }], next_cursor: null }); await retry;
   assert.equal(h.node('.comments-status').textContent, '2 条评论'); assert.equal(h.node('[data-comment-more]').hidden, true);
@@ -137,4 +139,14 @@ test('reply references escape parent content and safely label unavailable commen
   const html=h.node('.comments-list').innerHTML;
   assert.match(html,/回复/);assert.match(html,/&lt;Alice>/);assert.match(html,/&lt;img/);
   assert.doesNotMatch(html,/<img src=x>/);assert.match(html,/原评论已不可见/);
+});
+
+test('comments render Markdown and form help documents the 300 character cap',async()=>{
+ const h=harness();h.api.open('ABC-001','https://comments.test','task/1');
+ h.requests[0].resolve({items:[{id:1,body:'**粗体** 30:15'}]});await tick();
+ assert.match(h.node('.comments-list').innerHTML,/<strong>粗体<\/strong>/);
+ assert.match(h.node('.comments-list').innerHTML,/data-comment-time="1815"/);
+ assert.match(h.section.innerHTML,/maxlength="600"/);assert.match(h.section.innerHTML,/comment-help/);
+ h.form.elements.body.value='x'.repeat(301);await h.submit();
+ assert.equal(h.requests.length,1);assert.match(h.node('.comment-form-message').textContent,/300/);
 });

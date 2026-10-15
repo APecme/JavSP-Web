@@ -151,6 +151,8 @@
     if (path.startsWith('/api/tasks/')) {
       const task = tasks.find(item => item.id === path.split('/')[3]);
       if (!task) return json({ detail: '任务不存在' }, 404);
+      if (path.endsWith('/playback/sessions')) return json({ sessions: [] });
+      if (path.endsWith('/playback/seek')) return json({ detail: '演示模式没有连接媒体播放器' }, 409);
       if (path.endsWith('/cancel')) { task.status = 'cancelled'; return json(task); }
       if (method === 'DELETE') { tasks.splice(tasks.indexOf(task), 1); return json({ ok: true }); }
       if (method !== 'GET' || path.split('/').length > 4) return denied();

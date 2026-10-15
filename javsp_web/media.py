@@ -142,7 +142,7 @@ def overview_libraries() -> list[dict]:
     return result
 
 
-def playback_links(task: dict) -> list[dict]:
+def playback_links(task: dict, include_targets: bool = False) -> list[dict]:
     """Match output paths to selected libraries, then resolve the server's item page."""
     output = (task.get("progress") or {}).get("output") or {}
     folder = str(output.get("save_dir") or task.get("input_directory") or "")
@@ -202,8 +202,52 @@ def playback_links(task: dict) -> list[dict]:
                 url = base + "/web/#/details?" + query
             else:
                 url = base + "/web/index.html#!/item?" + query
-            links.append({"name": server["name"] + " · " + library["name"], "url": url})
+            link = {"name": server["name"] + " · " + library["name"], "url": url}
+            if include_targets:
+                link.update({"server_id": server["id"], "session_server_id": info.json().get("Id", ""), "item_id": str(exact[0]["Id"]), "server": server})
+            links.append(link)
+    if not include_targets:
+        return [{key: value for key, value in link.items() if key in {"name", "url"}} for link in links]
     return links
+
+
+def media_sessions(task: dict) -> list[dict]:
+    sessions = []
+    seen = set()
+    for target in playback_links(task, include_targets=True):
+        server = target.pop('server')
+        response = requests.get(f"{_service_url(server)}/Sessions", params={"activeWithinSeconds": 900}, headers=_headers(server), timeout=20)
+        response.raise_for_status()
+        for item in response.json() or []:
+            capabilities = item.get('Capabilities') or {}
+            if item.get('SupportsRemoteControl') is False or capabilities.get('SupportsMediaControl') is False:
+                continue
+            playable = capabilities.get('PlayableMediaTypes') or item.get('PlayableMediaTypes') or []
+            if playable and 'Video' not in playable:
+                continue
+            key = (target["server_id"], item.get('Id'))
+            if key in seen: continue
+            seen.add(key)
+            sessions.append({"server_id": target["server_id"], "item_id": target["item_id"], "server_name": target["name"],
+                             "session_id": item.get('Id'), "client": item.get('Client') or '', "device_name": item.get('DeviceName') or '',
+                             "user_name": item.get('UserName') or '', "last_activity": item.get('LastActivityDate')})
+    return [item for item in sessions if item.get('session_id')]
+
+
+def seek_media(task: dict, server_id: str, session_id: str, seconds: int) -> None:
+    targets = [target for target in playback_links(task, include_targets=True) if target['server_id'] == server_id]
+    targets = list({(target['server_id'], target['item_id']): target for target in targets}.values())
+    if len(targets) != 1:
+        raise ValueError('媒体库影片匹配不唯一')
+    target = targets[0]; server = target.pop('server')
+    sessions = media_sessions(task)
+    if not any(item['server_id'] == server_id and item['session_id'] == session_id for item in sessions):
+        raise ValueError('播放器会话不存在、已离线或无远程控制权限')
+    if seconds < 0 or seconds > 7 * 24 * 3600:
+        raise ValueError('播放时间超出允许范围')
+    params = {'playCommand': 'PlayNow', 'itemIds': target['item_id'], 'startPositionTicks': seconds * 10_000_000}
+    response = requests.post(f"{_service_url(server)}/Sessions/{quote(session_id, safe='')}/Playing", params=params, headers=_headers(server), timeout=20)
+    response.raise_for_status()
 
 
 _FILM_CACHE = {}

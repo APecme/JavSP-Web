@@ -73,7 +73,7 @@ from .storage import (
     write_config,
 )
 from .qbittorrent import QbittorrentError, delete_torrent, list_downloads, set_share_limits, set_torrent_transfer_limits, test_connection
-from .media import connection_error, list_media_libraries, overview_libraries, playback_links, sync_media_server
+from .media import connection_error, list_media_libraries, overview_libraries, playback_links, sync_media_server, media_sessions, seek_media
 from .tasks import NoScrapeTasksError, active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_task_summaries, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
 from .artwork import image_response
@@ -1331,6 +1331,31 @@ def task_playback(task_id: str, _: dict = Depends(current_user)) -> dict:
     if not links:
         raise HTTPException(404, "未在绑定媒体库中找到影片，请确认外部播放地址、媒体库路径及扫描状态")
     return {"links": links}
+
+
+@app.get("/api/tasks/{task_id}/playback/sessions")
+def task_playback_sessions(task_id: str, _: dict = Depends(current_user)) -> dict:
+    item = catalog_task(task_id) if task_id.startswith('media-') else get_task(task_id)
+    if not item: raise HTTPException(404, "任务不存在")
+    try: return {"sessions": media_sessions(item)}
+    except Exception as exc: raise HTTPException(400, "媒体库会话读取失败：" + connection_error(exc)) from exc
+
+
+class PlaybackSeekBody(BaseModel):
+    server_id: str = Field(min_length=1, max_length=128)
+    session_id: str = Field(min_length=1, max_length=256)
+    seconds: int = Field(ge=0, le=604800)
+
+
+@app.post("/api/tasks/{task_id}/playback/seek")
+def task_playback_seek(task_id: str, body: PlaybackSeekBody, _: dict = Depends(current_user)) -> dict:
+    item = catalog_task(task_id) if task_id.startswith('media-') else get_task(task_id)
+    if not item: raise HTTPException(404, "任务不存在")
+    try:
+        seek_media(item, body.server_id, body.session_id, body.seconds)
+    except ValueError as exc: raise HTTPException(400, "媒体库跳转失败：" + str(exc)) from exc
+    except Exception as exc: raise HTTPException(400, "媒体库跳转失败：" + connection_error(exc)) from exc
+    return {"ok": True, "seconds": body.seconds}
 
 
 @app.patch("/api/tasks/{task_id}/metadata")

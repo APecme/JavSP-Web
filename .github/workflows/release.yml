@@ -29,6 +29,7 @@ jobs:
           node tests/test_ai_translation_client.cjs
           node tests/test_cookiecloud_client.cjs
           node tests/test_comments_client.cjs
+          node tests/test_comment_markdown.cjs
           node tests/test_community_client.cjs
           node tests/test_library_playback.cjs
           node tests/test_demo.cjs

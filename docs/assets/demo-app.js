@@ -2036,7 +2036,7 @@ async function openTaskDetail(taskId, background = false) {
   $('#task-detail-subtitle').textContent = heading.subtitle;
   const identifier = String(metadata.dvdid || '').trim();
   patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
-  window.JavspComments?.open(identifier, state.runtime?.comments_url || '');
+  window.JavspComments?.open(identifier, state.runtime?.comments_url || '', task.id);
 }
 
 function artworkEditor(task) {
@@ -3713,6 +3713,7 @@ window.JavspComments = (() => {
   const target = () => $('#task-comments');
   const esc = (value) => escapeHtml(value ?? '');
   const date = (value) => new Date(Number(value) * 1000).toLocaleString();
+  const commentHelp = '<div class="comment-label-row"><label for="film-comment-body">评论内容</label><details class="comment-help"><summary aria-label="评论格式和时间标签说明">?</summary><div class="comment-help-content"><p>评论和回复最多 300 字符，举报原因最多 300 字符。</p><p>支持 Markdown：<code>**粗体**</code>、<code>*斜体*</code>、<code>~~删除线~~</code>、列表、引用、代码和链接。</p><p>输入 <code>30:15</code> 或 <code>1:02:03</code> 可生成时间标签，点击可从对应位置播放当前影片。</p><p>代码和链接中的时间保持原样；不执行 HTML，也不加载远程图片。播放时需绑定媒体库并登录播放器。</p></div></details></div>';
   const replyQuote = (item) => !item.reply_to_id ? '' : `<blockquote class="comment-reply-quote">${item.reply_to ? `<strong>回复 ${esc(item.reply_to.nickname)}</strong><span>${esc(item.reply_to.body)}</span>` : '<span class="muted">原评论已不可见</span>'}</blockquote>`;
   const selectReply = (active, item) => {
     active.replyTo = item ? { id: item.id, nickname: item.nickname } : null;
@@ -3742,7 +3743,7 @@ window.JavspComments = (() => {
   const render = (active) => {
     const section = target();
     section.querySelector('.comments-list').innerHTML = active.items.length
-      ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head">${window.JavspCommunity.avatar(item.avatar_id, item.nickname)}<strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div>${replyQuote(item)}<p>${esc(item.body)}</p><div class="comment-actions"><button class="comment-like" type="button" data-comment-like="${esc(item.id)}" aria-pressed="${Boolean(item.liked)}">${item.liked ? '已赞' : '点赞'} · ${Number(item.likes) || 0}</button><button class="comment-reply" type="button" data-comment-reply="${esc(item.id)}">回复</button><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></div></article>`).join('')
+      ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head">${window.JavspCommunity.avatar(item.avatar_id, item.nickname)}<strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div>${replyQuote(item)}<div class="comment-markdown">${window.JavspCommentMarkdown?.render(item.body) ?? esc(item.body)}</div><div class="comment-actions"><button class="comment-like" type="button" data-comment-like="${esc(item.id)}" aria-pressed="${Boolean(item.liked)}">${item.liked ? '已赞' : '点赞'} · ${Number(item.likes) || 0}</button><button class="comment-reply" type="button" data-comment-reply="${esc(item.id)}">回复</button><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></div></article>`).join('')
       : '<p class="muted">还没有评论，欢迎留下第一条。</p>';
     section.querySelector('.comments-status').textContent = active.cursor ? `已显示 ${active.items.length} 条` : `${active.items.length} 条评论`;
     section.querySelector('[data-comment-more]').hidden = !active.cursor;
@@ -3782,18 +3783,18 @@ window.JavspComments = (() => {
     const section = target();
     if (section) { section.hidden = true; section.innerHTML = ''; }
   };
-  const open = (identifier, baseUrl) => {
+  const open = (identifier, baseUrl, taskId = '') => {
     const section = target();
     if (!section) return;
     const name = String(identifier || '').trim();
     const base = String(baseUrl || '').replace(/\/+$/, '');
     window.JavspCommunity.configure(base);
-    if (current?.identifier === name && current?.base === base) return;
+    if (current?.identifier === name && current?.base === base) { current.taskId = taskId; return; }
     close();
     if (!name || !base) return;
-    current = { identifier: name, base, items: [], cursor: null, loading: false, posting: false, replyTo: null, requests: new Set() };
+    current = { identifier: name, base, taskId, items: [], cursor: null, loading: false, posting: false, replyTo: null, requests: new Set() };
     section.hidden = false;
-    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><div class="comment-reply-context" hidden><span class="comment-reply-label" role="status"></span><button type="button" class="comment-profile-link" data-comment-reply-cancel>取消回复</button></div><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
+    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><div class="comment-reply-context" hidden><span class="comment-reply-label" role="status"></span><button type="button" class="comment-profile-link" data-comment-reply-cancel>取消回复</button></div>${commentHelp}<textarea id="film-comment-body" name="body" maxlength="600" rows="3" required placeholder="写下你对这部影片的看法"></textarea><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
     load();
   };
   document.addEventListener('submit', async (event) => {
@@ -3807,6 +3808,8 @@ window.JavspComments = (() => {
     const message = form.querySelector('.comment-form-message');
     const body = form.elements.body.value.trim();
     if (!body) { message.textContent = '请先填写评论内容。'; return; }
+    if ([...body].length > 300) { message.textContent = '评论和回复不能超过 300 字符。'; return; }
+    if ([...body].length > 300) { message.textContent = '评论和回复不能超过 300 字符。'; return; }
     const replyToId = active.replyTo?.id;
     active.posting = true;
     button.disabled = true;
@@ -3842,6 +3845,28 @@ window.JavspComments = (() => {
       if (item) { selectReply(current, item); target().querySelector('textarea[name="body"]').focus(); }
       return;
     }
+    const timestamp = event.target.closest('#task-comments [data-comment-time]');
+    if (timestamp && current) {
+      const seconds = Number(timestamp.dataset.commentTime);
+      try {
+        const data = await api(`/api/tasks/${encodeURIComponent(current.taskId)}/playback/sessions`, { timeoutMs: 30000 });
+        const sessions = (data.sessions || []).filter(item => item.session_id);
+        if (sessions.length === 1) {
+          await api(`/api/tasks/${encodeURIComponent(current.taskId)}/playback/seek`, { method: 'POST', timeoutMs: 30000, body: JSON.stringify({ server_id: sessions[0].server_id, session_id: sessions[0].session_id, seconds }) });
+          showToast(`已在 ${sessions[0].client || sessions[0].device_name || '媒体播放器'} 跳转到 ${timestamp.textContent}`);
+        } else if (!sessions.length) {
+          showToast('请先登录并打开 Jellyfin/Emby 播放器页面，再刷新后重试。');
+        } else {
+          const labels = sessions.map((item, index) => `${index + 1}. ${item.client || item.device_name || '媒体播放器'}${item.user_name ? `（${item.user_name}）` : ''}`).join('\n');
+          const choice = window.prompt(`选择要跳转的播放器：\n${labels}`);
+          const index = Number(choice) - 1;
+          if (!Number.isInteger(index) || !sessions[index]) { showToast('播放器序号无效。', 'error'); return; }
+          await api(`/api/tasks/${encodeURIComponent(current.taskId)}/playback/seek`, { method: 'POST', timeoutMs: 30000, body: JSON.stringify({ server_id: sessions[index].server_id, session_id: sessions[index].session_id, seconds }) });
+          showToast(`已在 ${sessions[index].client || sessions[index].device_name || '媒体播放器'} 跳转到 ${timestamp.textContent}`);
+        }
+      } catch (error) { showToast(error.message, 'error'); }
+      return;
+    }
     const like = event.target.closest('#task-comments [data-comment-like]');
     if (like && current && !like.disabled) {
       const active = current;
@@ -3866,7 +3891,7 @@ window.JavspComments = (() => {
     if (!button || !active || button.disabled) return;
     const reason = window.prompt('请简要说明举报原因（最多 300 字）');
     if (!reason?.trim()) return;
-    if (reason.trim().length > 300) { window.alert('举报原因不能超过 300 字。'); return; }
+    if ([...reason.trim()].length > 300) { window.alert('举报原因不能超过 300 字。'); return; }
     button.disabled = true;
     try {
       await window.JavspCommunity.withChallenge('report', (turnstile_token) => {

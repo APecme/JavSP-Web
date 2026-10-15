@@ -89,6 +89,37 @@ class MediaTests(unittest.TestCase):
         self.assertNotIn('secret', media.connection_error(error))
         self.assertNotIn('secret', media.connection_error(requests.ConnectionError('secret URL')))
 
+    def test_media_sessions_filters_non_controllable_clients(self):
+        libraries = [{'id': 'movies', 'name': 'Movies', 'locations': ['/media/movies']}]
+        items = {'Items': [{'Id': 'movie-123', 'Path': '/media/movies/ABC-123/video.mkv'}]}
+        info = {'Id': 'server-id'}
+        sessions = [
+            {'Id': 'web-1', 'Client': 'Jellyfin Web', 'DeviceName': 'Browser', 'SupportsRemoteControl': True,
+             'Capabilities': {'SupportsMediaControl': True, 'PlayableMediaTypes': ['Video']}},
+            {'Id': 'music-1', 'Client': 'Music', 'SupportsRemoteControl': True,
+             'Capabilities': {'SupportsMediaControl': True, 'PlayableMediaTypes': ['Audio']}},
+            {'Id': 'no-control', 'Client': 'Other', 'SupportsRemoteControl': False,
+             'Capabilities': {'SupportsMediaControl': False, 'PlayableMediaTypes': ['Video']}},
+        ]
+        with patch.object(media, 'list_media_servers', return_value=[self.server]), patch.object(media, 'list_path_mappings', return_value=[]), \
+             patch.object(media, 'list_media_libraries', return_value=libraries), patch.object(media.requests, 'get', side_effect=[self.response(items), self.response(info), self.response(sessions)]):
+            result = media.media_sessions({'progress': {'output': {'save_dir': '/media/movies/ABC-123'}, 'metadata': {'dvdid': 'ABC-123'}}})
+        self.assertEqual([item['session_id'] for item in result], ['web-1'])
+
+    def test_seek_media_uses_jellyfin_start_position_ticks_and_session_guard(self):
+        libraries = [{'id': 'movies', 'name': 'Movies', 'locations': ['/media/movies']}]
+        item_response = self.response({'Items': [{'Id': 'movie-123', 'Path': '/media/movies/ABC-123/video.mkv'}]})
+        info_response = self.response({'Id': 'server-id'})
+        sessions_response = self.response([{'Id': 'web-1', 'SupportsRemoteControl': True,
+                                             'Capabilities': {'SupportsMediaControl': True, 'PlayableMediaTypes': ['Video']}}])
+        post = self.response({}, 204)
+        with patch.object(media, 'list_media_servers', return_value=[self.server]), patch.object(media, 'list_path_mappings', return_value=[]), \
+             patch.object(media, 'list_media_libraries', return_value=libraries), patch.object(media.requests, 'get', side_effect=[item_response, info_response, item_response, info_response, sessions_response]), \
+             patch.object(media.requests, 'post', return_value=post) as send:
+            media.seek_media({'progress': {'output': {'save_dir': '/media/movies/ABC-123'}, 'metadata': {'dvdid': 'ABC-123'}}}, 'local-config-id', 'web-1', 1815)
+        self.assertEqual(send.call_args.kwargs['params']['startPositionTicks'], 1815 * 10_000_000)
+        self.assertEqual(send.call_args.kwargs['params']['playCommand'], 'PlayNow')
+
 
 if __name__ == '__main__':
     unittest.main()
