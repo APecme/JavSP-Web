@@ -704,7 +704,11 @@ html[data-initial-view="ai-scrape"] [data-panel="ai-scrape"] { display: block; }
 .comment-item-head { align-items: center; justify-content: start; }
 .comment-item-head time { margin-left: auto; }
 .comment-actions { display: flex; align-items: center; gap: 18px; margin-top: 5px; }
-.comment-like, .comment-profile-link { border: 0; background: transparent; color: var(--text-muted); padding: 5px 0; cursor: pointer; font-size: 12px; }
+.comment-like, .comment-reply, .comment-profile-link { border: 0; background: transparent; color: var(--text-muted); padding: 5px 0; cursor: pointer; font-size: 12px; }
+.comment-reply:hover { color: var(--accent-text); }
+.comment-reply-context { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--text-muted); font-size: 12px; }
+.comment-reply-context[hidden] { display: none; }
+.comment-reply-quote { display: grid; gap: 4px; margin: 8px 0; padding: 8px 12px; border-left: 2px solid var(--border); color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
 .comment-like[aria-pressed="true"] { color: var(--accent-text); font-weight: 600; }
 .comment-like:disabled { opacity: .5; cursor: wait; }
 .task-detail-dialog .comment-form { grid-template-columns: 1fr; }

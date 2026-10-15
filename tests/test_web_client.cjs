@@ -76,7 +76,7 @@ function verifyTaskDetailHeadingAndOverviewLabels() {
     id: 'task', status: 'failed', task_type: 'scrape', name: 'ABC-123', file_name: 'ABC-123.mp4', cover_count: 0,
     progress: { metadata: { dvdid: 'ABC-123' } },
   }, 2, ['task', 'older']);
-  assert.match(card, /刮削 2 次/);
+  assert.doesNotMatch(card, /刮削\s*\d+\s*次|条刮削任务记录/);
   assert.match(card, /刮削失败/);
   assert.doesNotMatch(card, />未完成</);
 }

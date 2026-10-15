@@ -8,7 +8,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness() {
   const nodes = new Map(), events = {}, requests = [], saved = new Map();
   const node = key => {
-    if (!nodes.has(key)) nodes.set(key, { value: '', textContent: '', innerHTML: '', hidden: false, disabled: false, addEventListener() {} });
+    if (!nodes.has(key)) nodes.set(key, { value: '', textContent: '', innerHTML: '', hidden: false, disabled: false, focus() {}, addEventListener() {} });
     return nodes.get(key);
   };
   const section = node('section');
@@ -93,4 +93,48 @@ test('unconfigured identity preserves comment draft and does not start a challen
   assert.equal(h.form.elements.body.value,'keep my draft');
   assert.match(h.node('.comment-form-message').textContent,/登录评论身份/);
   assert.equal(h.node('button[type="submit"]').disabled,false);
+});
+
+test('reply selection preserves drafts, submits the parent and clears only after success', async () => {
+  const h=harness(); h.api.open('ABC-001','https://comments.test');
+  h.requests[0].resolve({items:[{id:5,nickname:'<Alice>',body:'parent text'}]}); await tick();
+  assert.match(h.node('.comments-list').innerHTML,/data-comment-reply="5"/);
+  h.form.elements.body.value='draft reply';
+  h.node('[data-comment-reply]').dataset={commentReply:'5'};
+  await h.click('[data-comment-reply]');
+  assert.equal(h.node('.comment-reply-context').hidden,false);
+  assert.match(h.node('.comment-reply-label').textContent,/<Alice>/);
+  assert.equal(h.form.elements.body.value,'draft reply');
+  const failed=h.submit(); await tick();
+  assert.equal(JSON.parse(h.requests[1].options.body).reply_to_id,5);
+  h.requests[1].resolve({detail:'稍后再试'},429);await failed;
+  assert.equal(h.node('.comment-reply-context').hidden,false);
+  assert.equal(h.form.elements.body.value,'draft reply');
+  const success=h.submit();await tick();
+  h.requests[2].resolve({comment:{status:'pending'}},201);await success;
+  assert.equal(h.node('.comment-reply-context').hidden,true);
+  assert.equal(h.form.elements.body.value,'');
+});
+
+test('cancel reply preserves text and a new movie cannot inherit a reply target', async()=>{
+  const h=harness();h.api.open('ABC-001','https://comments.test');
+  h.requests[0].resolve({items:[{id:5,nickname:'Alice',body:'parent'}]});await tick();
+  h.node('[data-comment-reply]').dataset={commentReply:'5'};
+  await h.click('[data-comment-reply]');h.form.elements.body.value='draft';
+  await h.click('[data-comment-reply-cancel]');
+  assert.equal(h.node('.comment-reply-context').hidden,true);
+  assert.equal(h.form.elements.body.value,'draft');
+  await h.click('[data-comment-reply]');
+  h.api.open('ABC-002','https://comments.test');h.requests[1].resolve({items:[]});await tick();
+  const sent=h.submit();await tick();
+  assert.equal(JSON.parse(h.requests[2].options.body).reply_to_id,undefined);
+  h.requests[2].resolve({comment:{status:'pending'}},201);await sent;
+});
+
+test('reply references escape parent content and safely label unavailable comments',async()=>{
+  const h=harness();h.api.open('ABC-001','https://comments.test');
+  h.requests[0].resolve({items:[{id:7,body:'reply',reply_to_id:5,reply_to:{id:5,nickname:'<Alice>',body:'<img src=x>'}},{id:8,body:'reply two',reply_to_id:4,reply_to:null}]});await tick();
+  const html=h.node('.comments-list').innerHTML;
+  assert.match(html,/回复/);assert.match(html,/&lt;Alice>/);assert.match(html,/&lt;img/);
+  assert.doesNotMatch(html,/<img src=x>/);assert.match(html,/原评论已不可见/);
 });

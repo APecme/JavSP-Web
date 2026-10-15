@@ -2319,10 +2319,9 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const selector = state.overviewSelectionMode && task.task_type !== 'media' ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
   const feedback = taskIds.some((id) => state.overviewSelectionFeedback.has(id));
   const year = String(metadata.publish_date || '').slice(0, 4);
-  const countBadge = taskCount > 1 ? `<span class="lc-chip" title="同一影片文件夹中有 ${taskCount} 条刮削任务记录">刮削 ${taskCount} 次</span>` : '';
   const incomplete = ['failed','cancelled'].includes(task.status);
   const failedBadge = incomplete ? `<span class="lc-chip lc-chip-danger" title="没有成功的刮削记录；已保留部分图片，可重新刮削">${task.status === 'failed' ? '刮削失败' : '刮削已停止'}</span>` : '';
-  const badges = `${/^\d{4}$/.test(year) ? `<span class="lc-chip">${escapeHtml(year)}</span>` : ''}${countBadge}${failedBadge}`;
+  const badges = `${/^\d{4}$/.test(year) ? `<span class="lc-chip">${escapeHtml(year)}</span>` : ''}${failedBadge}`;
   return `<article class="lc-film${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${task.task_type === 'media' ? '' : escapeHtml(taskIds.join(','))}">${selector}<div class="lc-film-art"><button class="lc-film-cover" type="button" data-task-detail="${escapeHtml(task.id)}" aria-label="${escapeHtml(`查看 ${identifier} 详情`)}">${artwork}<span class="lc-film-badges">${badges}</span></button>${state.overviewSelectionMode ? '' : playButton(task.id)}</div><button class="lc-film-caption" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="lc-film-id">${escapeHtml(identifier)}</span><span class="lc-film-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small>${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
 }
 
@@ -3714,6 +3713,14 @@ window.JavspComments = (() => {
   const target = () => $('#task-comments');
   const esc = (value) => escapeHtml(value ?? '');
   const date = (value) => new Date(Number(value) * 1000).toLocaleString();
+  const replyQuote = (item) => !item.reply_to_id ? '' : `<blockquote class="comment-reply-quote">${item.reply_to ? `<strong>回复 ${esc(item.reply_to.nickname)}</strong><span>${esc(item.reply_to.body)}</span>` : '<span class="muted">原评论已不可见</span>'}</blockquote>`;
+  const selectReply = (active, item) => {
+    active.replyTo = item ? { id: item.id, nickname: item.nickname } : null;
+    const section = target();
+    section.querySelector('.comment-reply-context').hidden = !item;
+    section.querySelector('.comment-reply-label').textContent = item ? `正在回复 ${item.nickname || '匿名用户'}` : '';
+    section.querySelector('.comment-form button[type="submit"]').textContent = item ? '发表回复' : '发表评论';
+  };
   const request = async (active, path, options = {}) => {
     const controller = new AbortController();
     active.requests.add(controller);
@@ -3735,7 +3742,7 @@ window.JavspComments = (() => {
   const render = (active) => {
     const section = target();
     section.querySelector('.comments-list').innerHTML = active.items.length
-      ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head">${window.JavspCommunity.avatar(item.avatar_id, item.nickname)}<strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div><p>${esc(item.body)}</p><div class="comment-actions"><button class="comment-like" type="button" data-comment-like="${esc(item.id)}" aria-pressed="${Boolean(item.liked)}">${item.liked ? '已赞' : '点赞'} · ${Number(item.likes) || 0}</button><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></div></article>`).join('')
+      ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head">${window.JavspCommunity.avatar(item.avatar_id, item.nickname)}<strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div>${replyQuote(item)}<p>${esc(item.body)}</p><div class="comment-actions"><button class="comment-like" type="button" data-comment-like="${esc(item.id)}" aria-pressed="${Boolean(item.liked)}">${item.liked ? '已赞' : '点赞'} · ${Number(item.likes) || 0}</button><button class="comment-reply" type="button" data-comment-reply="${esc(item.id)}">回复</button><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></div></article>`).join('')
       : '<p class="muted">还没有评论，欢迎留下第一条。</p>';
     section.querySelector('.comments-status').textContent = active.cursor ? `已显示 ${active.items.length} 条` : `${active.items.length} 条评论`;
     section.querySelector('[data-comment-more]').hidden = !active.cursor;
@@ -3784,9 +3791,9 @@ window.JavspComments = (() => {
     if (current?.identifier === name && current?.base === base) return;
     close();
     if (!name || !base) return;
-    current = { identifier: name, base, items: [], cursor: null, loading: false, requests: new Set() };
+    current = { identifier: name, base, items: [], cursor: null, loading: false, posting: false, replyTo: null, requests: new Set() };
     section.hidden = false;
-    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
+    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><div class="comment-reply-context" hidden><span class="comment-reply-label" role="status"></span><button type="button" class="comment-profile-link" data-comment-reply-cancel>取消回复</button></div><label>评论内容<textarea name="body" maxlength="2000" rows="3" required placeholder="写下你对这部影片的看法"></textarea></label><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
     load();
   };
   document.addEventListener('submit', async (event) => {
@@ -3800,6 +3807,8 @@ window.JavspComments = (() => {
     const message = form.querySelector('.comment-form-message');
     const body = form.elements.body.value.trim();
     if (!body) { message.textContent = '请先填写评论内容。'; return; }
+    const replyToId = active.replyTo?.id;
+    active.posting = true;
     button.disabled = true;
     message.textContent = '正在提交…';
     try {
@@ -3808,19 +3817,31 @@ window.JavspComments = (() => {
       const data = await window.JavspCommunity.withChallenge('comment', (turnstile_token) => {
         if (active !== current) return Promise.reject(new Error('评论窗口已关闭'));
         const payload = { ...window.JavspCommunity.identity(), body, website: '' };
+        if (replyToId) payload.reply_to_id = replyToId;
         if (turnstile_token) payload.turnstile_token = turnstile_token;
         return request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments`, { method: 'POST', body: JSON.stringify(payload) });
       });
       if (active !== current) return;
       form.elements.body.value = '';
+      selectReply(active, null);
       message.textContent = data.comment?.status === 'pending' ? '评论已提交，审核后会显示在这里。' : '评论已发布。';
       if (data.comment?.status !== 'pending') await load();
     } catch (error) { if (active === current) message.textContent = error.message; }
-    finally { button.disabled = false; }
+    finally { active.posting = false; button.disabled = false; }
   });
   document.addEventListener('click', async (event) => {
     if (event.target.closest('#task-comments [data-comment-more]')) { await load(true); return; }
     if (event.target.closest('#task-comments [data-comment-refresh]')) { await load(); return; }
+    if (event.target.closest('#task-comments [data-comment-reply-cancel]')) {
+      if (current && !current.posting) selectReply(current, null);
+      return;
+    }
+    const reply = event.target.closest('#task-comments [data-comment-reply]');
+    if (reply && current && !current.posting) {
+      const item = current.items.find(item => String(item.id) === reply.dataset.commentReply);
+      if (item) { selectReply(current, item); target().querySelector('textarea[name="body"]').focus(); }
+      return;
+    }
     const like = event.target.closest('#task-comments [data-comment-like]');
     if (like && current && !like.disabled) {
       const active = current;
