@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
+const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), actressScope: localStorage.getItem('javsp-web.actress-scope') || 'existing', gfriendsCatalog: null, activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -2220,18 +2220,29 @@ function renderOverviewGroups() {
   const container = $('#overview-tasks');
   if (!result) { patchChildren(container, '<p class="lc-loading">正在读取媒体库…</p>'); return; }
   const [, label, english] = overviewGroupType(result.by);
+  if (result.by === 'actress' && state.actressScope === 'all' && !Array.isArray(state.gfriendsCatalog)) {
+    patchChildren(container, '<p class="lc-loading">正在读取 Gfriends 女优目录…</p>');
+    fetch('/assets/avatar-catalog.json').then(response => response.json()).then(catalog => { state.gfriendsCatalog = catalog.filter(item => item.source === 'gfriends' && item.name); renderOverview(); }).catch(() => { state.gfriendsCatalog = []; renderOverview(); });
+    return;
+  }
   if (!result.all?.count && !result.groups?.length) {
     patchChildren(container, `<div class="library-empty lc-empty-state"><span aria-hidden="true">▤</span><h3>收藏从第一部影片开始</h3><p>添加刮削任务，完成后就能在这里按${escapeHtml(label)}浏览封面和影片资料。</p><button class="button primary" data-go="scrape">添加影片</button></div>`);
     return;
   }
   const everything = { key: '__all__', name: '全部影片', count: result.all.count, covers: result.all.covers, template: 'tilted' };
-  const groups = result.by === 'all' ? [everything] : result.groups;
-  const pages = Math.max(1, Math.ceil(result.total / result.limit));
+  let groups = result.by === 'all' ? [everything] : result.groups;
+  if (result.by === 'actress' && state.actressScope === 'all' && Array.isArray(state.gfriendsCatalog)) {
+    const existing = new Map(result.groups.map(group => [group.name, group]));
+    groups = state.gfriendsCatalog.map(item => ({ ...(existing.get(item.name) || { key: item.name, count: 0, covers: [] }), name: item.name, gfriends_url: item.url }));
+    if (state.overviewGroupQuery) groups = groups.filter(group => group.name.toLocaleLowerCase().includes(state.overviewGroupQuery.toLocaleLowerCase()));
+  }
+  const pages = Math.max(1, Math.ceil((result.by === 'actress' && state.actressScope === 'all' ? groups.length : result.total) / result.limit));
   const cards = groups.length
     ? `<div class="lc-library-grid">${groups.map((group) => libraryCard(group, group.key === '__all__' ? 'ALL MOVIES' : english)).join('')}</div>`
     : `<div class="library-empty lc-empty-state"><span aria-hidden="true">⌕</span><h3>没有找到“${escapeHtml(state.overviewGroupQuery)}”</h3><p>换个${escapeHtml(label)}名称试试。</p></div>`;
   const pagination = pages > 1 ? `<div class="overview-pagination"><span>第 ${state.overviewGroupPage} / ${pages} 页</span><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage - 1}"${state.overviewGroupPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage + 1}"${state.overviewGroupPage >= pages ? ' disabled' : ''}>下一页</button></div>` : '';
-  patchChildren(container, `${(state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('')}<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><span>${result.total} 个分类 · ${result.all.count} 部影片</span></div>${cards}${pagination}`);
+  const actressSwitch = result.by === 'actress' ? `<div class="overview-actress-scope" role="group" aria-label="女优范围"><button type="button" class="${state.actressScope === 'existing' ? 'active' : ''}" data-actress-scope="existing">仅显示已有女优</button><button type="button" class="${state.actressScope === 'all' ? 'active' : ''}" data-actress-scope="all">全部 Gfriends 女优</button></div>` : '';
+  patchChildren(container, `${(state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('')}<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><div>${actressSwitch}<span>${result.by === 'actress' && state.actressScope === 'all' ? groups.length : result.total} 个分类 · ${result.all.count} 部影片</span></div></div>${cards}${pagination}`);
 }
 
 function libraryCard(group, english) {
@@ -2246,7 +2257,7 @@ function coverHash(text) {
 
 // Library covers follow LibraryCoverStudio's 1920×1080 templates, drawn with live posters.
 function libraryCover(group, english) {
-  const covers = (group.covers || []).map((cover) => `/api/tasks/${encodeURIComponent(cover.id)}/cover/0?thumbnail=true&v=${encodeURIComponent(cover.v || '')}`);
+  const covers = group.gfriends_url ? [group.gfriends_url] : (group.covers || []).map((cover) => `/api/tasks/${encodeURIComponent(cover.id)}/cover/0?thumbnail=true&v=${encodeURIComponent(cover.v || '')}`);
   const seed = coverHash(`${english}:${group.key}`);
   const pickSeed = Math.imul(seed ^ (seed >>> 15), 2246822507) >>> 13;
   const template = group.template || (covers.length >= 5 ? ['tilted', 'upright', 'fan', 'strip'][pickSeed % 4] : covers.length ? ['stacked', 'diagonal', 'fan'][pickSeed % 3] : 'plain');
@@ -3240,6 +3251,14 @@ document.addEventListener('click', async (event) => {
   if (openGroup) { openOverviewGroup(openGroup.dataset.overviewOpenGroup); return; }
   const groupType = event.target.closest('[data-overview-group-by]');
   if (groupType) { closeOverviewGroup(groupType.dataset.overviewGroupBy); return; }
+  const actressScope = event.target.closest('[data-actress-scope]');
+  if (actressScope) {
+    state.actressScope = actressScope.dataset.actressScope;
+    localStorage.setItem('javsp-web.actress-scope', state.actressScope);
+    state.overviewGroupPage = 1;
+    renderOverviewGroups();
+    return;
+  }
   if (event.target.closest('[data-overview-back]')) { closeOverviewGroup(); return; }
   const groupPage = event.target.closest('[data-overview-group-page]');
   if (groupPage && !groupPage.disabled) {
