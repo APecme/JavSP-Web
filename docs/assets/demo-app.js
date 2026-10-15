@@ -3759,7 +3759,7 @@ window.JavspComments = (() => {
     message.textContent = '';
     moreButton.disabled = refreshButton.disabled = true;
     try {
-      const query = more && active.cursor ? `?before=${encodeURIComponent(active.cursor)}` : '';
+      const query = more && active.cursor ? `?limit=20&before=${encodeURIComponent(active.cursor)}` : '?limit=20';
       const data = await request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments${query}`);
       if (active !== current) return;
       const items = more ? [...active.items, ...(data.items || [])] : (data.items || []);
