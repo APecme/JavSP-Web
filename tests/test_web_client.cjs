@@ -61,6 +61,38 @@ async function verifyReportedVersion() {
   assert.equal(tag.dataset.updateStatus, 'unknown', 'failed checks must not claim the installation is current');
 }
 
+function verifyTaskDetailHeadingAndOverviewLabels() {
+  const headingSource = source.slice(source.indexOf('function taskDisplayName'), source.indexOf('function imageProgressSummary'));
+  const overviewSource = source.slice(source.indexOf('function overviewCoverCard'), source.indexOf('function playButton'));
+  const context = vm.createContext({
+    escapeHtml: value => String(value ?? ''),
+    state: { selectedOverviewTasks: new Set(), overviewSelectionMode: false, overviewSelectionFeedback: new Set() },
+    artworkPlaceholder: () => '<span></span>', playButton: () => '',
+  });
+  vm.runInContext(headingSource + '\n' + overviewSource, context);
+  const heading = context.taskDetailHeading({ task_type: 'scrape', title: '中文片名', file_name: 'ABC-123.mp4', progress: { metadata: { dvdid: 'ABC-123' } } });
+  assert.equal(heading.title, 'ABC-123');
+  const card = context.overviewCoverCard({
+    id: 'task', status: 'failed', task_type: 'scrape', name: 'ABC-123', file_name: 'ABC-123.mp4', cover_count: 0,
+    progress: { metadata: { dvdid: 'ABC-123' } },
+  }, 2, ['task', 'older']);
+  assert.match(card, /刮削 2 次/);
+  assert.match(card, /刮削失败/);
+  assert.doesNotMatch(card, />未完成</);
+}
+
+async function verifyBackgroundDetailDoesNotRewriteHeading() {
+ const writes=[],elements=new Map();
+ const get=selector=>{if(!elements.has(selector))elements.set(selector,{open:true,showModal(){},set textContent(value){writes.push([selector,value]);}});return elements.get(selector);};
+ const summary={id:'task',title:'中文片名',progress:{metadata:{dvdid:'ABC-123'}}};let release;
+ const context=vm.createContext({state:{tasks:[summary],detailTask:summary,activeTaskDetail:'task',taskMetadataEditing:true},$:get,window:{},api:()=>new Promise(resolve=>release=resolve)});
+ vm.runInContext(source.slice(source.indexOf('async function openTaskDetail('),source.indexOf('function artworkEditor(')),context);
+ const pending=context.openTaskDetail('task',true);
+ assert.equal(writes.length,0,'polling must not overwrite the heading while waiting for detail');
+ release(summary);await pending;
+ assert.equal(writes.length,0,'editing must not leave the heading as a transient Chinese title');
+}
+
 async function verifyUpdateOverlay() {
   const markup = fs.readFileSync(path.join(__dirname, '../javsp_web/web/index.html'), 'utf8');
   assert.match(markup, /id="update-overlay"[^>]*role="alertdialog"/);
@@ -178,6 +210,8 @@ async function main() {
   await verifyUpdateOverlay();
   await verifyReportedVersion();
   await verifyChannelSwitchSubmission();
+  verifyTaskDetailHeadingAndOverviewLabels();
+  await verifyBackgroundDetailDoesNotRewriteHeading();
   console.log('Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

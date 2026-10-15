@@ -17,6 +17,17 @@ test('verification accepts only the matching origin, window, nonce and action',a
  await Promise.resolve();assert.equal(resolved,false);
  f.listeners.message(good);assert.equal(await verification,'unit-test-proof');assert.equal(f.closed,1);assert.equal(f.listeners.message,undefined);
 });
+
+test('adaptive requests challenge only after 428 and retry once through the real verification flow', async()=>{
+ const f=fixture();let calls=0;
+ const pending=f.api.withChallenge('comment',async token=>{calls++;if(calls===1){assert.equal(token,'');throw Object.assign(new Error('challenge'),{status:428});}assert.equal(token,'proof');return 'posted';});
+ await new Promise(resolve=>setImmediate(resolve));
+ const nonce=new URLSearchParams(new URL(f.frame.src).hash.slice(1)).get('nonce');
+ f.listeners.message({origin:'https://comments.example',source:f.frame.contentWindow,data:{type:'javsp-verification',nonce,action:'comment',token:'proof'}});
+ assert.equal(await pending,'posted');assert.equal(calls,2);assert.equal(f.closed,1);
+ await assert.rejects(f.api.withChallenge('like',async()=>{throw Object.assign(new Error('limited'),{status:429});}),/limited/);
+ assert.equal(f.closed,1);
+});
 test('canceling verification rejects the action and allows a later attempt',async()=>{
  const f=fixture();const first=f.api.verify('like');await assert.rejects(f.api.verify('like'),/先完成/);
  const rejection=assert.rejects(first,/取消/);f.callbacks.close();await rejection;

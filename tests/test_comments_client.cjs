@@ -15,12 +15,12 @@ function harness() {
   section.querySelector = node;
   const form = { elements: { nickname: node('[name=nickname]'), body: node('body') }, querySelector: node, closest: selector => selector === '#task-comments form' ? form : null };
   const context = vm.createContext({
-    window: { JavspCommunity: { configure() {}, headers: () => ({ 'X-User-Token': 'test-user' }), identity: () => ({nickname:'tester',avatar_id:''}), avatar: () => '', requireIdentity: async () => {}, verify: async () => 'verified' } }, document: { addEventListener: (event, fn) => { events[event] = fn; } },
+    window: { JavspCommunity: { configure() {}, headers: () => ({ 'X-User-Token': 'test-user' }), identity: () => ({nickname:'tester',avatar_id:''}), avatar: () => '', requireIdentity: async () => {}, verify: async () => 'verified', withChallenge: async (_action, send) => send('verified') } }, document: { addEventListener: (event, fn) => { events[event] = fn; } },
     $: selector => selector === '#task-comments' ? section : node(selector),
     escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
     localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     AbortController, setTimeout, clearTimeout,
-    fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve: (data, status = 200) => resolve({ ok: status < 400, json: async () => data }), reject })),
+    fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve: (data, status = 200) => resolve({ ok: status < 400, status, json: async () => data }), reject })),
   });
   vm.runInContext(moduleSource, context);
   const click = selector => events.click({ target: { closest: value => value === '#task-comments ' + selector ? node(selector) : null } });
@@ -69,6 +69,16 @@ test('posting is single-flight, preserves failures, omits login credentials and 
 test('disabled service or unidentified movie makes no external request', () => {
   const h = harness(); h.api.open('ABC-001', ''); assert.equal(h.section.hidden, true);
   h.api.open('', 'https://comments.test'); assert.equal(h.requests.length, 0);
+});
+
+test('normal posting sends no proof and a challenge response triggers only one retry', async()=>{
+ const h=harness();h.api.open('ABC-001','https://comments.test');h.requests[0].resolve({items:[]});await tick();
+ h.community.withChallenge=async(_action,send)=>{try{return await send('');}catch(error){if(error.status!==428)throw error;return send('verified');}};
+ h.form.elements.body.value='keep text';const pending=h.submit();await tick();
+ assert.equal(JSON.parse(h.requests[1].options.body).turnstile_token,undefined);
+ h.requests[1].resolve({challenge:{action:'comment'}},428);await tick();
+ assert.equal(h.requests.length,3);assert.equal(JSON.parse(h.requests[2].options.body).turnstile_token,'verified');
+ h.requests[2].resolve({comment:{status:'pending'}},201);await pending;assert.equal(h.form.elements.body.value,'');
 });
 
 test('unconfigured identity preserves comment draft and does not start a challenge or post', async () => {

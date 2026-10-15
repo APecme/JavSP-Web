@@ -1881,6 +1881,12 @@ function taskDisplayName(task) {
   return task.title || task.file_name || task.name || task.id;
 }
 
+function taskDetailHeading(task) {
+  if (task.task_type === 'scan') return { title: taskDisplayName(task), subtitle: task.file_name || task.name || '' };
+  const dvdid = task.progress?.metadata?.dvdid || task.progress?.result?.dvdid || task.dvdid || '';
+  return { title: dvdid || '影片详情', subtitle: ['影片详情', task.preset_name, task.progress?.metadata?.publish_date].filter(Boolean).join(' · ') };
+}
+
 function imageProgressSummary(task) {
   const images = task.progress?.images || {};
   const cover = Number(task.cover_count) > 0 ? '封面已下载' : (images.failed ? '封面失败' : '封面等待中');
@@ -1973,8 +1979,11 @@ async function openTaskDetail(taskId, background = false) {
   if (state.activeTaskDetail !== taskId) window.JavspComments?.close();
   state.activeTaskDetail = taskId;
   const dialog = $('#task-detail-dialog');
-  $('#task-detail-title').textContent = taskDisplayName(summary);
-  $('#task-detail-subtitle').textContent = summary.file_name || summary.name || '';
+  if (!background) {
+    const heading = taskDetailHeading(summary);
+    $('#task-detail-title').textContent = heading.title;
+    $('#task-detail-subtitle').textContent = heading.subtitle;
+  }
   if (!background && state.detailTask?.id !== taskId) { renderedMarkup.delete($('#task-detail-content')); $('#task-detail-content').innerHTML = '<p class="muted">正在读取任务详情与日志...</p>'; }
   const detailRequestId = state.detailRequestId = (state.detailRequestId || 0) + 1;
   state.detailLoading = true;
@@ -2022,8 +2031,9 @@ async function openTaskDetail(taskId, background = false) {
   const taskLog = taskLogMarkup(task, `detail-${task.id}`, 'task-detail-log');
   const googleCover = task.task_type !== 'media' && !task.cover_count ? `<div class="google-cover-action"><button class="button secondary task-google-cover" type="button" data-google-cover-task="${escapeHtml(task.id)}">使用全部爬虫搜索封面</button></div>` : '';
   const restore = task.restore_available ? `<button class="button danger" type="button" data-restore-task-files="${escapeHtml(task.id)}">还原文件</button>` : '';
-  $('#task-detail-title').textContent = metadata.dvdid || '影片详情';
-  $('#task-detail-subtitle').textContent = ['影片详情', task.preset_name, metadata.publish_date].filter(Boolean).join(' · ');
+  const heading = taskDetailHeading(task);
+  $('#task-detail-title').textContent = heading.title;
+  $('#task-detail-subtitle').textContent = heading.subtitle;
   const identifier = String(metadata.dvdid || '').trim();
   patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
   window.JavspComments?.open(identifier, state.runtime?.comments_url || '');
@@ -2309,7 +2319,10 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
   const selector = state.overviewSelectionMode && task.task_type !== 'media' ? `<button class="overview-cover-select${selected ? ' selected' : ''}" type="button" data-overview-select-ids="${escapeHtml(taskIds.join(','))}" aria-pressed="${selected}" title="${selected ? '取消选择' : '选择记录'}" aria-label="${selected ? '取消选择' : '选择记录'}">${overviewSelectionIcon(selected)}</button>` : '';
   const feedback = taskIds.some((id) => state.overviewSelectionFeedback.has(id));
   const year = String(metadata.publish_date || '').slice(0, 4);
-  const badges = `${/^\d{4}$/.test(year) ? `<span class="lc-chip">${escapeHtml(year)}</span>` : ''}${taskCount > 1 ? `<span class="lc-chip">${taskCount} 条记录</span>` : ''}${task.status === 'failed' ? '<span class="lc-chip lc-chip-danger">未完成</span>' : ''}`;
+  const countBadge = taskCount > 1 ? `<span class="lc-chip" title="同一影片文件夹中有 ${taskCount} 条刮削任务记录">刮削 ${taskCount} 次</span>` : '';
+  const incomplete = ['failed','cancelled'].includes(task.status);
+  const failedBadge = incomplete ? `<span class="lc-chip lc-chip-danger" title="没有成功的刮削记录；已保留部分图片，可重新刮削">${task.status === 'failed' ? '刮削失败' : '刮削已停止'}</span>` : '';
+  const badges = `${/^\d{4}$/.test(year) ? `<span class="lc-chip">${escapeHtml(year)}</span>` : ''}${countBadge}${failedBadge}`;
   return `<article class="lc-film${selected ? ' selected' : ''}${state.overviewSelectionMode ? ' selecting' : ''}${feedback ? ' selection-feedback' : ''}" data-overview-task="${escapeHtml(task.id)}" data-overview-task-ids="${task.task_type === 'media' ? '' : escapeHtml(taskIds.join(','))}">${selector}<div class="lc-film-art"><button class="lc-film-cover" type="button" data-task-detail="${escapeHtml(task.id)}" aria-label="${escapeHtml(`查看 ${identifier} 详情`)}">${artwork}<span class="lc-film-badges">${badges}</span></button>${state.overviewSelectionMode ? '' : playButton(task.id)}</div><button class="lc-film-caption" type="button" data-task-detail="${escapeHtml(task.id)}"><span class="lc-film-id">${escapeHtml(identifier)}</span><span class="lc-film-title" title="${escapeHtml(taskDisplayName(task))}">${escapeHtml(taskDisplayName(task))}</span><small>${escapeHtml(actress || metadata.publish_date || '资料未齐全')}</small></button></article>`;
 }
 
@@ -3711,7 +3724,7 @@ window.JavspComments = (() => {
         headers: { Accept: 'application/json', ...window.JavspCommunity.headers(), ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || '评论服务暂时不可用，请稍后重试。');
+      if (!response.ok) { const error = new Error(data.detail || '评论服务暂时不可用，请稍后重试。'); error.status = response.status; throw error; }
       return data;
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('连接超时，请重试。');
@@ -3788,14 +3801,15 @@ window.JavspComments = (() => {
     const body = form.elements.body.value.trim();
     if (!body) { message.textContent = '请先填写评论内容。'; return; }
     button.disabled = true;
-    message.textContent = '请完成安全验证…';
+    message.textContent = '正在提交…';
     try {
       await window.JavspCommunity.requireIdentity();
-      const turnstile_token = await window.JavspCommunity.verify('comment');
-      if (active !== current) return;
       message.textContent = '正在提交…';
-      const data = await request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments`, {
-        method: 'POST', body: JSON.stringify({ ...window.JavspCommunity.identity(), body, website: '', turnstile_token }),
+      const data = await window.JavspCommunity.withChallenge('comment', (turnstile_token) => {
+        if (active !== current) return Promise.reject(new Error('评论窗口已关闭'));
+        const payload = { ...window.JavspCommunity.identity(), body, website: '' };
+        if (turnstile_token) payload.turnstile_token = turnstile_token;
+        return request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments`, { method: 'POST', body: JSON.stringify(payload) });
       });
       if (active !== current) return;
       form.elements.body.value = '';
@@ -3814,9 +3828,11 @@ window.JavspComments = (() => {
       like.disabled = true;
       try {
         await window.JavspCommunity.requireIdentity();
-        const turnstile_token = await window.JavspCommunity.verify('like');
-        if (active !== current) return;
-        const data = await request(active, `/api/comments/${encodeURIComponent(like.dataset.commentLike)}/like`, { method: 'POST', body: JSON.stringify({ liked, turnstile_token }) });
+        const data = await window.JavspCommunity.withChallenge('like', (turnstile_token) => {
+          if (active !== current) return Promise.reject(new Error('评论窗口已关闭'));
+          const payload = { liked }; if (turnstile_token) payload.turnstile_token = turnstile_token;
+          return request(active, `/api/comments/${encodeURIComponent(like.dataset.commentLike)}/like`, { method: 'POST', body: JSON.stringify(payload) });
+        });
         if (active !== current) return;
         like.setAttribute('aria-pressed', String(data.liked));
         like.textContent = `${data.liked ? '已赞' : '点赞'} · ${data.likes}`;
@@ -3832,9 +3848,11 @@ window.JavspComments = (() => {
     if (reason.trim().length > 300) { window.alert('举报原因不能超过 300 字。'); return; }
     button.disabled = true;
     try {
-      const turnstile_token = await window.JavspCommunity.verify('report');
-      if (active !== current) return;
-      await request(active, `/api/comments/${encodeURIComponent(button.dataset.commentReport)}/reports`, { method: 'POST', body: JSON.stringify({ reason: reason.trim(), turnstile_token }) });
+      await window.JavspCommunity.withChallenge('report', (turnstile_token) => {
+        if (active !== current) return Promise.reject(new Error('评论窗口已关闭'));
+        const payload = { reason: reason.trim() }; if (turnstile_token) payload.turnstile_token = turnstile_token;
+        return request(active, `/api/comments/${encodeURIComponent(button.dataset.commentReport)}/reports`, { method: 'POST', body: JSON.stringify(payload) });
+      });
       if (active === current) button.textContent = '已举报';
     } catch (error) { button.disabled = false; if (active === current) window.alert(error.message); }
   });

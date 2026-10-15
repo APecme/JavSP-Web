@@ -30,6 +30,14 @@ window.JavspCommunity = (() => {
     if (!response.ok) { const error = new Error(data.detail || '评论服务暂时不可用，请重试。'); error.status = response.status; throw error; }
     return data;
   }
+  async function withChallenge(action, send) {
+    try {
+      return await send('');
+    } catch (error) {
+      if (error?.status !== 428) throw error;
+      return send(await verify(action));
+    }
+  }
   function verify(action) {
     if (challengeActive) return Promise.reject(new Error('请先完成已打开的验证。'));
     if (!base) return Promise.reject(new Error('评论服务未启用。'));
@@ -241,5 +249,5 @@ window.JavspCommunity = (() => {
     } catch (error) { el('profile-message').textContent = error.message; }
     finally { clearPin(); button.disabled = false; }
   });
-  return { init, configure, headers, identity, avatar, verify, open, requireIdentity };
+  return { init, configure, headers, identity, avatar, verify, withChallenge, open, requireIdentity };
 })();
