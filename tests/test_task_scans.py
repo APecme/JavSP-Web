@@ -168,6 +168,78 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(finished['scan']['created_tasks'], 2)
         self.assertEqual(finished['scan']['discovered_files'], 3)
 
+    def test_single_part_collects_siblings_into_one_manifest_and_output_folder(self):
+        paths = self.files('FC2-4953812-CD1.strm', 'FC2-4953812-CD2.strm', 'ABC-123.strm')
+        scan = self.submit(paths[1])
+        tasks._run_task(scan)
+        children = self.children(scan)
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0]['input_files'], list(map(str, paths[:2])))
+        config = yaml.safe_load(Path(children[0]['config_path']).read_text(encoding='utf8'))
+        from javsp.config import Cfg
+        from javsp.file import scan_movies
+        model = Cfg.model_validate(config)
+        with patch('javsp.file.Cfg', return_value=model), patch('javsp.avid.Cfg', return_value=model):
+            movies = scan_movies(children[0]['input_directory'])
+        self.assertEqual(len(movies), 1)
+        movie = movies[0]
+        destination = self.root / 'organized/FC2-4953812'
+        destination.mkdir(parents=True)
+        movie.save_dir, movie.basename = str(destination), movie.dvdid
+        movie.rename_files(use_hardlink=True)
+        self.assertEqual([Path(p).name for p in movie.new_paths], ['FC2-4953812-CD1.strm', 'FC2-4953812-CD2.strm'])
+        self.assertEqual({Path(p).parent for p in movie.new_paths}, {destination})
+        self.assertTrue(all(path.exists() for path in paths))
+
+    def test_single_small_part_collects_large_sibling(self):
+        paths = self.files('FC2-4953812-1.mp4', 'FC2-4953812-2.mp4')
+        paths[1].write_bytes(b'x')
+        scan = self.submit(paths[1])
+        tasks._run_task(scan)
+        self.assertEqual(storage.get_task_record(scan['id'])['status'], 'succeeded')
+        self.assertEqual(self.children(scan)[0]['input_files'], list(map(str, paths)))
+
+    def test_explicit_one_part_selection_does_not_expand_the_manifest(self):
+        paths = self.files('FC2-4953812-CD1.mp4', 'FC2-4953812-CD2.mp4')
+        scan = self.submit(paths[0], [paths[0]])
+        tasks._run_task(scan)
+        self.assertEqual(self.children(scan)[0]['input_files'], [str(paths[0])])
+
+    def test_single_part_ambiguous_siblings_fail_before_children_start(self):
+        paths = self.files('FC2-4953812-CD1.mp4', 'FC2PPV-4953812-01.mkv')
+        scan = self.submit(paths[0])
+        tasks._run_task(scan)
+        self.assertEqual(storage.get_task_record(scan['id'])['status'], 'failed')
+        self.assertEqual(self.children(scan), [])
+
+    def test_download_single_part_does_not_collect_unfinished_sibling(self):
+        paths = self.files('FC2-4953812-CD1.mp4', 'FC2-4953812-CD2.mp4')
+        with patch.object(Path, 'iterdir', side_effect=AssertionError('must not inspect another download')):
+            prepared = tasks._prepare_tasks(str(paths[0]), source='download')
+        self.assertEqual(len(prepared), 1)
+        self.assertIsNone(prepared[0]['input_files'])
+
+    def test_single_part_enumeration_error_is_a_readable_scan_error(self):
+        video = self.files('FC2-4953812-CD1.mp4')[0]
+        with patch.object(Path, 'iterdir', side_effect=OSError('mount offline')):
+            with self.assertRaisesRegex(ValueError, '无法读取输入目录.*mount offline'):
+                tasks._prepare_tasks(str(video))
+
+    def test_single_part_does_not_silently_ignore_an_unnumbered_copy(self):
+        paths = self.files('FC2-4953812-CD2.mp4', 'FC2-4953812.mp4')
+        scan = self.submit(paths[0])
+        tasks._run_task(scan)
+        self.assertEqual(storage.get_task_record(scan['id'])['status'], 'failed')
+        self.assertEqual(self.children(scan), [])
+
+    @unittest.skipUnless(os.name == 'nt', 'Case-insensitive Windows paths')
+    def test_single_part_accepts_different_path_casing(self):
+        paths = self.files('FC2-4953812-CD1.mp4', 'FC2-4953812-CD2.mp4')
+        prepared = tasks._prepare_tasks(str(paths[0]).lower())
+        self.assertEqual(len(prepared), 1)
+        self.assertEqual({os.path.normcase(p) for p in prepared[0]['input_files']},
+                         {os.path.normcase(str(p)) for p in paths})
+
     def test_multiselect_falls_back_when_mount_realpath_is_unsupported(self):
         paths = self.files('FC2-4953812-1.mp4', 'FC2-4953812-2.mp4')
         scan = self.submit(paths[0], paths)

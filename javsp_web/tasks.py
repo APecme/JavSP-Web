@@ -1127,10 +1127,29 @@ def _prepare_tasks(
     if input_files is None and input_path.is_file():
         if only_match_media_types and configured_media_type(str(input_path), scanner) is None:
             raise ValueError("文件名未匹配任何影片分类规则，已跳过扫描")
-        if not _passes_minimum_size(input_path, minimum_size, config_data):
-            raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
-        progress(1, "正在创建单文件任务")
-        return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id, _snapshot=snapshot, _defer=True)]
+        from javsp.multipart import media_identity, part_number
+
+        if (source == 'download' or input_path.suffix.lower() not in _VIDEO_EXTENSIONS
+                or part_number(input_path, scanner) is None):
+            if not _passes_minimum_size(input_path, minimum_size, config_data):
+                raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
+            progress(1, "正在创建单文件任务")
+            return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id, _snapshot=snapshot, _defer=True)]
+        # A direct part path represents the movie. The shared grouping validator
+        # rejects ambiguous same-ID copies. Explicit manifests stay exact and a
+        # completed download must never collect a different unfinished download.
+        identity = media_identity(input_path, scanner)
+        input_files = []
+        try:
+            for sibling in input_path.parent.iterdir():
+                progress(len(input_files), "正在收集同目录的分 P 文件")
+                if (sibling.suffix.lower() in _VIDEO_EXTENSIONS
+                        and media_identity(sibling, scanner) == identity and sibling.is_file()):
+                    input_files.append(str(sibling))
+        except OSError as exc:
+            raise ValueError(f"无法读取输入目录: {exc}") from exc
+        if os.path.normcase(str(input_path)) not in {os.path.normcase(path) for path in input_files}:
+            raise ValueError("分 P 文件不存在，请重新扫描目录")
     if input_files is None and not input_path.is_dir():
         raise ValueError("输入路径不是目录或文件")
     video_files = []

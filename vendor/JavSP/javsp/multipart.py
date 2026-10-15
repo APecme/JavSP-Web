@@ -6,7 +6,7 @@ from javsp.avid import configured_media_type, get_cid, get_id
 
 
 _PART_NUMBER_RE = re.compile(
-    r'(?:[-_ .]+(?:cd|part|pt)?\s*|(?:cd|part|pt)\s*)'
+    r'(?:[-_ .]+(?:cd|part|pt|p)?\s*|(?:cd|part|pt|p)\s*)'
     r'(\d{1,3})(?:(?:[-_ .]+)(?:\d{3,4}p|\d{1,2}k))?$',
     re.I,
 )

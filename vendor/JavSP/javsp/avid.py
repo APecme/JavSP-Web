@@ -152,7 +152,7 @@ def get_id(filepath_str: str, scanner=None) -> str:
         return ''
 
 
-CD_POSTFIX = re.compile(r'(?:[-_]?(?:cd|part|pt)\d+|[-_](?:\d+|[a-z]))$', re.I)
+CD_POSTFIX = re.compile(r'(?:[-_]?(?:cd|part|pt)\d+|[-_ ]p\d{1,3}|[-_](?:\d+|[a-z]))$', re.I)
 def _get_legacy_cid(filepath: str) -> str:
     """Recognize a DMM Content ID without consulting the media type configuration."""
     basename = os.path.splitext(os.path.basename(filepath))[0]

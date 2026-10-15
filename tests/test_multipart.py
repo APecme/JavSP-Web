@@ -54,6 +54,27 @@ class MultipartTests(unittest.TestCase):
         self.assertEqual([part_number(path, self.config.scanner) for path in paths], [1, 2])
         self.assertEqual(group_files(paths, self.config.scanner), [paths])
 
+    def test_p_suffix_parts_share_identity_and_one_movie(self):
+        for stem in ('FC2-4953812', 'ssni00123'):
+            with self.subTest(stem=stem):
+                paths = self.files(f'{stem}-P1.strm', f'{stem}-P2.strm')
+                self.assertEqual([part_number(path, self.config.scanner) for path in paths], [1, 2])
+                self.assertEqual(group_files(paths, self.config.scanner), [paths])
+                self.data['scanner']['input_files'] = list(map(str, paths))
+                self.config = Cfg.model_validate(self.data)
+                movies = scan_movies(str(paths[0]))
+                self.assertEqual(len(movies), 1)
+                self.assertEqual(movies[0].part_numbers, [1, 2])
+
+    def test_p_part_suffix_does_not_truncate_cid_prefixes_ending_in_p(self):
+        from javsp.multipart import media_identity
+        for cid in ('118abp00123', 'abp00123', 'sdmp00123', 'h_1234abp00123'):
+            with self.subTest(cid=cid):
+                self.assertEqual(media_identity(cid + '.mp4', self.config.scanner), ('cid', cid))
+                self.assertIsNone(part_number(cid + '.mp4', self.config.scanner))
+                for suffix in ('-P1', '_P2'):
+                    self.assertEqual(media_identity(cid + suffix + '.mp4', self.config.scanner), ('cid', cid))
+
     def test_identifiers_are_not_parts(self):
         for name in ('ABC-123.mp4', 'FC2-4953812.mp4', '080826_01.mp4', 'HEYDOUGA-1234-123.mp4'):
             with self.subTest(name=name):
