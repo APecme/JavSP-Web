@@ -237,6 +237,27 @@ class MultipartTests(unittest.TestCase):
         self.assertTrue(all(path.read_bytes() == b'original' for path in targets))
         self.assertFalse(list(output.glob('.javsp-backup-*')))
 
+    def test_cross_drive_log_path_does_not_interrupt_organization(self):
+        for hardlink in (False, True):
+            with self.subTest(hardlink=hardlink):
+                source = self.files(f'incoming-{hardlink}/ABC-123.mp4')[0]
+                movie = scan_movies(str(source))[0]
+                output = self.root / f'output-{hardlink}'
+                output.mkdir()
+                target = output / 'ABC-123.mp4'
+                target.write_bytes(b'old video')
+                movie.save_dir, movie.basename = str(output), 'ABC-123'
+                # Windows cannot express a C: media path relative to an F: cwd.
+                with patch('javsp.datatype.os.path.relpath', side_effect=ValueError(
+                        "path is on mount 'C:', start on mount 'F:'")):
+                    movie.rename_files(use_hardlink=hardlink, policy='always')
+                self.assertEqual(target.read_bytes(), b'x' * 20)
+                self.assertEqual(movie.new_paths, [str(target)])
+                self.assertEqual(source.exists(), hardlink)
+                if hardlink:
+                    self.assertTrue(os.path.samefile(source, target))
+                self.assertFalse(list(output.glob('.javsp-backup-*')))
+
     def test_never_preserves_existing_artwork_before_downloads(self):
         source = self.files('incoming/ABC-123.mp4')[0]
         movie = scan_movies(str(source))[0]

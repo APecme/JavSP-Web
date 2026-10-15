@@ -2,13 +2,13 @@
 :root {
   --lc-bg: var(--bg); --lc-surface: var(--surface); --lc-raised: var(--surface-subtle);
   --lc-line: var(--border); --lc-line-strong: var(--border-strong);
-  --lc-text: var(--text); --lc-soft: var(--text-secondary); --lc-muted: var(--text-muted); --lc-faint: var(--text-faint);
+  --lc-text: var(--text); --lc-soft: var(--text-secondary); --lc-muted: var(--text-muted); --lc-faint: var(--text-faint); --lc-faint-text: var(--text-muted);
   --lc-accent: #9b4dca; --lc-accent-hover: #8841b5; --lc-accent-soft: #9b4dca1a;
   --lc-accent-text: #7e3aa8; --lc-dialog-bg: var(--surface); --lc-hover: var(--surface-muted);
   --lc-accent-border: #9b4dca80; --lc-shadow: #10182822;
 }
 :root[data-theme="dark"] {
-  --lc-accent: #9f50c2; --lc-accent-hover: #a455c6; --lc-accent-soft: #b366d62e;
+  --lc-accent: #9f50c2; --lc-accent-hover: #984bbd; --lc-accent-soft: #b366d62e;
   --lc-accent-text: #d8b4fe; --lc-dialog-bg: #111113; --lc-hover: #2a2a2f;
   --lc-accent-border: #b366d680; --lc-shadow: #00000073;
 }
@@ -31,6 +31,11 @@
 [data-panel="overview"] #overview-tasks { display: block; padding: 0; border: 0; background: none; box-shadow: none; }
 .lc-loading { color: var(--lc-muted); padding: 40px 0; text-align: center; }
 
+/* Use the theme text color so focus remains visible on either surface. */
+[data-panel="overview"] .button.primary:focus-visible,
+.lc-tabs button:focus-visible,
+#task-detail-dialog .button.primary:focus-visible { outline: 2px solid var(--lc-text); outline-offset: 3px; }
+
 /* ---------- Stats ---------- */
 [data-panel="overview"] .lc-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0; }
 [data-panel="overview"] .lc-stat { position: relative; overflow: hidden; display: grid; gap: 4px; padding: 22px 24px; background: var(--lc-surface); border: 1px solid var(--lc-line); border-radius: 16px; box-shadow: none; --tone: #8b5cf6 /* theme: fixed */; }
@@ -49,6 +54,7 @@
 .lc-tabs button { border: 0; padding: 8px 16px; border-radius: 9px; background: transparent; color: var(--lc-muted); font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
 .lc-tabs button:hover { color: var(--lc-text); background: var(--lc-raised); }
 .lc-tabs button.active { background: var(--lc-accent); color: var(--on-accent); }
+.lc-tabs button.active:not([aria-selected="false"]):hover { background: var(--lc-accent-hover); }
 .lc-tabs button.active[aria-selected="false"] { background: var(--lc-accent-soft); color: var(--lc-accent-text); }
 [data-panel="overview"] .lc-search { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
 [data-panel="overview"] .lc-search label { position: relative; flex: 1; display: block; min-width: 0; }
@@ -63,7 +69,7 @@
 /* ---------- Library cover cards ---------- */
 .lc-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 16px; }
 .lc-section-head h3 { margin: 0; color: var(--lc-text); font-size: 18px; }
-.lc-section-head span { color: var(--lc-faint); font-size: 12px; }
+.lc-section-head span { color: var(--lc-faint-text); font-size: 12px; }
 .lc-library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 20px; }
 .lc-library-card { display: grid; gap: 0; min-width: 0; padding: 12px; background: var(--lc-surface); border: 1px solid var(--lc-line); border-radius: 18px; color: inherit; text-align: left; cursor: pointer; transition: border-color .18s, transform .18s, box-shadow .18s; }
 .lc-library-card:hover, .lc-library-card:focus-visible { border-color: var(--lc-accent-border); transform: translateY(-3px); box-shadow: 0 14px 34px var(--lc-shadow); outline: 0; }
@@ -171,7 +177,7 @@
 .lc-film-caption { display: grid; gap: 4px; min-width: 0; padding: 11px 13px 13px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
 .lc-film-id { color: var(--lc-accent-text); font: 700 11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .04em; }
 .lc-film-title { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.6em; color: var(--lc-text); font-size: 13px; font-weight: 600; line-height: 1.3; }
-.lc-film-caption small { overflow: hidden; color: var(--lc-faint); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.lc-film-caption small { overflow: hidden; color: var(--lc-faint-text); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 [data-panel="overview"] .overview-cover-select { position: absolute; z-index: 3; top: 8px; right: 8px; display: grid; place-items: center; width: 30px; height: 30px; padding: 4px; border: 1px solid #ffffff59 /* theme: fixed */; border-radius: 9px; background: #09090bb3 /* theme: fixed */; color: #fff /* theme: fixed */; cursor: pointer; }
 [data-panel="overview"] .overview-cover-select.selected { background: var(--lc-accent); border-color: var(--lc-accent); }
 [data-panel="overview"] .overview-cover-select svg { width: 18px; height: 18px; }
@@ -236,7 +242,7 @@
 .lc-actress span { padding: 4px 12px; border-radius: 999px; background: var(--lc-accent-soft); color: var(--lc-accent-text); font-size: 13px; font-weight: 600; }
 .lc-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; width: 100%; margin: 4px 0; }
 .lc-facts div { min-width: 0; }
-.lc-facts dt { color: var(--lc-faint); font-size: 12px; }
+.lc-facts dt { color: var(--lc-faint-text); font-size: 12px; }
 .lc-facts dd { margin: 2px 0 0; overflow: hidden; color: var(--lc-text); font-size: 14px; white-space: nowrap; text-overflow: ellipsis; }
 .lc-film-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
 
@@ -254,7 +260,7 @@
 #task-detail-dialog details > summary::after { border-color: var(--control-border); background: var(--lc-raised); color: var(--lc-soft); }
 #task-detail-dialog .film-files .detail-images { background: var(--lc-bg); border: 1px solid var(--lc-line); border-radius: 12px; }
 #task-detail-dialog .film-file-data { margin: 0 22px; }
-#task-detail-dialog :is(.film-file-data, .task-detail-data) dt { color: var(--lc-faint); }
+#task-detail-dialog :is(.film-file-data, .task-detail-data) dt { color: var(--lc-faint-text); }
 #task-detail-dialog :is(.film-file-data, .task-detail-data) dd { color: var(--lc-soft); }
 #task-detail-dialog .detail-images { border-color: var(--lc-line); }
 #task-detail-dialog :is(.task-detail-log, .task-log-wrap) { border-color: var(--lc-line); background: var(--lc-bg); color: var(--lc-soft); }

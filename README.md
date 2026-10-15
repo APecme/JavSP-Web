@@ -70,7 +70,10 @@ docker compose up -d
 
 欢迎提交 Issue、改进文档、补充测试或提交 Pull Request。请先搜索已有 Issue，并在反馈中附上版本、部署方式、复现步骤和脱敏日志；不要上传密钥、Cookie 或完整数据目录。
 
+运行测试请使用 Python 3.11 或 3.12（与 Docker 一致推荐 3.12），并在隔离环境中安装应用及测试依赖。测试使用 Python 3.11 新增的 `unittest.TestCase.enterContext`，不能直接用 Python 3.8 运行。
+
 ```sh
+python -m pip install -r requirements.txt -r tests/requirements.txt
 python -m unittest discover -s tests -v
 python scripts/build_demo.py
 node tests/test_demo.cjs
