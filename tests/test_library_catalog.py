@@ -95,6 +95,104 @@ class LibraryIntegrationTests(unittest.TestCase):
         self.assertEqual(library.overview_page(24, 0, [])['total'], 1)
 
 
+class OverviewDeduplicationTests(unittest.TestCase):
+    def film(self, id, folder, source=None, identifier='ABC-123', created='2026-10-19'):
+        film = {'id': id, 'created_at': created, 'status': 'succeeded', 'cover_count': 1,
+                'progress': {'metadata': {'dvdid': identifier}, 'output': {'save_dir': folder}}}
+        if source:
+            film.update(input_directory=source, preset_id='p', task_ids=[id])
+        else:
+            film.update(task_type='media', library_keys=['server:movies'],
+                        media_reference={'server_id': 'server', 'library_id': 'movies', 'item_id': id})
+        return film
+
+    def collect(self, local, remote, mappings=None):
+        self.local_before = copy.deepcopy(local)
+        self.remote_before = copy.deepcopy(remote)
+        with patch.object(library.task_store, 'page', return_value={'items': local, 'metrics': {'total': 7}}), \
+             patch.object(library.media, 'catalog_movies', return_value=(remote, [])), \
+             patch.object(library.media, 'list_path_mappings', return_value=mappings or []):
+            result = library._collection([])
+        self.assertEqual(local, self.local_before)
+        self.assertEqual(remote, self.remote_before)
+        return result[0]
+
+    def test_mount_prefix_only_difference_merges_history_with_media(self):
+        local = self.film('scrape', '/video/movies/category/ABC-123', '/download/ABC-123.strm')
+        remote = self.film('media', '/media/movies/category/ABC-123')
+        items = self.collect([local], [remote])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['id'], 'scrape')
+        self.assertEqual(items[0]['media_reference']['item_id'], 'media')
+        self.assertEqual(items[0]['library_keys'], ['server:movies'])
+
+    def test_same_source_title_and_fc2_alias_changes_keep_one_card_and_all_history(self):
+        new = self.film('new', '/video/movies/category/FC2-1234567-new title', '/download/same.strm', 'FC2-1234567')
+        old = self.film('old', '/video/movies/category/FC2-PPV-1234567-old title', '/download/same.strm', 'FC2-PPV-1234567', '2026-10-18')
+        old['task_ids'] = ['old', 'older']
+        movies = [self.film('new-media', '/media/movies/category/FC2-1234567-new title', identifier='FC2-1234567'),
+                  self.film('old-media', '/media/movies/category/FC2-PPV-1234567-old title', identifier='FC2-1234567')]
+        items = self.collect([new, old], movies)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['id'], 'new')
+        self.assertEqual(set(items[0]['task_ids']), {'new', 'old', 'older'})
+        self.assertEqual(len(items[0]['media_references']), 2)
+
+    def test_different_sources_categories_presets_and_identifiers_stay_separate(self):
+        a = self.film('a', '/video/movies/one/ABC-123', '/download/a.strm')
+        b = self.film('b', '/video/movies/two/ABC-123', '/download/b.strm')
+        c = self.film('c', '/media/movies/three/ABC-123')
+        self.assertEqual(len(self.collect([a,b], [c])), 3)
+        b['input_directory'] = a['input_directory']; b['preset_id'] = 'other'
+        self.assertEqual(len(self.collect([a,b], [])), 2)
+        remote = self.film('different', '/media/movies/one/ABC-123', identifier='OTHER-123')
+        self.assertEqual(len(self.collect([a], [remote])), 2)
+
+    def test_ambiguous_relative_path_and_multiple_servers_do_not_collapse_editions(self):
+        a = self.film('a', '/disk1/movies/category/ABC-123', '/download/a.strm')
+        b = self.film('b', '/disk2/movies/category/ABC-123', '/download/b.strm')
+        remote = self.film('media', '/media/movies/category/ABC-123')
+        self.assertEqual(len(self.collect([a,b], [remote])), 3)
+        other = copy.deepcopy(remote); other['id'] = 'other'; other['media_reference']['server_id'] = 'other'
+        self.assertEqual(len(self.collect([a], [remote,other])), 2)
+
+    def test_overlapping_explicit_mappings_do_not_count_one_match_twice(self):
+        local = self.film('a', '/video/movies/category/ABC-123', '/download/a.strm')
+        remote = self.film('media', '/video/movies/category/ABC-123')
+        mappings = [{'source_path':'/video', 'target_path':'/video'}]
+        self.assertEqual(len(self.collect([local], [remote], mappings)), 1)
+
+    def test_different_media_items_in_one_folder_are_kept(self):
+        local = self.film('local', '/video/movies/category/ABC-123', '/download/ABC-123.strm')
+        first = self.film('part-one', '/media/movies/category/ABC-123')
+        second = self.film('part-two', '/media/movies/category/ABC-123')
+        self.assertEqual(len(self.collect([local], [first, second])), 2)
+
+    def test_same_source_with_different_output_parent_remains_separate(self):
+        a = self.film('a', '/video/movies/one/ABC-123', '/download/ABC-123.strm')
+        b = self.film('b', '/video/movies/two/ABC-123', '/download/ABC-123.strm')
+        self.assertEqual(len(self.collect([a,b], [])), 2)
+
+    def test_merge_happens_before_paging_and_updates_library_counts(self):
+        local = self.film('scrape', '/video/movies/category/ABC-123', '/download/ABC-123.strm')
+        remote = self.film('media', '/media/movies/category/ABC-123')
+        with patch.object(library.task_store, 'page', return_value={'items':[local], 'metrics':{}}), \
+             patch.object(library.media, 'catalog_movies', return_value=([remote], [])), \
+             patch.object(library.media, 'list_path_mappings', return_value=[]):
+            page = library.overview_page(1, 0, [], group_by='library', group='server:movies')
+            groups = library.overview_groups('all', 0, 12, '', [])
+        self.assertEqual(page['total'], 1)
+        self.assertEqual(len(page['items']), 1)
+        self.assertEqual(groups['all']['count'], 1)
+
+    def test_duplicate_remote_item_from_overlapping_libraries_merges_library_keys(self):
+        a = self.film('a', '/media/movies/category/ABC-123')
+        b = copy.deepcopy(a); b['id'] = 'b'; b['library_keys'] = ['server:other']; b['media_reference']['library_id'] = 'other'
+        items = self.collect([], [a,b])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(set(items[0]['library_keys']), {'server:movies','server:other'})
+
+
 class GfriendsTests(unittest.TestCase):
     def test_actress_scope_pages_full_directory_with_counts_outside_current_page(self):
         films = [{'id':'f1','progress':{'metadata':{'actress':['Zelda']}}}]
