@@ -41,7 +41,7 @@ test('same movie refresh preserves drafts; closing aborts requests and ignores s
   assert.match(h.node('.comments-list').innerHTML, /new movie/); assert.doesNotMatch(h.node('.comments-list').innerHTML, /old movie/);
   h.api.close(); assert.equal(h.section.hidden, true);
 });
-test('pagination appends escaped comments and retry keeps existing results', async () => {
+test('pagination replaces pages, retries safely and goes back without losing drafts', async () => {
   const h = harness(); h.api.open('ABC-001', 'https://comments.test');
   h.requests[0].resolve({ items: [{ id: 3, body: '<script>bad</script>', nickname: '<img>' }], next_cursor: 3 }); await tick();
   assert.match(h.node('.comments-list').innerHTML, /&lt;script&gt;/); assert.doesNotMatch(h.node('.comments-list').innerHTML, /<img>/);
@@ -52,7 +52,17 @@ test('pagination appends escaped comments and retry keeps existing results', asy
   assert.match(h.node('.comments-list').innerHTML, /&lt;script&gt;/);
   const retry = h.click('[data-comment-more]');
   h.requests[2].resolve({ items: [{ id: 2, body: 'older comment' }], next_cursor: null }); await retry;
-  assert.equal(h.node('.comments-status').textContent, '2 条评论'); assert.equal(h.node('[data-comment-more]').hidden, true);
+  assert.doesNotMatch(h.node('.comments-list').innerHTML, /&lt;script/);
+  assert.match(h.node('.comments-status').textContent, /第 2 页.*1 条/);
+  assert.equal(h.node('[data-comment-more]').disabled, true);
+  h.form.elements.body.value='draft';
+  await h.click('[data-comment-prev]');
+  assert.match(h.node('.comments-list').innerHTML, /&lt;script&gt;/);
+  assert.equal(h.form.elements.body.value,'draft');
+  assert.equal(h.requests.length,3);
+  await h.click('[data-comment-more]');
+  assert.match(h.node('.comments-list').innerHTML,/older comment/);
+  assert.equal(h.requests.length,3);
 });
 test('posting is single-flight, preserves failures, omits login credentials and handles pending review', async () => {
   const h = harness(); h.api.open('ABC-001', 'https://comments.test');

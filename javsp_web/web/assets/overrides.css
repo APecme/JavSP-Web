@@ -719,9 +719,10 @@ html[data-initial-view="ai-scrape"] [data-panel="ai-scrape"] { display: block; }
 .comment-label-row label { margin: 0; }
 .comment-help summary { width: 17px; height: 17px; border: 1px solid var(--text-muted); border-radius: 50%; color: var(--text-muted); cursor: pointer; font-size: 11px; line-height: 15px; text-align: center; list-style: none; }
 .comment-help summary::-webkit-details-marker { display: none; }
-.comment-help-content { position: absolute; z-index: 5; width: min(340px, calc(100vw - 40px)); margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: 0 8px 22px rgba(0,0,0,.15); color: var(--text-muted); font-size: 12px; line-height: 1.55; }
+.comment-help-content { position: absolute; z-index: 5; width: min(340px, calc(100vw - 40px)); margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: 0 8px 22px var(--shadow-popover); color: var(--text-muted); font-size: 12px; line-height: 1.55; }
 .comment-help-content p { margin: 0 0 6px; }
 .comment-help-content p:last-child { margin-bottom: 0; }
+.comment-pagination { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--text-muted); }
 .comment-help summary { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--accent); border-radius: 50%; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent-text); font-weight: 800; font-size: 13px; line-height: 1; }
 .comment-help-content { width: min(390px, calc(100vw - 48px)); padding: 14px 16px; border-radius: 8px; box-shadow: 0 12px 30px var(--shadow-strong); }
 .overview-actress-scope { display:inline-flex; gap:2px; margin-right:12px; padding:2px; border:1px solid var(--border); border-radius:6px; background:var(--surface-subtle); }

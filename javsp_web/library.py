@@ -1,6 +1,7 @@
 """Overview combines scrape history with the actual bound media libraries."""
 import re
 from . import media, task_store
+from .avatars import avatar_directory
 
 
 def studio_prefix(identifier):
@@ -45,7 +46,7 @@ def _collection(libraries):
     return items, local['metrics'], errors
 
 
-def overview_groups(by, offset, limit, query, libraries):
+def overview_groups(by, offset, limit, query, libraries, actress_scope='existing'):
     items, metrics, errors = _collection(libraries)
     groups = {lib['key']: {'key': lib['key'], 'name': lib['name'], 'count': 0, 'covers': []} for lib in libraries} if by == 'library' else {}
     everything = {'count': len(items), 'covers': []}
@@ -58,6 +59,17 @@ def overview_groups(by, offset, limit, query, libraries):
             group['count'] += 1
             if cover and len(group['covers']) < 9:
                 group['covers'].append(cover)
+    if by == 'actress':
+        for portrait in avatar_directory().values():
+            if portrait.get('source') != 'gfriends':
+                continue
+            name = str(portrait.get('name') or '').strip()
+            if not name:
+                continue
+            if actress_scope == 'all':
+                groups.setdefault(name, {'key': name, 'name': name, 'count': 0, 'covers': []})
+            if name in groups:
+                groups[name]['avatar_id'] = portrait['id']
     values = list(groups.values()) if by != 'all' else []
     if by == 'year':
         values.sort(key=lambda group: group['key'], reverse=True)

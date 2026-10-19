@@ -96,6 +96,33 @@ class LibraryIntegrationTests(unittest.TestCase):
 
 
 class GfriendsTests(unittest.TestCase):
+    def test_actress_scope_pages_full_directory_with_counts_outside_current_page(self):
+        films = [{'id':'f1','progress':{'metadata':{'actress':['Zelda']}}}]
+        catalog = {'a':{'id':'a','name':'Alice','source':'gfriends'},
+                   'z':{'id':'z','name':'Zelda','source':'gfriends'}}
+        with patch.object(library, '_collection', return_value=(films, {}, [])), \
+             patch('javsp_web.library.avatar_directory', return_value=catalog, create=True):
+            first = library.overview_groups('actress', 0, 1, '', [], actress_scope='all')
+            second = library.overview_groups('actress', 1, 1, '', [], actress_scope='all')
+            existing = library.overview_groups('actress', 0, 12, '', [], actress_scope='existing')
+        self.assertEqual(first['total'], 2)
+        self.assertEqual(len(first['groups']), 1)
+        self.assertEqual(first['groups'][0]['name'], 'Zelda')
+        self.assertEqual(first['groups'][0]['count'], 1)
+        self.assertEqual(first['groups'][0]['avatar_id'], 'z')
+        self.assertEqual(second['groups'][0]['name'], 'Alice')
+        self.assertEqual(second['groups'][0]['count'], 0)
+        self.assertEqual([g['name'] for g in existing['groups']], ['Zelda'])
+
+    def test_actress_directory_works_without_films_and_searches_before_paging(self):
+        catalog = {name:{'id':name,'name':name,'source':'gfriends'} for name in ['Alice','Bea']}
+        with patch.object(library, '_collection', return_value=([], {}, [])), \
+             patch('javsp_web.library.avatar_directory', return_value=catalog, create=True):
+            result = library.overview_groups('actress', 0, 1, 'bea', [], actress_scope='all')
+        self.assertEqual(result['total'], 1)
+        self.assertEqual(result['groups'][0]['key'], 'Bea')
+        self.assertEqual(result['groups'][0]['count'], 0)
+
     def test_aliases_use_the_highest_quality_provider_and_safe_urls(self):
         result = catalog_from_tree({'Content': {'A': {'Alice.jpg': 'Alice.jpg?t=1'}, 'Best Quality': {'Alice.jpg': 'AI-Fix-Alice.jpg?t=2', '爱丽丝.jpg': 'AI-Fix-Alice.jpg?t=2', '../bad.jpg': '../bad.jpg'}}})
         self.assertEqual(len(result), 2)
