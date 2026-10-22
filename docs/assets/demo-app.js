@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
+const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), actressScope: localStorage.getItem('javsp-web.actress-scope') || 'existing', activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -927,6 +927,7 @@ function taskPageRequest() {
   if (view === 'overview' && !state.overviewGroup && state.overviewGroupBy !== 'all') {
     const groups = new URLSearchParams({ by: state.overviewGroupBy, limit: String(OVERVIEW_GROUP_PAGE_SIZE), offset: String((state.overviewGroupPage - 1) * OVERVIEW_GROUP_PAGE_SIZE) });
     if (state.overviewGroupQuery) groups.set('query', state.overviewGroupQuery);
+    if (state.overviewGroupBy === 'actress') groups.set('actress_scope', state.actressScope);
     return `/api/tasks/overview-groups?${groups}`;
   }
   if (view === 'overview') {
@@ -1972,11 +1973,27 @@ function renderTasks() {
   restoreLogScroll();
 }
 
+// Downloaded stills become labelled buttons; missing and failed slots keep their placeholder.
+function fanartGridMarkup(task, imageInfo = {}, limit = 24) {
+  const expected = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
+  if (!expected) return '<p class="muted">暂无剧照</p>';
+  const downloaded = Math.min(Number(task.fanart_count) || 0, limit);
+  const failures = imageInfo.fanart_failures || [];
+  const version = task.updated_at || task.finished_at || '';
+  return Array.from({ length: Math.min(expected, limit) }, (_, index) => {
+    if (index >= downloaded) {
+      const failed = failures.includes(index + 1);
+      return artworkPlaceholder('detail-fanart-empty', failed ? `剧照 ${index + 1} 下载失败` : `剧照 ${index + 1} 未下载`);
+    }
+    return `<button type="button" class="detail-fanart" data-fanart-open="${index}" data-fanart-task="${escapeHtml(task.id)}" data-fanart-total="${downloaded}" data-fanart-version="${escapeHtml(version)}" aria-label="放大查看剧照 ${index + 1}，共 ${downloaded} 张"><img src="/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}?v=${encodeURIComponent(version)}" loading="lazy" alt=""></button>`;
+  }).join('');
+}
+
 async function openTaskDetail(taskId, background = false) {
   if (!taskId || (background && state.detailLoading)) return;
   const summary = state.tasks.find((item) => item.id === taskId) || state.detailTask;
   if (!summary) return;
-  if (state.activeTaskDetail !== taskId) window.JavspComments?.close();
+  if (state.activeTaskDetail !== taskId) { window.JavspComments?.close(); window.JavspStills?.close({ restoreFocus: false }); }
   state.activeTaskDetail = taskId;
   const dialog = $('#task-detail-dialog');
   if (!background) {
@@ -1997,7 +2014,7 @@ async function openTaskDetail(taskId, background = false) {
   } finally { if (detailRequestId === state.detailRequestId) state.detailLoading = false; }
   if (state.activeTaskDetail !== taskId || !dialog.open || detailRequestId !== state.detailRequestId || (background && (state.taskMetadataEditing || state.taskDetailLogSelecting || hasTaskDetailLogSelection()))) return;
   state.detailTask = task;
-  document.querySelector('.film-navigation').hidden = task.task_type === 'scan';
+  document.querySelectorAll('.film-navigation [data-detail-section]').forEach((button) => { button.hidden = task.task_type === 'scan'; });
   const editButton = document.querySelector('#task-detail-dialog > .film-detail-shell > .panel-heading [data-edit-task-metadata]');
   if (editButton) editButton.hidden = task.task_type === 'scan' || state.taskMetadataEditing;
   document.querySelector('[data-detail-section="task-comments"]').hidden = !task.progress?.metadata?.dvdid || !state.runtime?.comments_url;
@@ -2018,13 +2035,7 @@ async function openTaskDetail(taskId, background = false) {
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
-  const fanarts = expectedFanart
-    ? Array.from({ length: Math.min(expectedFanart, 24) }, (_, index) => {
-      if (index < Number(task.fanart_count || 0)) return `<img src="/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="剧照 ${index + 1}">`;
-      const failed = fanartFailures.includes(index + 1);
-      return artworkPlaceholder('detail-fanart-empty', failed ? `剧照 ${index + 1} 下载失败` : `剧照 ${index + 1} 未下载`);
-    }).join('')
-    : '<p class="muted">暂无剧照</p>';
+  const fanarts = fanartGridMarkup(task, imageInfo);
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const fileInfo = [['文件名', task.file_name || task.name], ['原始路径', task.input_directory], ['整理路径', task.progress?.output?.save_dir]].map(([name,value]) => `<div class="detail-data-row"><dt>${name}</dt><dd>${escapeHtml(value || '—')}</dd></div>`).join('');
@@ -2053,6 +2064,18 @@ async function refreshArtworkEditor() {
   const editor = $('#task-metadata-editor .artwork-editor');
   if (editor) editor.outerHTML = artworkEditor(task);
 }
+
+document.addEventListener('click', (event) => {
+  const still = event.target.closest('[data-fanart-open]');
+  if (!still) return;
+  window.JavspStills?.open({
+    taskId: still.dataset.fanartTask,
+    index: Number(still.dataset.fanartOpen),
+    total: Number(still.dataset.fanartTotal),
+    version: still.dataset.fanartVersion,
+    opener: still,
+  });
+});
 
 document.addEventListener('change', async event => {
   const input = event.target.closest('[data-artwork-upload]');
@@ -2220,18 +2243,19 @@ function renderOverviewGroups() {
   const container = $('#overview-tasks');
   if (!result) { patchChildren(container, '<p class="lc-loading">正在读取媒体库…</p>'); return; }
   const [, label, english] = overviewGroupType(result.by);
-  if (!result.all?.count && !result.groups?.length) {
+  if (!result.all?.count && !result.groups?.length && result.by !== 'actress') {
     patchChildren(container, `<div class="library-empty lc-empty-state"><span aria-hidden="true">▤</span><h3>收藏从第一部影片开始</h3><p>添加刮削任务，完成后就能在这里按${escapeHtml(label)}浏览封面和影片资料。</p><button class="button primary" data-go="scrape">添加影片</button></div>`);
     return;
   }
   const everything = { key: '__all__', name: '全部影片', count: result.all.count, covers: result.all.covers, template: 'tilted' };
-  const groups = result.by === 'all' ? [everything] : result.groups;
+  let groups = result.by === 'all' ? [everything] : result.groups;
   const pages = Math.max(1, Math.ceil(result.total / result.limit));
   const cards = groups.length
     ? `<div class="lc-library-grid">${groups.map((group) => libraryCard(group, group.key === '__all__' ? 'ALL MOVIES' : english)).join('')}</div>`
     : `<div class="library-empty lc-empty-state"><span aria-hidden="true">⌕</span><h3>没有找到“${escapeHtml(state.overviewGroupQuery)}”</h3><p>换个${escapeHtml(label)}名称试试。</p></div>`;
   const pagination = pages > 1 ? `<div class="overview-pagination"><span>第 ${state.overviewGroupPage} / ${pages} 页</span><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage - 1}"${state.overviewGroupPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage + 1}"${state.overviewGroupPage >= pages ? ' disabled' : ''}>下一页</button></div>` : '';
-  patchChildren(container, `${(state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('')}<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><span>${result.total} 个分类 · ${result.all.count} 部影片</span></div>${cards}${pagination}`);
+  const actressSwitch = result.by === 'actress' ? `<div class="overview-actress-scope" role="group" aria-label="女优范围"><button type="button" class="${state.actressScope === 'existing' ? 'active' : ''}" data-actress-scope="existing">仅显示已有女优</button><button type="button" class="${state.actressScope === 'all' ? 'active' : ''}" data-actress-scope="all">全部 Gfriends 女优</button></div>` : '';
+  patchChildren(container, `${(state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('')}<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><div>${actressSwitch}<span>${result.total} 个分类 · ${result.all.count} 部影片</span></div></div>${cards}${pagination}`);
 }
 
 function libraryCard(group, english) {
@@ -2246,7 +2270,7 @@ function coverHash(text) {
 
 // Library covers follow LibraryCoverStudio's 1920×1080 templates, drawn with live posters.
 function libraryCover(group, english) {
-  const covers = (group.covers || []).map((cover) => `/api/tasks/${encodeURIComponent(cover.id)}/cover/0?thumbnail=true&v=${encodeURIComponent(cover.v || '')}`);
+  const covers = group.avatar_id ? [`/api/avatars/${encodeURIComponent(group.avatar_id)}`] : (group.covers || []).map((cover) => `/api/tasks/${encodeURIComponent(cover.id)}/cover/0?thumbnail=true&v=${encodeURIComponent(cover.v || '')}`);
   const seed = coverHash(`${english}:${group.key}`);
   const pickSeed = Math.imul(seed ^ (seed >>> 15), 2246822507) >>> 13;
   const template = group.template || (covers.length >= 5 ? ['tilted', 'upright', 'fan', 'strip'][pickSeed % 4] : covers.length ? ['stacked', 'diagonal', 'fan'][pickSeed % 3] : 'plain');
@@ -3240,6 +3264,15 @@ document.addEventListener('click', async (event) => {
   if (openGroup) { openOverviewGroup(openGroup.dataset.overviewOpenGroup); return; }
   const groupType = event.target.closest('[data-overview-group-by]');
   if (groupType) { closeOverviewGroup(groupType.dataset.overviewGroupBy); return; }
+  const actressScope = event.target.closest('[data-actress-scope]');
+  if (actressScope) {
+    state.actressScope = actressScope.dataset.actressScope;
+    localStorage.setItem('javsp-web.actress-scope', state.actressScope);
+    state.overviewGroupPage = 1;
+    state.tasksSignature = '';
+    loadTasks();
+    return;
+  }
   if (event.target.closest('[data-overview-back]')) { closeOverviewGroup(); return; }
   const groupPage = event.target.closest('[data-overview-group-page]');
   if (groupPage && !groupPage.disabled) {
@@ -3713,7 +3746,11 @@ window.JavspComments = (() => {
   const target = () => $('#task-comments');
   const esc = (value) => escapeHtml(value ?? '');
   const date = (value) => new Date(Number(value) * 1000).toLocaleString();
-  const commentHelp = '<div class="comment-label-row"><label for="film-comment-body">评论内容</label><details class="comment-help"><summary aria-label="评论格式和时间标签说明">?</summary><div class="comment-help-content"><p>评论和回复最多 300 字符，举报原因最多 300 字符。</p><p>支持 Markdown：<code>**粗体**</code>、<code>*斜体*</code>、<code>~~删除线~~</code>、列表、引用、代码和链接。</p><p>输入 <code>30:15</code> 或 <code>1:02:03</code> 可生成时间标签，点击可从对应位置播放当前影片。</p><p>代码和链接中的时间保持原样；不执行 HTML，也不加载远程图片。播放时需绑定媒体库并登录播放器。</p></div></details></div>';
+  const commentHelp = '<div class="comment-label-row"><label for="film-comment-body">评论内容</label><details class="comment-help"><summary aria-label="评论格式与时间标签说明"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6h.01"/></svg><span>格式说明</span></summary><div class="comment-help-content">' + '<section class="comment-help-group"><h4>字数</h4><ul><li>评论和回复最多 300 字符。</li><li>举报原因最多 300 字符。</li></ul></section>'
+    + '<section class="comment-help-group"><h4>Markdown</h4><ul><li><code>**粗体**</code>、<code>*斜体*</code>、<code>~~删除线~~</code></li><li>还支持列表、引用、代码和链接。</li></ul></section>'
+    + '<section class="comment-help-group"><h4>时间标签</h4><ul><li><code>30:15</code> 或 <code>1:02:03</code> 会变成时间标签。</li><li>点击标签从对应位置播放当前影片。</li></ul></section>'
+    + '<section class="comment-help-group"><h4>限制</h4><ul><li>代码和链接中的时间保持原样。</li><li>不执行 HTML，也不加载远程图片。</li><li>播放时需绑定媒体库并登录播放器。</li></ul></section>'
+    + '</div></details></div>';
   const replyQuote = (item) => !item.reply_to_id ? '' : `<blockquote class="comment-reply-quote">${item.reply_to ? `<strong>回复 ${esc(item.reply_to.nickname)}</strong><span>${esc(item.reply_to.body)}</span>` : '<span class="muted">原评论已不可见</span>'}</blockquote>`;
   const selectReply = (active, item) => {
     active.replyTo = item ? { id: item.id, nickname: item.nickname } : null;
@@ -3745,12 +3782,21 @@ window.JavspComments = (() => {
     section.querySelector('.comments-list').innerHTML = active.items.length
       ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head">${window.JavspCommunity.avatar(item.avatar_id, item.nickname)}<strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div>${replyQuote(item)}<div class="comment-markdown">${window.JavspCommentMarkdown?.render(item.body) ?? esc(item.body)}</div><div class="comment-actions"><button class="comment-like" type="button" data-comment-like="${esc(item.id)}" aria-pressed="${Boolean(item.liked)}">${item.liked ? '已赞' : '点赞'} · ${Number(item.likes) || 0}</button><button class="comment-reply" type="button" data-comment-reply="${esc(item.id)}">回复</button><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></div></article>`).join('')
       : '<p class="muted">还没有评论，欢迎留下第一条。</p>';
-    section.querySelector('.comments-status').textContent = active.cursor ? `已显示 ${active.items.length} 条` : `${active.items.length} 条评论`;
-    section.querySelector('[data-comment-more]').hidden = !active.cursor;
+    section.querySelector('.comments-status').textContent = `第 ${active.page + 1} 页 · 本页 ${active.items.length} 条`;
+    section.querySelector('[data-comment-more]').disabled = !active.cursor && active.page >= active.pages.length - 1;
+    section.querySelector('[data-comment-prev]').disabled = active.page === 0;
+    section.querySelector('.comments-list').scrollTop = 0;
   };
   const load = async (more = false) => {
     const active = current;
     if (!active?.base || active.loading) return;
+    if (more && active.pages[active.page + 1]) {
+      active.page++;
+      Object.assign(active, active.pages[active.page]);
+      render(active);
+      return;
+    }
+    if (more && !active.cursor) return;
     active.loading = true;
     const section = target();
     const message = section.querySelector('.comments-load-message');
@@ -3762,9 +3808,12 @@ window.JavspComments = (() => {
       const query = more && active.cursor ? `?limit=20&before=${encodeURIComponent(active.cursor)}` : '?limit=20';
       const data = await request(active, `/api/threads/${encodeURIComponent(active.identifier)}/comments${query}`);
       if (active !== current) return;
-      const items = more ? [...active.items, ...(data.items || [])] : (data.items || []);
+      const items = data.items || [];
       active.items = [...new Map(items.map(item => [item.id, item])).values()];
       active.cursor = data.next_cursor || null;
+      active.page = more ? active.page + 1 : 0;
+      if (!more) active.pages = [];
+      active.pages[active.page] = {items: active.items, cursor: active.cursor};
       render(active);
     } catch (error) {
       if (active !== current) return;
@@ -3774,7 +3823,8 @@ window.JavspComments = (() => {
       refreshButton.textContent = '重试';
     } finally {
       active.loading = false;
-      moreButton.disabled = refreshButton.disabled = false;
+      refreshButton.disabled = false;
+      moreButton.disabled = !active.cursor && active.page >= active.pages.length - 1;
     }
   };
   const close = () => {
@@ -3792,9 +3842,9 @@ window.JavspComments = (() => {
     if (current?.identifier === name && current?.base === base) { current.taskId = taskId; return; }
     close();
     if (!name || !base) return;
-    current = { identifier: name, base, taskId, items: [], cursor: null, loading: false, posting: false, replyTo: null, requests: new Set() };
+    current = { identifier: name, base, taskId, items: [], pages: [], page: 0, cursor: null, loading: false, posting: false, replyTo: null, requests: new Set() };
     section.hidden = false;
-    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><button type="button" class="button secondary comments-more" data-comment-more hidden>加载更多</button><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><div class="comment-reply-context" hidden><span class="comment-reply-label" role="status"></span><button type="button" class="comment-profile-link" data-comment-reply-cancel>取消回复</button></div>${commentHelp}<textarea id="film-comment-body" name="body" maxlength="600" rows="3" required placeholder="写下你对这部影片的看法"></textarea><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
+    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><nav class="comment-pagination" aria-label="评论分页"><button type="button" class="button secondary" data-comment-prev disabled>上一页</button><span>每页 20 条</span><button type="button" class="button secondary" data-comment-more disabled>下一页</button></nav><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><div class="comment-reply-context" hidden><span class="comment-reply-label" role="status"></span><button type="button" class="comment-profile-link" data-comment-reply-cancel>取消回复</button></div>${commentHelp}<textarea id="film-comment-body" name="body" maxlength="600" rows="3" required placeholder="写下你对这部影片的看法"></textarea><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
     load();
   };
   document.addEventListener('submit', async (event) => {
@@ -3808,7 +3858,6 @@ window.JavspComments = (() => {
     const message = form.querySelector('.comment-form-message');
     const body = form.elements.body.value.trim();
     if (!body) { message.textContent = '请先填写评论内容。'; return; }
-    if ([...body].length > 300) { message.textContent = '评论和回复不能超过 300 字符。'; return; }
     if ([...body].length > 300) { message.textContent = '评论和回复不能超过 300 字符。'; return; }
     const replyToId = active.replyTo?.id;
     active.posting = true;
@@ -3834,6 +3883,14 @@ window.JavspComments = (() => {
   });
   document.addEventListener('click', async (event) => {
     if (event.target.closest('#task-comments [data-comment-more]')) { await load(true); return; }
+    if (event.target.closest('#task-comments [data-comment-prev]')) {
+      if (current && !current.loading && current.page > 0) {
+        current.page--;
+        Object.assign(current, current.pages[current.page]);
+        render(current);
+      }
+      return;
+    }
     if (event.target.closest('#task-comments [data-comment-refresh]')) { await load(); return; }
     if (event.target.closest('#task-comments [data-comment-reply-cancel]')) {
       if (current && !current.posting) selectReply(current, null);
@@ -3920,7 +3977,97 @@ if (privacyMode) {
   });
 }
 
-$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; state.taskMetadataEditing = false; window.JavspComments?.close(); });
+// --- Stills viewer (regressions: tests/test_film_detail_ux.cjs) ---
+window.JavspStills = (() => {
+  const dialog = () => document.querySelector('#stills-dialog');
+  const inside = (selector) => dialog()?.querySelector(selector) || null;
+  let view = null;
+
+  function render() {
+    const image = inside('.stills-image');
+    const error = inside('[data-stills-error]');
+    const counter = inside('[data-stills-counter]');
+    const prev = inside('[data-stills-prev]');
+    const next = inside('[data-stills-next]');
+    if (error) error.hidden = true;
+    if (!view) {
+      if (image) { image.removeAttribute('src'); image.alt = ''; }
+      if (counter) counter.textContent = '';
+      if (prev) prev.disabled = true;
+      if (next) next.disabled = true;
+      return;
+    }
+    if (image) {
+      image.setAttribute('src', `/api/tasks/${encodeURIComponent(view.taskId)}/fanart/${view.index}?v=${encodeURIComponent(view.version)}`);
+      image.alt = `剧照 ${view.index + 1}`;
+    }
+    if (counter) counter.textContent = `${view.index + 1} / ${view.total}`;
+    if (prev) prev.disabled = view.index <= 0;
+    if (next) next.disabled = view.index >= view.total - 1;
+  }
+
+  function open(options = {}) {
+    const taskId = String(options.taskId || '');
+    const total = Math.min(Math.max(Math.trunc(Number(options.total)) || 0, 0), 999);
+    if (!taskId || total < 1) return false;
+    const index = Math.min(Math.max(Math.trunc(Number(options.index)) || 0, 0), total - 1);
+    const element = dialog();
+    if (!element) return false;
+    view = { taskId, index, total, version: String(options.version || ''), opener: options.opener || null };
+    if (!element.open) element.showModal();
+    render();
+    inside('[data-stills-close]')?.focus();
+    return true;
+  }
+
+  function step(delta) {
+    if (!view) return false;
+    const index = view.index + delta;
+    if (index < 0 || index > view.total - 1) return false;
+    view.index = index;
+    render();
+    return true;
+  }
+
+  function close(options = {}) {
+    const opener = view?.opener;
+    view = null;
+    render();
+    const element = dialog();
+    if (element?.open) element.close();
+    if (options.restoreFocus !== false && opener?.isConnected) opener.focus();
+  }
+
+  const isOpen = () => Boolean(view) && Boolean(dialog()?.open);
+
+  const element = dialog();
+  if (element) {
+    element.addEventListener('click', (event) => {
+      if (event.target.closest('[data-stills-close]')) { close(); return; }
+      if (event.target.closest('[data-stills-prev]')) { step(-1); return; }
+      if (event.target.closest('[data-stills-next]')) step(1);
+    });
+    element.addEventListener('keydown', (event) => {
+      if (!isOpen()) return;
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); return; }
+      if (event.key === 'ArrowRight') { if (step(1)) event.preventDefault(); return; }
+      if (event.key === 'ArrowLeft' && step(-1)) event.preventDefault();
+    });
+    // 'error' does not bubble: listen in the capture phase on the dialog itself.
+    element.addEventListener('error', (event) => {
+      if (!view || event.target !== inside('.stills-image')) return;
+      const error = inside('[data-stills-error]');
+      if (error) error.hidden = false;
+    }, true);
+    // Whatever closed the dialog (button, Escape, task switch) drops the decoded image.
+    element.addEventListener('close', () => { view = null; render(); });
+  }
+
+  return { open, close, step, isOpen };
+})();
+// --- end stills viewer ---
+
+$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; state.taskMetadataEditing = false; window.JavspComments?.close(); window.JavspStills?.close({ restoreFocus: false }); });
 
 document.addEventListener('pointerdown', (event) => {
   state.taskDetailLogSelecting = Boolean(event.target.closest('#task-detail-content .task-log'));

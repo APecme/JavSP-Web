@@ -24,6 +24,8 @@ jobs:
       - name: Verify browser request and version regressions
         run: |
           node tests/test_web_client.cjs
+          node tests/test_overview_actress.cjs
+          node tests/test_film_detail_ux.cjs
           node tests/test_scan_client.cjs
           node tests/test_mount_batch_client.cjs
           node tests/test_ai_translation_client.cjs

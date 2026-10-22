@@ -1294,9 +1294,10 @@ def _etag_json(request: Request, result: dict) -> Response:
 @app.get("/api/tasks/overview-groups")
 def task_overview_groups(request: Request, by: Literal['all', 'library', 'actress', 'producer', 'year'] = 'all',
                          offset: int = Query(default=0, ge=0), limit: int = Query(default=24, ge=1, le=120),
-                         query: str = Query(default='', max_length=200), _: dict = Depends(current_user)) -> Response:
+                         query: str = Query(default='', max_length=200), actress_scope: Literal['existing','all'] = 'existing',
+                         _: dict = Depends(current_user)) -> Response:
     libraries = overview_libraries()
-    result = film_library.overview_groups(by, offset, limit, query.strip(), libraries)
+    result = film_library.overview_groups(by, offset, limit, query.strip(), libraries, actress_scope=actress_scope)
     result['libraries_available'] = bool(libraries)
     return _etag_json(request, result)
 

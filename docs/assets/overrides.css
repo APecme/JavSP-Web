@@ -715,13 +715,29 @@ html[data-initial-view="ai-scrape"] [data-panel="ai-scrape"] { display: block; }
 .comment-markdown ul, .comment-markdown ol { margin: 4px 0; padding-left: 20px; }
 .comment-markdown blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--border); color: var(--text-muted); }
 .comment-timestamp { padding: 0 3px; border: 0; border-radius: 3px; background: var(--surface-subtle); color: var(--accent-text); cursor: pointer; font: inherit; }
-.comment-label-row { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+/* Comment help: a compact labelled trigger with the rules grouped in place,
+   so the card stays in the form flow instead of floating out of its column.
+   Its accent follows the console purple (--lc-*) instead of the legacy blue. */
+.comment-label-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 5px; }
 .comment-label-row label { margin: 0; }
-.comment-help summary { width: 17px; height: 17px; border: 1px solid var(--text-muted); border-radius: 50%; color: var(--text-muted); cursor: pointer; font-size: 11px; line-height: 15px; text-align: center; list-style: none; }
+.comment-help { flex: 1 1 100%; min-width: 0; }
+.comment-help summary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 5px 13px 5px 11px; border: 1px solid var(--lc-line); border-radius: 999px; background: var(--lc-raised); color: var(--lc-muted); font-size: 11px; font-weight: 600; line-height: 1.4; cursor: pointer; list-style: none; transition: background .15s, border-color .15s, color .15s; }
 .comment-help summary::-webkit-details-marker { display: none; }
-.comment-help-content { position: absolute; z-index: 5; width: min(340px, calc(100vw - 40px)); margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: 0 8px 22px rgba(0,0,0,.15); color: var(--text-muted); font-size: 12px; line-height: 1.55; }
-.comment-help-content p { margin: 0 0 6px; }
-.comment-help-content p:last-child { margin-bottom: 0; }
+.comment-help summary:hover { border-color: var(--lc-accent-border); background: var(--lc-accent-soft); color: var(--lc-accent-text); }
+.comment-help summary:focus-visible { outline: 2px solid var(--lc-accent-text); outline-offset: 2px; }
+.comment-help summary svg { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.comment-help summary::after { display: none; }
+.comment-help[open] summary { border-color: var(--lc-accent); background: var(--lc-accent-soft); color: var(--lc-accent-text); }
+.comment-help-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px 14px; margin-top: 8px; padding: 12px 14px; border: 1px solid var(--lc-line); border-radius: 10px; background: var(--lc-raised); color: var(--lc-muted); font-size: 12px; line-height: 1.55; }
+.comment-help-group { min-width: 0; padding-left: 10px; border-left: 2px solid var(--lc-accent-border); }
+.comment-help-group h4 { margin: 0 0 4px; color: var(--lc-soft); font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.comment-help-group ul { display: grid; gap: 3px; margin: 0; padding-left: 15px; }
+.comment-help-group li { overflow-wrap: anywhere; }
+.comment-help-content code { padding: 1px 5px; border-radius: 5px; background: var(--lc-surface); color: var(--lc-accent-text); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.comment-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.overview-actress-scope { display:inline-flex; gap:2px; margin-right:12px; padding:2px; border:1px solid var(--border); border-radius:6px; background:var(--surface-subtle); }
+.overview-actress-scope button { border:0; border-radius:4px; padding:5px 9px; background:transparent; color:var(--text-muted); font-size:12px; cursor:pointer; }
+.overview-actress-scope button.active { background:var(--surface); color:var(--accent-text); box-shadow:0 1px 3px var(--shadow-soft); font-weight:700; }
 .comment-like[aria-pressed="true"] { color: var(--accent-text); font-weight: 600; }
 .comment-like:disabled { opacity: .5; cursor: wait; }
 .task-detail-dialog .comment-form { grid-template-columns: 1fr; }
