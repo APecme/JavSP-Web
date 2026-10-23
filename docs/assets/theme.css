@@ -342,6 +342,7 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 :root[data-theme="dark"] .theme-toggle .theme-icon-sun { display: block; }
 :root[data-theme="dark"] .theme-toggle .theme-icon-moon { display: none; }
 .auth-shell .auth-theme-toggle { position: fixed; top: 16px; right: 16px; z-index: 10; }
+.auth-shell .auth-palette-toggle { position: fixed; top: 16px; right: 60px; z-index: 10; }
 @media (max-width: 800px) {
   .topbar .theme-toggle, .auth-shell .theme-toggle { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
   .topbar .account { gap: 6px; flex-shrink: 0; }
@@ -351,5 +352,75 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   .topbar .app-version { width: 24px; height: 24px; min-width: 24px; flex: none; justify-content: center; gap: 0; padding: 0; font-size: 0; }
   .topbar .account-profile { padding: 4px; }
   .auth-shell .auth-theme-toggle { top: 10px; right: 10px; }
+  .auth-shell .auth-palette-toggle { top: 10px; right: 56px; }
   .auth-shell { padding-top: 64px; }
+}
+
+/* Accent palette picker (opened by the palette button next to the theme toggle). */
+.palette-toggle {
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0;
+  background: var(--surface); color: var(--text-tertiary);
+  border: 1px solid var(--control-border); border-radius: 10px;
+  cursor: pointer;
+}
+.palette-toggle:hover { background: var(--surface-muted); color: var(--text); }
+.palette-toggle:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 3px; }
+.palette-toggle svg {
+  width: 18px; height: 18px;
+  fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+@media (max-width: 800px) {
+  .palette-toggle { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+}
+
+.palette-popover {
+  position: fixed;
+  z-index: 80;
+  width: 232px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px var(--shadow-popover, var(--shadow-lg));
+  color: var(--text-body);
+}
+.palette-popover[hidden] { display: none; }
+.palette-popover-title {
+  margin: 0 0 10px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em;
+  color: var(--text-muted); text-transform: uppercase;
+}
+.palette-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.palette-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--swatch);
+  cursor: pointer;
+}
+.palette-swatch:hover { transform: scale(1.08); }
+.palette-swatch:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+.palette-swatch.active {
+  border-color: var(--surface);
+  box-shadow: 0 0 0 2px var(--swatch);
+}
+.palette-custom {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft, var(--border));
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  cursor: pointer;
+}
+.palette-custom input[type="color"] {
+  width: 40px; height: 28px; padding: 2px;
+  border: 1px solid var(--control-border); border-radius: 6px;
+  background: var(--surface); cursor: pointer;
 }

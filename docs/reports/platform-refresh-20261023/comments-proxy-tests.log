@@ -1,0 +1,24 @@
+test_admin_escapes_and_method_confusion_are_refused (test_comments_proxy.ProxyTests.test_admin_escapes_and_method_confusion_are_refused) ... ok
+test_delete_token_only_travels_on_comment_deletion (test_comments_proxy.ProxyTests.test_delete_token_only_travels_on_comment_deletion) ... ok
+test_empty_upstream_body_keeps_its_status (test_comments_proxy.ProxyTests.test_empty_upstream_body_keeps_its_status) ... ok
+test_empty_upstream_disables_the_whole_proxy (test_comments_proxy.ProxyTests.test_empty_upstream_disables_the_whole_proxy) ... ok
+test_malformed_identity_tokens_are_refused (test_comments_proxy.ProxyTests.test_malformed_identity_tokens_are_refused) ... ok
+test_non_json_upstream_bodies_are_refused_instead_of_relayed (test_comments_proxy.ProxyTests.test_non_json_upstream_bodies_are_refused_instead_of_relayed) ... ok
+test_query_parameters_are_limited_to_paging (test_comments_proxy.ProxyTests.test_query_parameters_are_limited_to_paging) ... ok
+test_request_and_response_sizes_are_bounded (test_comments_proxy.ProxyTests.test_request_and_response_sizes_are_bounded) ... ok
+test_site_credentials_and_proxy_headers_never_reach_the_upstream (test_comments_proxy.ProxyTests.test_site_credentials_and_proxy_headers_never_reach_the_upstream) ... ok
+test_site_login_is_the_gate_before_any_forwarding (test_comments_proxy.ProxyTests.test_site_login_is_the_gate_before_any_forwarding) ... ok
+test_unreachable_upstream_is_reported_without_internal_details (test_comments_proxy.ProxyTests.test_unreachable_upstream_is_reported_without_internal_details) ... ok
+test_upstream_cookies_and_redirects_never_reach_the_browser (test_comments_proxy.ProxyTests.test_upstream_cookies_and_redirects_never_reach_the_browser) ... ok
+test_upstream_status_and_retry_after_are_preserved (test_comments_proxy.ProxyTests.test_upstream_status_and_retry_after_are_preserved) ... ok
+test_upstream_timeout_is_a_readable_504 (test_comments_proxy.ProxyTests.test_upstream_timeout_is_a_readable_504) ... ok
+test_whitelisted_routes_reach_the_upstream_verbatim (test_comments_proxy.ProxyTests.test_whitelisted_routes_reach_the_upstream_verbatim) ... ok
+test_disabled_or_invalid_upstream_hides_comments_entirely (test_comments_proxy.RuntimeTests.test_disabled_or_invalid_upstream_hides_comments_entirely) ... ok
+test_public_comment_api_is_same_origin_and_verification_keeps_its_own_origin (test_comments_proxy.RuntimeTests.test_public_comment_api_is_same_origin_and_verification_keeps_its_own_origin) ... ok
+test_server_mounts_the_proxy_router (test_comments_proxy.RuntimeTests.test_server_mounts_the_proxy_router) ... ok
+test_unset_upstream_keeps_the_built_in_default (test_comments_proxy.RuntimeTests.test_unset_upstream_keeps_the_built_in_default) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 9.289s
+
+OK

@@ -6,7 +6,7 @@ const source = fs.readFileSync(require('node:path').join(__dirname, '../javsp_we
 const moduleSource = source.slice(source.indexOf('window.JavspComments ='), source.indexOf('\nfunction formatLocalDateTime'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness() {
-  const nodes = new Map(), events = {}, requests = [], saved = new Map(), played = [];
+  const nodes = new Map(), events = {}, requests = [], saved = new Map(), played = [], configured = [];
   const node = key => {
     if (!nodes.has(key)) nodes.set(key, { value: '', textContent: '', innerHTML: '', hidden: false, disabled: false, focus() {}, addEventListener() {} });
     return nodes.get(key);
@@ -15,19 +15,26 @@ function harness() {
   section.querySelector = node;
   const form = { elements: { nickname: node('[name=nickname]'), body: node('body') }, querySelector: node, closest: selector => selector === '#task-comments form' ? form : null };
   const context = vm.createContext({
-    window: { markdownit: require('../javsp_web/web/assets/markdown-it.min.js'), JavspCommunity: { configure() {}, headers: () => ({ 'X-User-Token': 'test-user' }), identity: () => ({nickname:'tester',avatar_id:''}), avatar: () => '', requireIdentity: async () => {}, verify: async () => 'verified', withChallenge: async (_action, send) => send('verified') } }, document: { addEventListener: (event, fn) => { events[event] = fn; } },
+    window: { markdownit: require('../javsp_web/web/assets/markdown-it.min.js') }, document: { addEventListener: (event, fn) => { events[event] = fn; }, getElementById: node, querySelectorAll: () => [], body: { classList: { contains: () => false } } },
     $: selector => selector === '#task-comments' ? section : node(selector),
     escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
+    javspIcon: () => '',
     localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
-    AbortController, setTimeout, clearTimeout,
+    AbortController, setTimeout, clearTimeout, URL, URLSearchParams,
     playTask: async (button, seconds) => played.push({id:button.dataset.playTask,seconds}),
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve: (data, status = 200) => resolve({ ok: status < 400, status, json: async () => data }), reject })),
   });
   vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../javsp_web/web/assets/comment-markdown.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../javsp_web/web/assets/community.js'),'utf8'),context);
+  // The real community client supplies the request-init policy, so keep it and
+  // only stub what JavspComments calls around it.
+  const community = context.window.JavspCommunity;
+  const requestInit = community.requestInit;
+  context.window.JavspCommunity = { configure(base, verify) { configured.push([base, verify]); }, requestInit, requestCredentials: community.requestCredentials, headers: () => ({ 'X-User-Token': 'test-user' }), identity: () => ({nickname:'tester',avatar_id:''}), avatar: () => '', requireIdentity: async () => {}, verify: async () => 'verified', withChallenge: async (_action, send) => send('verified') };
   vm.runInContext(moduleSource, context);
   const click = selector => events.click({ target: { closest: value => value === '#task-comments ' + selector ? node(selector) : null } });
   const submit = () => events.submit({ target: form, preventDefault() {} });
-  return { api: context.window.JavspComments, community: context.window.JavspCommunity, requests, node, section, form, click, submit, saved, played };
+  return { api: context.window.JavspComments, community: context.window.JavspCommunity, requests, node, section, form, click, submit, saved, played, configured };
 }
 test('same movie refresh preserves drafts; closing aborts requests and ignores stale responses', async () => {
   const h = harness(); h.api.open('ABC-001', 'https://comments.test');
@@ -159,4 +166,42 @@ test('comments render Markdown and form help documents the 300 character cap',as
  assert.match(h.section.innerHTML,/maxlength="600"/);assert.match(h.section.innerHTML,/comment-help/);
  h.form.elements.body.value='x'.repeat(301);await h.submit();
  assert.equal(h.requests.length,1);assert.match(h.node('.comment-form-message').textContent,/300/);
+});
+
+test('same-origin comments base and its verification origin reach JavspCommunity separately', async () => {
+  const h = harness();
+  h.api.open('ABC-001', '/api/comments', 'task/1', 'https://comments.example');
+  assert.deepEqual(h.configured.at(-1), ['/api/comments', 'https://comments.example']);
+  assert.equal(h.requests[0].url, '/api/comments/api/threads/ABC-001/comments?limit=20');
+  assert.equal(h.requests[0].options.credentials, 'same-origin');
+  h.requests[0].resolve({ items: [] }); await tick();
+  assert.match(h.node('.comment-form-message').textContent, /^$/);
+  // A disabled comment service keeps the section hidden and makes no request.
+  h.api.close(); const h2 = harness(); h2.api.open('ABC-001', '', '', '');
+  assert.equal(h2.requests.length, 0); assert.equal(h2.section.hidden, true);
+});
+
+test('a same-origin proxy base authenticates reads and writes with the site session cookie', async () => {
+  const h = harness(); h.api.open('ABC-001', '/api/comments', 'task/1', 'https://comments.example');
+  assert.equal(new URL(h.requests[0].url, 'https://app.example').origin, 'https://app.example');
+  assert.equal(h.requests[0].options.credentials, 'same-origin');
+  assert.equal(h.requests[0].options.referrerPolicy, 'no-referrer');
+  h.requests[0].resolve({ items: [] }); await tick();
+  h.form.elements.body.value = 'hello';
+  const sent = h.submit(); await tick();
+  assert.equal(h.requests[1].options.credentials, 'same-origin');
+  assert.equal(h.requests[1].options.referrerPolicy, 'no-referrer');
+  h.requests[1].resolve({ comment: { status: 'pending' } }, 201); await sent;
+});
+
+test('a legacy absolute comments base keeps omitting credentials for reads and writes', async () => {
+  const h = harness(); h.api.open('ABC-001', 'https://comments.test', 'task/1', '');
+  assert.equal(h.requests[0].url, 'https://comments.test/api/threads/ABC-001/comments?limit=20');
+  assert.equal(h.requests[0].options.credentials, 'omit');
+  assert.equal(h.requests[0].options.referrerPolicy, 'no-referrer');
+  h.requests[0].resolve({ items: [] }); await tick();
+  h.form.elements.body.value = 'hello';
+  const sent = h.submit(); await tick();
+  assert.equal(h.requests[1].options.credentials, 'omit');
+  h.requests[1].resolve({ comment: { status: 'pending' } }, 201); await sent;
 });

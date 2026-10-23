@@ -75,6 +75,10 @@
     if (path === '/api/auth/me') return json({ username: 'demo', role: 'admin' });
     if (path.startsWith('/api/auth/')) return denied();
     if (path === '/api/runtime') return json({ version: seed.version, app_version: seed.version, docker: true, deployment: 'docker', timezone: 'Asia/Shanghai', ai_enabled: settings.enabled });
+    if (path === '/api/directory-watch/rules' && method === 'GET') return json({
+      rules: [], scheduler: { thread_running: false, demo: true },
+      limits: { poll_seconds: { default: 30, min: 5, max: 3600 }, stable_seconds: { default: 60, min: 0, max: 86400 }, max_tasks_per_scan: { default: 20, min: 1, max: 100 }, max_rules: 50 },
+    });
     if (path === '/api/update') return json(update);
     if (path.startsWith('/api/update/')) return denied();
     if (path === '/api/ai/settings') {

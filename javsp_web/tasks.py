@@ -1099,11 +1099,24 @@ def _prepare_tasks(
     input_files: list[str] | None = None,
     batch_id: str | None = None,
     on_progress=None,
+    on_message=None,
 ) -> list[dict]:
-    """Discover and prepare a complete batch before making any child runnable."""
+    """Discover and prepare a complete batch before making any child runnable.
+
+    ``on_progress`` is a throttled best-effort channel. ``on_message`` receives
+    diagnostics that belong to the scan itself, such as a skipped duplicate copy
+    whose original file is not part of the selection; callers without it fall
+    back to ``on_progress``.
+    """
     def progress(count, message):
         if on_progress:
             on_progress(count, message)
+
+    def scan_message(message):
+        if on_message is not None:
+            on_message(message)
+        else:
+            progress(len(video_files), message)
 
     progress(0, "正在检查输入路径")
     input_path = Path(os.path.abspath(os.path.expanduser(input_directory.strip())))
@@ -1127,14 +1140,28 @@ def _prepare_tasks(
     if input_files is None and input_path.is_file():
         if only_match_media_types and configured_media_type(str(input_path), scanner) is None:
             raise ValueError("文件名未匹配任何影片分类规则，已跳过扫描")
-        from javsp.multipart import media_identity, part_number
+        from javsp.multipart import media_identity, part_number, inspect_download_copy
+
+        copy_message = None
+        copy_info = inspect_download_copy(input_path)
+        if copy_info:
+            if copy_info['duplicate']:
+                copy_message = f"跳过重复副本：{input_path.name} → {Path(copy_info['original']).name}"
+                progress(1, copy_message)
+                input_path = Path(copy_info['original'])
+            else:
+                raise ValueError(f"重复下载候选冲突，保留文件：{input_path.name}（{copy_info['reason']}）")
 
         if (source == 'download' or input_path.suffix.lower() not in _VIDEO_EXTENSIONS
                 or part_number(input_path, scanner) is None):
             if not _passes_minimum_size(input_path, minimum_size, config_data):
                 raise ValueError(f"影片文件小于预设的最小匹配文件大小，未创建任务（至少 {minimum_size} 字节）")
             progress(1, "正在创建单文件任务")
-            return [create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id, _snapshot=snapshot, _defer=True)]
+            task = create_task(str(input_path), preset_id, batch_id=batch_id, task_concurrency=concurrency, source=source, schedule_id=schedule_id, _snapshot=snapshot, _defer=True)
+            if copy_message:
+                _logs.setdefault(task['id'], list(task.get('log_tail') or [])).append(copy_message)
+                task['log_tail'] = list(_logs[task['id']])
+            return [task]
         # A direct part path represents the movie. The shared grouping validator
         # rejects ambiguous same-ID copies. Explicit manifests stay exact and a
         # completed download must never collect a different unfinished download.
@@ -1185,9 +1212,44 @@ def _prepare_tasks(
             continue
         seen_paths.add(identity)
         unique_videos.append(video)
-    from javsp.multipart import group_files
+    from javsp.multipart import group_files_skipping_conflicts, inspect_download_copy
 
-    groups = group_files(unique_videos, scanner)
+    def path_key(path):
+        try:
+            return os.path.normcase(os.path.realpath(str(path)))
+        except OSError:
+            return os.path.normcase(os.path.abspath(str(path)))
+
+    # Copy diagnostics belong to the task that owns the original file. A copy
+    # whose original is not part of this selection is reported at scan level
+    # only; no unrelated task may absorb its message.
+    selected_keys = {path_key(video) for video in unique_videos}
+    copy_messages: dict[str, list[str]] = {}
+    duplicate_pairs: list[str] = []
+    for video in unique_videos:
+        info = inspect_download_copy(video)
+        if not (info and info['duplicate']):
+            continue
+        pair = f"{video.name} → {Path(info['original']).name}"
+        duplicate_pairs.append(pair)
+        message = f"跳过重复副本：{pair}"
+        origin_key = path_key(info['original'])
+        messages = copy_messages.setdefault(origin_key, [])
+        if message not in messages:
+            messages.append(message)
+        if origin_key in selected_keys:
+            progress(len(video_files), message)
+        else:
+            scan_message(message)
+    groups, part_conflicts = group_files_skipping_conflicts(unique_videos, scanner)
+    for conflict in part_conflicts:
+        # Problem files are skipped; the rest of the batch keeps going.
+        scan_message(conflict)
+    if not groups and len(duplicate_pairs) == len(unique_videos):
+        # Only verified copies were selected: say so instead of blaming the
+        # minimum file size. The original is never added behind the user's back.
+        raise NoScrapeTasksError(
+            "已跳过重复副本，无可处理文件：" + "；".join(duplicate_pairs))
     # A short final part belongs to the movie when another part meets the limit.
     eligible = []
     for paths in groups:
@@ -1198,6 +1260,8 @@ def _prepare_tasks(
                 break
     groups = eligible
     if not groups:
+        if part_conflicts:
+            raise NoScrapeTasksError("已跳过分 P 或重复副本存在问题的文件，无可处理文件：" + "；".join(part_conflicts))
         raise NoScrapeTasksError("输入目录中未找到符合预设最小匹配文件大小的影片文件")
     prepared = []
     try:
@@ -1205,6 +1269,15 @@ def _prepare_tasks(
             progress(len(video_files), f"正在准备影片任务 {len(prepared) + 1}/{len(groups)}")
             prepared.append(create_task(str(paths[0]), preset_id, batch_id=batch_id, task_concurrency=concurrency,
                                        source=source, schedule_id=schedule_id, input_files=[str(path) for path in paths], _snapshot=snapshot, _defer=True))
+        for task in prepared:
+            related = []
+            for path in task.get('input_files') or [task['input_directory']]:
+                for message in copy_messages.get(path_key(path), []):
+                    if message not in related:
+                        related.append(message)
+            if related:
+                _logs.setdefault(task['id'], list(task.get('log_tail') or [])).extend(related)
+                task['log_tail'] = list(_logs[task['id']])
         progress(len(video_files), f"扫描完成，正在提交 {len(prepared)} 个影片任务")
     except BaseException:
         from .task_scans import discard_prepared

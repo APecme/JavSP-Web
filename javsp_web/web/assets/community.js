@@ -1,5 +1,5 @@
 window.JavspCommunity = (() => {
-  let profile = null, catalog = null, base = '', selectedAvatar = '', historyCursor = null, historyItems = [], historyVersion = 0;
+  let profile = null, catalog = null, base = '', verifyBase = '', verifyOrigin = '', selectedAvatar = '', historyCursor = null, historyItems = [], historyVersion = 0;
   let avatarPage = 0, historyLoading = false, challengeActive = false;
   const el = id => document.getElementById(id);
   const esc = value => escapeHtml(value ?? '');
@@ -15,7 +15,38 @@ window.JavspCommunity = (() => {
     profile = await api('/api/profile');
     renderAccount();
   }
-  function configure(url) { base = String(url || '').replace(/\/+$/, ''); }
+  // The API base and the Cloudflare verification origin are separate: data goes
+  // through this site's proxy, while Turnstile keeps running on its own hostname.
+  function cleanURL(value) { return String(value || '').trim().replace(/\/+$/, ''); }
+  function configure(url, verifyUrl) {
+    const next = cleanURL(url), nextVerify = cleanURL(verifyUrl), baseChanged = next !== base;
+    base = next;
+    // A missing verification argument must not wipe the runtime-provided source
+    // for the same base, while switching bases must never carry the old origin.
+    if (nextVerify) verifyBase = nextVerify;
+    else if (baseChanged) verifyBase = next;
+    verifyOrigin = '';
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(verifyBase)) {
+      try { verifyOrigin = new URL(verifyBase).origin; } catch (_) { verifyOrigin = ''; }
+    }
+  }
+  // Credentials are a security decision, not a request detail: the same-origin
+  // proxy authenticates with this site's session cookie, while a legacy absolute
+  // comments host must never receive it.
+  const absoluteURL = value => /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(String(value || ''));
+  function requestCredentials(target) {
+    const url = String(target || '');
+    if (!absoluteURL(url)) return 'same-origin';
+    try {
+      const page = typeof location === 'undefined' ? null : location;
+      if (page?.origin && page.origin !== 'null' && new URL(url, page.href).origin === page.origin) return 'same-origin';
+    } catch (_) {}
+    return 'omit';
+  }
+  // Callers may refine a request, but never its credential or referrer policy.
+  function requestInit(target, options = {}) {
+    return { ...options, credentials: requestCredentials(target), referrerPolicy: 'no-referrer' };
+  }
   function renderAccount() {
     if (!profile) return;
     el('current-user').textContent = profile.display_name;
@@ -25,7 +56,8 @@ window.JavspCommunity = (() => {
   }
   async function service(path, options = {}) {
     if (!base) throw new Error('评论服务未启用。');
-    const response = await fetch(base + path, { ...options, credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json', ...headers(), ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
+    const url = base + path;
+    const response = await fetch(url, { ...requestInit(url, options), signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json', ...headers(), ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { const error = new Error(data.detail || '评论服务暂时不可用，请重试。'); error.status = response.status; throw error; }
     return data;
@@ -41,6 +73,7 @@ window.JavspCommunity = (() => {
   function verify(action) {
     if (challengeActive) return Promise.reject(new Error('请先完成已打开的验证。'));
     if (!base) return Promise.reject(new Error('评论服务未启用。'));
+    if (!verifyOrigin) return Promise.reject(new Error('评论验证服务未配置，请刷新页面后重试。'));
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     const hex = [...bytes].map(x => x.toString(16).padStart(2, '0')).join('');
     const nonce = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
@@ -49,7 +82,7 @@ window.JavspCommunity = (() => {
     dialog.setAttribute('aria-label', '安全验证');
     dialog.innerHTML = '<div class="comments-heading"><h3>安全验证</h3><button type="button" class="icon-button" data-verify-cancel>取消验证</button></div><iframe title="Cloudflare 人机验证" referrerpolicy="no-referrer"></iframe><p class="muted">请按提示完成验证。无法加载时，可取消后重试。</p>';
     const frame = dialog.querySelector('iframe');
-    frame.src = `${base}/verify#${new URLSearchParams({ action, nonce })}`;
+    frame.src = `${verifyBase}/verify#${new URLSearchParams({ action, nonce })}`;
     document.body.append(dialog);
     dialog.showModal();
     challengeActive = true;
@@ -57,7 +90,7 @@ window.JavspCommunity = (() => {
       const cleanup = () => { clearTimeout(timeout); window.removeEventListener('message', receive); dialog.removeEventListener('close', cancel); challengeActive = false; dialog.close(); dialog.remove(); };
       const cancel = () => { cleanup(); reject(new Error('验证已取消，可以重新提交。')); };
       const receive = event => {
-        if (event.origin !== new URL(base).origin || event.source !== frame.contentWindow || event.data?.type !== 'javsp-verification' || event.data.nonce !== nonce || event.data.action !== action || typeof event.data.token !== 'string') return;
+        if (event.origin !== verifyOrigin || event.source !== frame.contentWindow || event.data?.type !== 'javsp-verification' || event.data.nonce !== nonce || event.data.action !== action || typeof event.data.token !== 'string' || !event.data.token || event.data.token.length > 4096) return;
         cleanup(); resolve(event.data.token);
       };
       const timeout = setTimeout(() => { cleanup(); reject(new Error('验证超时，请重试。')); }, 180000);
@@ -249,5 +282,5 @@ window.JavspCommunity = (() => {
     } catch (error) { el('profile-message').textContent = error.message; }
     finally { clearPin(); button.disabled = false; }
   });
-  return { init, configure, headers, identity, avatar, verify, withChallenge, open, requireIdentity };
+  return { init, configure, headers, identity, avatar, verify, withChallenge, open, requireIdentity, requestCredentials, requestInit };
 })();

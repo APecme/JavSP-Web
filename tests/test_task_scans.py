@@ -58,6 +58,13 @@ class ScanTests(unittest.TestCase):
             paths.append(path)
         return paths
 
+    def streams(self, *names):
+        """Create .strm fixtures that all point at the same media link."""
+        paths = self.files(*names)
+        for path in paths:
+            path.write_text('https://example.test/copy.mp4', encoding='utf-8')
+        return paths
+
     def submit(self, path, selected=None):
         body = dict(input_directory=str(path), preset_id='default')
         if selected is not None:
@@ -205,11 +212,40 @@ class ScanTests(unittest.TestCase):
         tasks._run_task(scan)
         self.assertEqual(self.children(scan)[0]['input_files'], [str(paths[0])])
 
-    def test_single_part_ambiguous_siblings_fail_before_children_start(self):
+    def test_explicit_copy_only_manifest_reports_the_skip_not_a_size_mismatch(self):
+        original, duplicate = self.streams('hhd800.com@AVSA-223.strm', 'hhd800.com@AVSA-223(1).strm')
+        scan = self.submit(duplicate.parent, [duplicate])
+        tasks._run_task(scan)
+        record = storage.get_task_record(scan['id'])
+        self.assertEqual(record['status'], 'failed')
+        self.assertIn('已跳过重复副本，无可处理文件', record['error'])
+        self.assertNotIn('最小匹配文件大小', record['error'])
+        self.assertIn('hhd800.com@AVSA-223(1).strm → hhd800.com@AVSA-223.strm', record['error'])
+        self.assertEqual(self.children(scan), [], '不得擅自把未选择的原文件加入任务')
+        self.assertTrue(original.exists() and duplicate.exists())
+
+    def test_explicit_mixed_copy_manifest_keeps_the_skip_in_the_scan_log(self):
+        original, duplicate = self.streams('hhd800.com@AVSA-223.strm', 'hhd800.com@AVSA-223(1).strm')
+        movie = self.files('ABC-123.mp4')[0]
+        scan = self.submit(duplicate.parent, [duplicate, movie])
+        tasks._run_task(scan)
+        record = storage.get_task_record(scan['id'])
+        self.assertEqual(record['status'], 'succeeded')
+        expected = '跳过重复副本：hhd800.com@AVSA-223(1).strm → hhd800.com@AVSA-223.strm'
+        self.assertIn(expected, record['log_tail'], '跳过提示必须进入用户可见的扫描结果')
+        self.assertFalse(any('example.test' in line for line in record['log_tail']), '扫描日志不得包含链接')
+        children = self.children(scan)
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0]['input_files'], [str(movie)])
+        self.assertNotIn(expected, children[0]['log_tail'], '提示不得挂到无关任务')
+
+    def test_single_part_ambiguous_siblings_are_skipped_with_a_clear_reason(self):
         paths = self.files('FC2-4953812-CD1.mp4', 'FC2PPV-4953812-01.mkv')
         scan = self.submit(paths[0])
         tasks._run_task(scan)
-        self.assertEqual(storage.get_task_record(scan['id'])['status'], 'failed')
+        record = storage.get_task_record(scan['id'])
+        self.assertEqual(record['status'], 'failed')
+        self.assertIn('已跳过分 P 或重复副本存在问题的文件', record['error'])
         self.assertEqual(self.children(scan), [])
 
     def test_download_single_part_does_not_collect_unfinished_sibling(self):
@@ -229,7 +265,9 @@ class ScanTests(unittest.TestCase):
         paths = self.files('FC2-4953812-CD2.mp4', 'FC2-4953812.mp4')
         scan = self.submit(paths[0])
         tasks._run_task(scan)
-        self.assertEqual(storage.get_task_record(scan['id'])['status'], 'failed')
+        record = storage.get_task_record(scan['id'])
+        self.assertEqual(record['status'], 'failed')
+        self.assertIn('已跳过分 P 或重复副本存在问题的文件', record['error'])
         self.assertEqual(self.children(scan), [])
 
     @unittest.skipUnless(os.name == 'nt', 'Case-insensitive Windows paths')
@@ -277,6 +315,8 @@ class ScanTests(unittest.TestCase):
         self.assertIn('输入目录中未找到符合预设最小匹配文件大小的影片文件', result['error'])
 
     def test_scheduled_empty_scan_is_not_saved_as_failed_run(self):
+        from javsp_web import directory_watch
+        directory_watch.stop_scheduler()
         schedule = {
             'id': 'empty-schedule', 'name': '空目录', 'enabled': True, 'cron': '* * * * *',
             'input_directory': str(self.root / 'mount'), 'preset_id': 'default',
@@ -284,14 +324,23 @@ class ScanTests(unittest.TestCase):
             'last_run_key': '', 'last_run_at': '', 'last_result': '尚未执行', 'runs': [],
         }
         storage.save_auto_scrape_schedules([schedule])
-        with patch.object(self.server, 'active_schedule_task_ids', return_value=[]), \
-             patch.object(self.server, 'create_tasks', side_effect=tasks.NoScrapeTasksError('输入目录中未找到符合预设最小匹配文件大小的影片文件')):
-            claimed, created = self.server._run_auto_scrape_schedule('empty-schedule', '2026-10-06T12:01')
-        saved = storage.list_auto_scrape_schedules()[0]
-        self.assertEqual(created, [])
-        self.assertEqual(claimed['last_result'], '未发现符合条件的影片，已跳过本次运行')
-        self.assertEqual(saved['runs'], [])
-        self.assertEqual(saved['last_run_key'], '2026-10-06T12:01')
+        (self.root / 'mount').mkdir(exist_ok=True)
+        report = directory_watch.migrate_legacy_schedules()
+        self.assertEqual((report['checked'], report['imported']), (1, 1))
+        rule = next(item for item in directory_watch.read_rules() if item['id'] == 'empty-schedule')
+        self.assertEqual(rule['trigger'], 'schedule')
+        with patch.object(tasks, 'active_schedule_task_ids', return_value=[]), \
+             patch.object(directory_watch, '_submit_schedule', side_effect=tasks.NoScrapeTasksError('输入目录中未找到符合预设最小匹配文件大小的影片文件')):
+            outcome = directory_watch.run_schedule_rule('empty-schedule', '2026-10-06T12:01')
+        self.assertEqual(outcome['created'], 0)
+        self.assertEqual(outcome['state'], 'ok')
+        self.assertEqual(outcome['message'], '未发现符合条件的影片，已跳过本次运行')
+        entry = directory_watch.read_state()['rules']['empty-schedule']
+        self.assertEqual(entry['schedule_runs'], [], '空扫描不落运行记录，但分钟声明保留')
+        self.assertEqual(entry['last_schedule_run_key'], '2026-10-06T12:01')
+        # 旧存储保持原样：迁移不重写旧文件。
+        legacy = storage.list_auto_scrape_schedules()
+        self.assertEqual([item['id'] for item in legacy], ['empty-schedule'])
 
     def test_single_file_still_creates_one_scrape_task(self):
         video = self.files('ABC-123.mp4')[0]
@@ -321,13 +370,28 @@ class ScanTests(unittest.TestCase):
         self.assertIn('network disconnected', storage.get_task_record(scan['id'])['error'])
         self.assertEqual(self.children(scan), [])
 
-    def test_ambiguous_parts_fail_before_any_child_starts(self):
+    def test_ambiguous_parts_are_skipped_and_the_rest_of_the_batch_runs(self):
+        paths = self.files('FC2-4953812-1.mp4', 'FC2PPV-4953812-01.mkv', 'ABC-123.mp4')
+        scan = self.submit(paths[0], paths)
+        tasks._run_task(scan)
+        record = storage.get_task_record(scan['id'])
+        self.assertEqual(record['status'], 'succeeded')
+        self.assertTrue(any('已跳过该组文件' in line for line in record['log_tail']),
+                        '跳过提示必须进入用户可见的扫描结果')
+        self.assertFalse(any('example.test' in line for line in record['log_tail']))
+        children = self.children(scan)
+        self.assertEqual(len(children), 1, '健康的影片继续刮削，问题文件不阻塞批次')
+        self.assertEqual(children[0]['input_directory'], str(paths[2]))
+
+    def test_ambiguous_only_batch_reports_the_skip_not_a_size_mismatch(self):
         paths = self.files('FC2-4953812-1.mp4', 'FC2PPV-4953812-01.mkv')
         scan = self.submit(paths[0], paths)
         tasks._run_task(scan)
-        self.assertEqual(storage.get_task_record(scan['id'])['status'], 'failed')
+        record = storage.get_task_record(scan['id'])
+        self.assertEqual(record['status'], 'failed')
+        self.assertIn('已跳过分 P 或重复副本存在问题的文件，无可处理文件', record['error'])
+        self.assertNotIn('最小匹配文件大小', record['error'])
         self.assertEqual(self.children(scan), [])
-        self.assertEqual(self.enqueue.call_count, 1)
 
     def test_cancellation_after_preparation_discards_config_and_children(self):
         video = self.files('ABC-123.mp4')[0]

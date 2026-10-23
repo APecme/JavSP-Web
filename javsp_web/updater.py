@@ -14,7 +14,7 @@ import uuid
 
 import requests
 
-from . import __version__, app_update, storage
+from . import __version__, app_supervisor, app_update, storage
 
 REPOSITORY = 'apecme/javsp-web'
 ACTIVE = {'scheduled', 'downloading', 'restarting'}
@@ -166,7 +166,14 @@ def status(include_capability=True):
     result = read_state('check')
     if result.get('channel') != selected or result.get('current') != current_version():
         result = {}
-    response = {'settings': storage.get_update_settings(), 'result': result, 'job': job(), 'current': current_version(), 'channel': selected}
+    selected_state = app_supervisor.read_state()
+    response = {
+        'settings': storage.get_update_settings(), 'result': result, 'job': job(), 'current': current_version(), 'channel': selected,
+        # Distinguish the image the container runs, the application version the
+        # supervisor selected for it, and the version the check wants to install.
+        'base': app_supervisor.base_identity(), 'selected': selected_state.get('current') or '',
+        'pending': bool(selected_state.get('pending')),
+    }
     if include_capability:
         response['capability'] = capability()
     return response

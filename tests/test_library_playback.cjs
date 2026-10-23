@@ -12,6 +12,7 @@ async function main() {
     window: { open: () => player },
     api: async url => { request = url; return { links: [{ url: 'https://player.test/web/#/details?id=1' }] }; },
     showToast: error => { message = error; }, escapeHtml: value => value,
+    javspIcon: () => '',
   });
   vm.runInContext(functions, context);
   await context.playTask(button);

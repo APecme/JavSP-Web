@@ -1,0 +1,9 @@
+test_pulled_image_replaces_the_persisted_overlay (test_update_restart_e2e.RestartEndToEndTests.test_pulled_image_replaces_the_persisted_overlay) ... ok
+test_restart_after_a_crashed_download_leaves_updates_usable (test_update_restart_e2e.RestartEndToEndTests.test_restart_after_a_crashed_download_leaves_updates_usable) ... ok
+test_two_independent_restart_cycles_run_the_installed_update (test_update_restart_e2e.RestartEndToEndTests.test_two_independent_restart_cycles_run_the_installed_update) ... ok
+test_update_that_cannot_start_rolls_back_and_stays_back (test_update_restart_e2e.RestartEndToEndTests.test_update_that_cannot_start_rolls_back_and_stays_back) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 46.972s
+
+OK

@@ -15,8 +15,8 @@ DOCS = ROOT / 'docs'
 
 
 def build():
-    assets = ['theme.css', 'theme.js', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js', 'markdown-it.min.js', 'markdown-it.LICENSE', 'comment-markdown.js']
-    inputs = [WEB / 'index.html', WEB / 'assets' / 'avatar-catalog.json', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
+    assets = ['theme.css', 'theme.js', 'icons.js', 'navigation.js', 'navigation.css', 'directory-watch.js', 'directory-watch.css', 'page-layouts.css', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js', 'markdown-it.min.js', 'markdown-it.LICENSE', 'comment-markdown.js']
+    inputs = [ROOT / 'VERSION', WEB / 'index.html', WEB / 'assets' / 'avatar-catalog.json', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
               ROOT / 'vendor' / 'JavSP' / 'config.yml', DOCS / 'demo-mock.js', DOCS / 'demo.css',
               Path(__file__), *sorted((ROOT / 'javsp_web' / 'skills').glob('*/SKILL.md'))]
     revision = hashlib.sha256(b''.join(path.read_text(encoding='utf-8').encode('utf-8') for path in inputs)).hexdigest()[:12]
@@ -56,7 +56,8 @@ def build():
     document = document.replace('assets/app.js?', 'assets/demo-app.js?')
     document = document.replace('<title>JavSP WEB</title>', '<title>交互示例 | JavSP WEB</title>')
     document = document.replace('<body>', '<body class="demo-mode">\n<script src="demo-seed.js?v=' + revision + '"></script>\n<script src="demo-mock.js?v=' + revision + '"></script>')
-    document = document.replace('<main class="main">', '<main class="main"><aside class="demo-notice" role="note"><strong>交互示例 · ' + seed['version'] + '</strong><span>使用当前程序界面与模拟数据，不连接模型、不访问影片文件。更改仅保留到刷新；请勿填写真实密钥。</span><a href="docs.html">使用教程 ↗</a></aside>')
+    app_version = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
+    document = document.replace('<main class="main">', '<main class="main"><aside class="demo-notice" role="note"><strong>在线体验 · v' + app_version + ' · 模拟数据</strong><span>体验片库分类、明暗主题、隐私模式、预设与 AI 助手。示例不连接模型、不读取影片、不提供真实播放与评论提交；更改在刷新后重置，请勿填写真实密钥。</span><a href="docs.html">使用教程 ↗</a></aside>')
     document = document.replace('</head>', '<link rel="stylesheet" href="demo.css?v=' + revision + '">\n</head>')
     (DOCS / 'demo.html').write_text(document, encoding='utf-8')
     print('Generated demo:', seed['version'])

@@ -1,0 +1,25 @@
+# 前端文件基线快照 2026-10-23 16:52:44
+
+用途：KIMI3 会话无法停止，若其后续落盘可据此 diff 判定归属。
+
+```
+c621d44ee160b3a78b0dddf5f78ead46905d41c98f61dd609e41c7f7d25bb76c  ./assets/ai-markdown.js
+133d37f12735267eab96cff1ad22d21416e868bc84a143c455b29b4435168935  ./assets/ai.js
+08043696afd3e2a6cc8185b91fad5699048bc2429bd05c8a0f8361b0c5f713c9  ./assets/app.css
+854ff8daed992eb786f4af776e1ea6e875e374fd1ccd8e11d420badd42db3de8  ./assets/app.js
+32d95532aa359d1144160634c53573e8436dca4131f4c6fc879b8e377c0c7570  ./assets/cinema.css
+8d9453d30a368201df75b248d138e906fc52a70046ce561b3c6a58efec72156c  ./assets/comment-markdown.js
+d02bddd0dfaf9e06a9f38c2a02ef01a7371126ecfb8e7fd4bcdb546f6718e63d  ./assets/community.js
+146c2199bcad906bf7daf0d905cfddb3436b3357c9f8757e44f14f3cc9a93329  ./assets/directory-watch.css
+ac2ef71877cd0a81657ad2e5f28a00e7fb52ebf5cb4f16d1c1308831feb95d12  ./assets/directory-watch.js
+9f80fc399a73b3ddb5fd497d9776844951793e6475bbdf8b678eac12da0cd298  ./assets/icons.js
+38c70a1e7ca91ab40e2d9e6e60129851a717ed1c7d4acbbdd41bf9503791cf68  ./assets/markdown-it.min.js
+dbf7b62536aea9e4f78e4eb1fe92d09c5f517f1e2b40e385e8254491c77c6e14  ./assets/navigation.css
+f645ff5a034883657aff922202ecc3cda0c0902ce4b1e4ce760e182e114dcc94  ./assets/navigation.js
+b267f1dfeb9f0d06efc6b9ff7a39641fdffbada6cebcf5f96db05d5b56801e67  ./assets/overrides.css
+ef4f40d60d2dfe6d2407c87f01342896717a9a77df6959e2540bd84d5bebb5ea  ./assets/page-layouts.css
+c97f4c0f5b211fe7dd2db52918489bb0b715114d6c9e47d1a2c38ec6808740f2  ./assets/theme.css
+d5f476a8dc39dbcb731e065de00db8dcbb26a46b0a9e1a6778067a8b0a45945c  ./assets/theme.js
+60880729aaf95c99913294086f08e9f4c81b1166293b8553b8eee2c2b95799f8  ./index.html
+f1f2a3b9d89d3b61ed5417254d18a091605acd983b3d610974f0cff81cdb9c30  ./login.html
+```

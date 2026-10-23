@@ -27,8 +27,8 @@ function browser({ stored = null, dark = false, blocked = false, legacy = false 
     addEventListener(name, listener) { this.listeners[name] = listener; },
   };
   const document = {
-    documentElement: { dataset: {}, style: {}, classList: { add() {}, remove() {} } },
-    querySelectorAll: () => [button],
+    documentElement: { dataset: {}, style: { setProperty(name, value) { this[name] = String(value); }, removeProperty(name) { delete this[name]; } }, classList: { add() {}, remove() {} } },
+    querySelectorAll: selector => selector === '[data-theme-toggle]' ? [button] : [],
   };
   const storage = {
     getItem(key) { if (blocked) throw Error('Storage denied'); return values.get(key) ?? null; },
@@ -138,7 +138,7 @@ test('every migrated color token resolves and fixed artwork colors are explicitl
   const styles = files.map(file => read(`javsp_web/web/assets/${file}`));
   const definitions = new Set([...styles.join('\n').matchAll(/(--[\w-]+)\s*:/g)].map(m => m[1]));
   for (const [i, css] of styles.entries()) {
-    for (const match of css.matchAll(/var\((--[\w-]+)/g)) assert.ok(definitions.has(match[1]) || ['--progress', '--i', '--hue', '--tone', '--title-scale'].includes(match[1]), `${files[i]}: undefined ${match[1]}`);
+    for (const match of css.matchAll(/var\((--[\w-]+)/g)) assert.ok(definitions.has(match[1]) || ['--progress', '--i', '--hue', '--tone', '--title-scale', '--swatch'].includes(match[1]), `${files[i]}: undefined ${match[1]}`);
   }
   assert.ok(definitions.has('--control-border'), 'interactive boundaries need their own theme token');
   for (const name of ['app.css', 'overrides.css']) {

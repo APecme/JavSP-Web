@@ -1,0 +1,2434 @@
+[
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "overview",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1004.46875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1004.46875,
+      "left": 240
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "scrape",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1048.734375,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1048.734375,
+      "left": 240
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "ai-scrape",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 960,
+      "top": 0,
+      "right": 1440,
+      "bottom": 960,
+      "left": 240
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "auto-scrape",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1082.421875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1082.421875,
+      "left": 240
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "downloads",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 950,
+      "top": 0,
+      "right": 1440,
+      "bottom": 950,
+      "left": 240
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "crawler-config",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1243.046875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1243.046875,
+      "left": 240
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "presets",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1331.78125,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1331.78125,
+      "left": 240
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "view": "settings",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 3308.875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 3308.875,
+      "left": 240
+    },
+    "title": "系统设置",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "overview",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1004.46875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1004.46875,
+      "left": 240
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "scrape",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1048.734375,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1048.734375,
+      "left": 240
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "ai-scrape",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 960,
+      "top": 0,
+      "right": 1440,
+      "bottom": 960,
+      "left": 240
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "auto-scrape",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1082.421875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1082.421875,
+      "left": 240
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "downloads",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 950,
+      "top": 0,
+      "right": 1440,
+      "bottom": 950,
+      "left": 240
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "crawler-config",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1243.046875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1243.046875,
+      "left": 240
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "presets",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 1331.78125,
+      "top": 0,
+      "right": 1440,
+      "bottom": 1331.78125,
+      "left": 240
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "view": "settings",
+    "scroll": 1440,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 3308.875,
+      "top": 0,
+      "right": 1440,
+      "bottom": 3308.875,
+      "left": 240
+    },
+    "title": "系统设置",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "overview",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1330.640625,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1330.640625,
+      "left": 240
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "scrape",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1530,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1530,
+      "left": 240
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "ai-scrape",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 960,
+      "top": 0,
+      "right": 1024,
+      "bottom": 960,
+      "left": 240
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "auto-scrape",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1386.421875,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1386.421875,
+      "left": 240
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "downloads",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 950,
+      "top": 0,
+      "right": 1024,
+      "bottom": 950,
+      "left": 240
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "crawler-config",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1262.234375,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1262.234375,
+      "left": 240
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "presets",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1600.15625,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1600.15625,
+      "left": 240
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "light",
+    "view": "settings",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 3366.4375,
+      "top": 0,
+      "right": 1024,
+      "bottom": 3366.4375,
+      "left": 240
+    },
+    "title": "系统设置",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "overview",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1330.640625,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1330.640625,
+      "left": 240
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "scrape",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1530,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1530,
+      "left": 240
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "ai-scrape",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 960,
+      "top": 0,
+      "right": 1024,
+      "bottom": 960,
+      "left": 240
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "auto-scrape",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1386.421875,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1386.421875,
+      "left": 240
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "downloads",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 950,
+      "top": 0,
+      "right": 1024,
+      "bottom": 950,
+      "left": 240
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "crawler-config",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1262.234375,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1262.234375,
+      "left": 240
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "presets",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 1600.15625,
+      "top": 0,
+      "right": 1024,
+      "bottom": 1600.15625,
+      "left": 240
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "theme": "dark",
+    "view": "settings",
+    "scroll": 1024,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 950,
+      "top": 0,
+      "right": 240,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 16,
+      "y": 86,
+      "width": 207,
+      "height": 822,
+      "top": 86,
+      "right": 223,
+      "bottom": 908,
+      "left": 16
+    },
+    "main": {
+      "x": 240,
+      "y": 0,
+      "width": 784,
+      "height": 3366.4375,
+      "top": 0,
+      "right": 1024,
+      "bottom": 3366.4375,
+      "left": 240
+    },
+    "title": "系统设置",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "overview",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1320,
+      "top": 0,
+      "right": 390,
+      "bottom": 1320,
+      "left": 56
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "scrape",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 2162.40625,
+      "top": 0,
+      "right": 390,
+      "bottom": 2162.40625,
+      "left": 56
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "ai-scrape",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 954,
+      "top": 0,
+      "right": 390,
+      "bottom": 954,
+      "left": 56
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "auto-scrape",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1800.421875,
+      "top": 0,
+      "right": 390,
+      "bottom": 1800.421875,
+      "left": 56
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "downloads",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1375.09375,
+      "top": 0,
+      "right": 390,
+      "bottom": 1375.09375,
+      "left": 56
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "crawler-config",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1832.15625,
+      "top": 0,
+      "right": 390,
+      "bottom": 1832.15625,
+      "left": 56
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "presets",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 2553.828125,
+      "top": 0,
+      "right": 390,
+      "bottom": 2553.828125,
+      "left": 56
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "view": "settings",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 4073.375,
+      "top": 0,
+      "right": 390,
+      "bottom": 4073.375,
+      "left": 56
+    },
+    "title": "系统设置",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "overview",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1320,
+      "top": 0,
+      "right": 390,
+      "bottom": 1320,
+      "left": 56
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "scrape",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 2162.40625,
+      "top": 0,
+      "right": 390,
+      "bottom": 2162.40625,
+      "left": 56
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "ai-scrape",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 954,
+      "top": 0,
+      "right": 390,
+      "bottom": 954,
+      "left": 56
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "auto-scrape",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1800.421875,
+      "top": 0,
+      "right": 390,
+      "bottom": 1800.421875,
+      "left": 56
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "downloads",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1375.09375,
+      "top": 0,
+      "right": 390,
+      "bottom": 1375.09375,
+      "left": 56
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "crawler-config",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 1832.15625,
+      "top": 0,
+      "right": 390,
+      "bottom": 1832.15625,
+      "left": 56
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "presets",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 2553.828125,
+      "top": 0,
+      "right": 390,
+      "bottom": 2553.828125,
+      "left": 56
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "view": "settings",
+    "scroll": 390,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 334,
+      "height": 4073.375,
+      "top": 0,
+      "right": 390,
+      "bottom": 4073.375,
+      "left": 56
+    },
+    "title": "系统设置",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "overview",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1996.28125,
+      "top": 0,
+      "right": 320,
+      "bottom": 1996.28125,
+      "left": 56
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "scrape",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 2405.0625,
+      "top": 0,
+      "right": 320,
+      "bottom": 2405.0625,
+      "left": 56
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "ai-scrape",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 954,
+      "top": 0,
+      "right": 320,
+      "bottom": 954,
+      "left": 56
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "auto-scrape",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1896.796875,
+      "top": 0,
+      "right": 320,
+      "bottom": 1896.796875,
+      "left": 56
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "downloads",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1374.28125,
+      "top": 0,
+      "right": 320,
+      "bottom": 1374.28125,
+      "left": 56
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "crawler-config",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1827.34375,
+      "top": 0,
+      "right": 320,
+      "bottom": 1827.34375,
+      "left": 56
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "presets",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 2973.59375,
+      "top": 0,
+      "right": 320,
+      "bottom": 2973.59375,
+      "left": 56
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "view": "settings",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 4373.25,
+      "top": 0,
+      "right": 320,
+      "bottom": 4373.25,
+      "left": 56
+    },
+    "title": "系统设置",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "overview",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1996.28125,
+      "top": 0,
+      "right": 320,
+      "bottom": 1996.28125,
+      "left": 56
+    },
+    "title": "片库",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "scrape",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 2405.0625,
+      "top": 0,
+      "right": 320,
+      "bottom": 2405.0625,
+      "left": 56
+    },
+    "title": "手动刮削",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "ai-scrape",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 954,
+      "top": 0,
+      "right": 320,
+      "bottom": 954,
+      "left": 56
+    },
+    "title": "AI 刮削",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "auto-scrape",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1896.796875,
+      "top": 0,
+      "right": 320,
+      "bottom": 1896.796875,
+      "left": 56
+    },
+    "title": "自动刮削",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "downloads",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1374.28125,
+      "top": 0,
+      "right": 320,
+      "bottom": 1374.28125,
+      "left": 56
+    },
+    "title": "下载管理",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "crawler-config",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 1827.34375,
+      "top": 0,
+      "right": 320,
+      "bottom": 1827.34375,
+      "left": 56
+    },
+    "title": "爬虫配置",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "presets",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 2973.59375,
+      "top": 0,
+      "right": 320,
+      "bottom": 2973.59375,
+      "left": 56
+    },
+    "title": "刮削预设",
+    "errors": []
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "view": "settings",
+    "scroll": 320,
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "width": 56,
+      "height": 950,
+      "top": 0,
+      "right": 56,
+      "bottom": 950,
+      "left": 0
+    },
+    "nav": {
+      "x": 6,
+      "y": 62,
+      "width": 43,
+      "height": 880,
+      "top": 62,
+      "right": 49,
+      "bottom": 942,
+      "left": 6
+    },
+    "main": {
+      "x": 56,
+      "y": 0,
+      "width": 264,
+      "height": 4373.25,
+      "top": 0,
+      "right": 320,
+      "bottom": 4373.25,
+      "left": 56
+    },
+    "title": "系统设置",
+    "errors": []
+  }
+]

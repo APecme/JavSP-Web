@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import stat
 import tempfile
 import threading
@@ -84,15 +85,34 @@ def extract_verified(archive, destination, expected):
         raise ValueError('更新文件缺少必需内容')
 
 
+def _remove_version_dir(target):
+    if target.is_symlink() or target.is_file():
+        target.unlink()
+    elif target.is_dir():
+        shutil.rmtree(target)
+
+
+def staged_version_usable(label):
+    try:
+        app_supervisor.root_for(label)
+    except (ValueError, OSError):
+        return False
+    return True
+
+
 def stage(info):
     label, commit = info['target'], info.get('commit', '')
     if not re.fullmatch(r'(?:bata\.\d{14}|\d+\.\d+\.\d+)', label) or not re.fullmatch(r'[a-f0-9]{40}', commit):
         raise ValueError('目标镜像未提供有效的应用版本和提交标识；请手动更新镜像')
     app_supervisor.APP_DIR.mkdir(parents=True, exist_ok=True)
     target = app_supervisor.APP_DIR / label
-    if target.is_dir():
-        app_supervisor.root_for(label)
+    if target.is_symlink():
+        # Never follow a planted link out of the update directory.
+        target.unlink()
+    elif target.is_dir() and staged_version_usable(label):
         return
+    # A half-written or corrupted copy stays in the way until a verified
+    # replacement is ready, so a broken download never deletes the only copy.
     commit_info = get_json(f'{API}/git/commits/{commit}')
     if commit_info.get('sha') != commit:
         raise ValueError('Git 提交标识不匹配')
@@ -111,6 +131,9 @@ def stage(info):
             if (extracted / name).read_bytes() != (app_supervisor.BASE_ROOT / name).read_bytes():
                 raise ValueError('新版本修改了镜像或依赖；请手动更新 Docker 镜像')
         archive.unlink()
+        # Only now, with a verified replacement in hand, drop a corrupted or
+        # stray entry so the version can be installed again.
+        _remove_version_dir(target)
         extracted.rename(target)
 
 
@@ -120,7 +143,7 @@ def install(info):
     app_supervisor.save_state({
         'current': info['target'], 'commit': info['commit'], 'previous': current.get('current'),
         'previous_commit': current.get('commit', ''), 'pending': True,
-        'base_image': app_supervisor.image_identity(),
+        'base_image': app_supervisor.base_identity(),
     })
 
 

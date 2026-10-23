@@ -1,0 +1,432 @@
+/* Sidebar navigation — loaded after app.css/overrides.css/cinema.css on purpose.
+   Desktop: 240px full sidebar, 72px icon rail when collapsed.
+   Phone (<=800px): permanent 56px icon rail, the same sidebar expands as an overlay drawer.
+   Owns layout + rail/drawer chrome only; view content stays in app.js. */
+
+.app-shell {
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.app-shell > .main {
+  min-width: 0;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  padding-top: 20px;
+  padding-bottom: 16px;
+  border-right: 1px solid var(--sidebar-control);
+  background: var(--sidebar-bg);
+}
+
+.sidebar .nav {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  margin-top: 18px;
+  padding: 2px 6px 2px 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.nav-label {
+  margin: 20px 12px 8px;
+  color: var(--sidebar-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--sidebar-muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.nav-item::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: translateY(-50%);
+  transition: height 0.18s ease;
+}
+
+.nav-item:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 2px;
+}
+
+.nav-item.active {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+  /* Stronger glyph contrast on the active item so the rail reads at a glance. */
+  font-weight: 700;
+}
+
+.nav-item.active::before {
+  height: 60%;
+}
+
+.nav-item-icon {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  /* Optical baseline: stroke icons sit slightly high against 14px/600 labels. */
+  transform: translateY(1px);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* First label hugs the top of the list; later labels get group separation. */
+.sidebar .nav .nav-label:first-child {
+  margin-top: 4px;
+}
+
+.sidebar-toggle {
+  display: inline-flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.sidebar-toggle:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+.sidebar-footer {
+  /* Same rhythm as .nav-label's block spacing (nav gap + label margin). */
+  margin: 16px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sidebar-control);
+  border-radius: 12px;
+  background: var(--sidebar-hover);
+}
+
+.sidebar-toggle-glyph {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar-toggle-glyph--menu,
+.sidebar-toggle-glyph--close {
+  display: none;
+}
+
+.sidebar-toggle:focus-visible {
+  outline: 2px solid var(--on-accent);
+  outline-offset: 2px;
+}
+
+/* Desktop icon rail: real icons, labels stay available to assistive tech and tooltips. */
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.app-shell.sidebar-collapsed .sidebar {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.app-shell.sidebar-collapsed .sidebar .nav {
+  padding: 0;
+}
+
+.app-shell.sidebar-collapsed .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding: 8px 0;
+  font-size: 14px;
+  text-align: center;
+}
+
+.app-shell.sidebar-collapsed .nav-item-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.app-shell.sidebar-collapsed .sidebar-toggle-glyph--collapse {
+  transform: rotate(180deg);
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  border: 0;
+  padding: 0;
+  background: var(--backdrop-default);
+}
+
+.sidebar-backdrop[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    transition: none;
+  }
+}
+
+/* Phone: permanent 56px icon rail; the sidebar slides over the page as a drawer. */
+@media (max-width: 800px) {
+  html.nav-drawer-open,
+  html.nav-drawer-open body {
+    overflow: hidden;
+  }
+
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-width: 0;
+    min-height: 100vh;
+  }
+
+  .sidebar,
+  .app-shell.sidebar-collapsed .sidebar {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    width: 56px;
+    height: 100vh;
+    padding: 8px 6px;
+    overflow: hidden;
+    border-right: 1px solid var(--sidebar-control);
+    box-shadow: none;
+    z-index: 30;
+  }
+
+  .sidebar .sidebar-brand-row,
+  .app-shell.sidebar-collapsed .sidebar-brand-row {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .sidebar .sidebar-brand-row .brand,
+  .app-shell.sidebar-collapsed .sidebar-brand-row .brand {
+    display: none;
+  }
+
+  .sidebar .sidebar-toggle,
+  .app-shell.sidebar-collapsed .sidebar-toggle {
+    display: inline-flex;
+    flex: 0 0 44px;
+    align-self: center;
+    width: 44px;
+    height: 44px;
+  }
+
+  .sidebar .sidebar-toggle-glyph--menu {
+    display: block;
+  }
+
+  .sidebar .sidebar-toggle-glyph--collapse,
+  .sidebar .sidebar-toggle-glyph--close {
+    display: none;
+  }
+
+  .sidebar .nav,
+  .app-shell.sidebar-collapsed .sidebar .nav {
+    flex: 1 1 auto;
+    gap: 4px;
+    min-height: 0;
+    margin-top: 10px;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .sidebar .nav-label,
+  .app-shell.sidebar-collapsed .nav-label {
+    display: none;
+  }
+
+  .sidebar .nav-item,
+  .app-shell.sidebar-collapsed .nav-item {
+    flex: 0 0 auto;
+    justify-content: center;
+    width: 44px;
+    min-height: 44px;
+    gap: 0;
+    padding: 0;
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .sidebar .nav-item-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+  }
+
+  .sidebar .sidebar-footer,
+  .app-shell.sidebar-collapsed .sidebar-footer {
+    display: none;
+  }
+
+  .app-shell > .main {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Open drawer: same element, wider, above the page and the rail. */
+  .sidebar.sidebar-drawer-open,
+  .app-shell.sidebar-collapsed .sidebar.sidebar-drawer-open {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(240px, 82vw);
+    height: 100vh;
+    padding: 12px;
+    overflow-y: auto;
+    border-right: 1px solid var(--sidebar-control);
+    box-shadow: 0 18px 40px var(--shadow-lg);
+    z-index: 60;
+  }
+
+  .sidebar.sidebar-drawer-open .sidebar-brand-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 44px;
+  }
+
+  .sidebar.sidebar-drawer-open .sidebar-brand-row .brand {
+    display: flex;
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .sidebar.sidebar-drawer-open .sidebar-brand-row .brand > div {
+    display: block;
+  }
+
+  .sidebar.sidebar-drawer-open .sidebar-toggle {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .sidebar.sidebar-drawer-open .sidebar-toggle-glyph--close {
+    display: block;
+  }
+
+  .sidebar.sidebar-drawer-open .sidebar-toggle-glyph--menu {
+    display: none;
+  }
+
+  .sidebar.sidebar-drawer-open .nav {
+    flex: 1 1 auto;
+    margin-top: 14px;
+    padding: 0;
+  }
+
+  .sidebar.sidebar-drawer-open .nav-label {
+    display: block;
+    margin: 14px 0 6px;
+    padding: 0 12px;
+  }
+
+  .sidebar.sidebar-drawer-open .nav-item {
+    justify-content: flex-start;
+    width: 100%;
+    min-height: 44px;
+    gap: 10px;
+    padding: 0 12px;
+    text-align: left;
+  }
+
+  .sidebar.sidebar-drawer-open .nav-item-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    clip: auto;
+    clip-path: none;
+  }
+
+  .sidebar.sidebar-drawer-open .sidebar-footer {
+    display: flex;
+    margin-top: 14px;
+  }
+}

@@ -79,6 +79,15 @@ def run_scan(task: dict) -> None:
             task["log_tail"] = (task.get("log_tail", []) + [message])[-200:]
             tasks._persist(task)
 
+    def scan_message(message):
+        """Scan-level diagnostics (skipped copies) must not be throttled away."""
+        with tasks._queue_condition:
+            check_cancelled()
+            task["scan"]["message"] = message
+            if message not in task.get("log_tail", []):
+                task["log_tail"] = (task.get("log_tail", []) + [message])[-200:]
+            tasks._persist(task)
+
     try:
         with tasks._queue_condition:
             check_cancelled()
@@ -87,7 +96,7 @@ def run_scan(task: dict) -> None:
             tasks._persist(task)
         prepared = tasks._prepare_tasks(
             task["input_directory"], task["preset_id"], input_files=task.get("input_files"),
-            batch_id=task_id, on_progress=progress,
+            batch_id=task_id, on_progress=progress, on_message=scan_message,
         )
         # No mount I/O inside this lock. Cancellation and committing children
         # are mutually exclusive; restart sees either the scan or its children.

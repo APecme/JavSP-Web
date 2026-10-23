@@ -411,8 +411,9 @@ html[data-initial-view] .app-shell [data-panel]{display:none}html[data-initial-v
 @keyframes overview-selection-unselect { 0% { transform: scale(.965); } 45% { transform: scale(1.035); } 100% { transform: scale(1); } }
 details > summary { display: flex; align-items: center; gap: 10px; min-height: 34px; cursor: pointer; list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
-details > summary::after { content: "\2304"; display: grid; width: 28px; height: 28px; place-items: center; flex: 0 0 28px; margin-left: auto; border: 1px solid var(--control-border); border-radius: 5px; color: var(--text-tertiary); background: var(--surface); font-size: 16px; line-height: 1; transition: transform .16s ease, border-color .14s ease, background-color .14s ease, color .14s ease; }
-details > summary:hover::after { border-color: var(--accent-border); color: var(--accent-text); background: var(--accent-soft); }
+/* Disclosure caret: same chevron-down outline as icons.js, masked so it follows the theme color. */
+details > summary::after { content: ""; display: block; width: 16px; height: 16px; flex: 0 0 16px; margin-left: auto; color: var(--text-tertiary); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 9 5 5 5-5'/%3E%3C/svg%3E") center / 16px 16px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 9 5 5 5-5'/%3E%3C/svg%3E") center / 16px 16px no-repeat; transition: transform .16s ease, color .14s ease; }
+details > summary:hover::after { color: var(--accent-text); }
 details[open] > summary::after { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .button, .icon-button, .task-toggle, .overview-cover-card.selecting .overview-cover, .overview-cover-select, details > summary::after { transition: none; } .overview-cover-card.selection-feedback .overview-cover { animation: none; } }
 .overview-cover > small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11px; }
@@ -715,16 +716,26 @@ html[data-initial-view="ai-scrape"] [data-panel="ai-scrape"] { display: block; }
 .comment-markdown ul, .comment-markdown ol { margin: 4px 0; padding-left: 20px; }
 .comment-markdown blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--border); color: var(--text-muted); }
 .comment-timestamp { padding: 0 3px; border: 0; border-radius: 3px; background: var(--surface-subtle); color: var(--accent-text); cursor: pointer; font: inherit; }
-.comment-label-row { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+/* Comment help: a compact labelled trigger with the rules grouped in place,
+   so the card stays in the form flow instead of floating out of its column.
+   Its accent follows the console purple (--lc-*) instead of the legacy blue. */
+.comment-label-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 5px; }
 .comment-label-row label { margin: 0; }
-.comment-help summary { width: 17px; height: 17px; border: 1px solid var(--text-muted); border-radius: 50%; color: var(--text-muted); cursor: pointer; font-size: 11px; line-height: 15px; text-align: center; list-style: none; }
+.comment-help { flex: 1 1 100%; min-width: 0; }
+.comment-help summary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 5px 13px 5px 11px; border: 1px solid var(--lc-line); border-radius: 999px; background: var(--lc-raised); color: var(--lc-muted); font-size: 11px; font-weight: 600; line-height: 1.4; cursor: pointer; list-style: none; transition: background .15s, border-color .15s, color .15s; }
 .comment-help summary::-webkit-details-marker { display: none; }
-.comment-help-content { position: absolute; z-index: 5; width: min(340px, calc(100vw - 40px)); margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: 0 8px 22px var(--shadow-popover); color: var(--text-muted); font-size: 12px; line-height: 1.55; }
-.comment-help-content p { margin: 0 0 6px; }
-.comment-help-content p:last-child { margin-bottom: 0; }
-.comment-pagination { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--text-muted); }
-.comment-help summary { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--accent); border-radius: 50%; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent-text); font-weight: 800; font-size: 13px; line-height: 1; }
-.comment-help-content { width: min(390px, calc(100vw - 48px)); padding: 14px 16px; border-radius: 8px; box-shadow: 0 12px 30px var(--shadow-strong); }
+.comment-help summary:hover { border-color: var(--lc-accent-border); background: var(--lc-accent-soft); color: var(--lc-accent-text); }
+.comment-help summary:focus-visible { outline: 2px solid var(--lc-accent-text); outline-offset: 2px; }
+.comment-help summary svg { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.comment-help summary::after { display: none; }
+.comment-help[open] summary { border-color: var(--lc-accent); background: var(--lc-accent-soft); color: var(--lc-accent-text); }
+.comment-help-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px 14px; margin-top: 8px; padding: 12px 14px; border: 1px solid var(--lc-line); border-radius: 10px; background: var(--lc-raised); color: var(--lc-muted); font-size: 12px; line-height: 1.55; }
+.comment-help-group { min-width: 0; padding-left: 10px; border-left: 2px solid var(--lc-accent-border); }
+.comment-help-group h4 { margin: 0 0 4px; color: var(--lc-soft); font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.comment-help-group ul { display: grid; gap: 3px; margin: 0; padding-left: 15px; }
+.comment-help-group li { overflow-wrap: anywhere; }
+.comment-help-content code { padding: 1px 5px; border-radius: 5px; background: var(--lc-surface); color: var(--lc-accent-text); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.comment-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); }
 .overview-actress-scope { display:inline-flex; gap:2px; margin-right:12px; padding:2px; border:1px solid var(--border); border-radius:6px; background:var(--surface-subtle); }
 .overview-actress-scope button { border:0; border-radius:4px; padding:5px 9px; background:transparent; color:var(--text-muted); font-size:12px; cursor:pointer; }
 .overview-actress-scope button.active { background:var(--surface); color:var(--accent-text); box-shadow:0 1px 3px var(--shadow-soft); font-weight:700; }
@@ -756,8 +767,6 @@ html[data-privacy-mode="1"] .overview-cover:hover .library-artwork img,html[data
 
 @media(max-width:700px){.film-hero .film-info{display:contents}.film-hero .detail-poster-wrap{grid-row:1 / span 2}.film-hero .film-heading-row,.film-hero .film-title{grid-column:2}.film-hero .film-title{align-self:start;margin:0;font-size:17px}.film-hero .task-detail-main{row-gap:16px}.film-hero .task-detail-data{grid-column:1 / -1;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:6px}}
 
-.film-navigation .film-nav-close{margin-left:auto;color:var(--library-close);font-weight:400}
-
 /* Personal identity and focused avatar picker. */
 .avatar-edit{position:relative;display:inline-flex;border:0;background:transparent;padding:0;border-radius:50%;cursor:pointer}
 .avatar-edit:focus-visible{outline:3px solid var(--accent-text);outline-offset:5px}
@@ -771,3 +780,51 @@ html[data-privacy-mode="1"] .overview-cover:hover .library-artwork img,html[data
 
 /* Comment identity actions: keep [hidden] working. */
 .identity-actions:not([hidden]) { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* icons.js: one shared inline SVG icon used by every page and dynamic template. */
+.javsp-icon { display: inline-block; flex: none; width: 1em; height: 1em; vertical-align: -0.15em; margin-inline-end: .35em; }
+/* Flex and grid controls already space their children, so drop the margin there. */
+.button .javsp-icon, .icon-button .javsp-icon, .task-toggle .javsp-icon, .stills-nav .javsp-icon, .download-sort-mark .javsp-icon, .dialog-close .javsp-icon { margin-inline-end: 0; }
+/* Icon-only dialog close keeps the visual weight of the × it replaced. */
+.dialog-close .javsp-icon { width: 16px; height: 16px; }
+
+/* Keep shared SVG and text controls aligned after the feature integrations. */
+.icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.icon-button .javsp-icon { flex-shrink: 0; margin-inline-end: 0; }
+
+/* Crawler source card grid: skeleton shimmer and editor dialog sizing. */
+.crawler-skeleton-line {
+  background: linear-gradient(90deg, var(--surface-muted) 25%, var(--surface-subtle) 50%, var(--surface-muted) 75%);
+  background-size: 200% 100%;
+  animation: crawler-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes crawler-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crawler-skeleton-line { animation: none; }
+}
+
+.crawler-editor-dialog { width: min(760px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+
+/* Crawler test button shows a spinner while running. */
+.button[data-busy] { position: relative; }
+.button[data-busy]::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 7px;
+  border: 2px solid var(--accent-surface);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: crawler-button-spin .8s linear infinite;
+}
+@keyframes crawler-button-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .button[data-busy]::before { animation: none; }
+}

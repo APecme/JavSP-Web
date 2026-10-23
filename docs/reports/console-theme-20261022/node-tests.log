@@ -1,0 +1,322 @@
+TAP version 13
+# AI translation client checks passed: exclusive translation mode, disabled engine fields, explicit recovery, preset round trip and shared AI settings.
+# Subtest: tests/test_ai_translation_client.cjs
+ok 1 - tests/test_ai_translation_client.cjs
+  ---
+  duration_ms: 165.314005
+  type: 'test'
+  ...
+# Subtest: comment Markdown supports formatting without executing HTML or unsafe links
+ok 2 - comment Markdown supports formatting without executing HTML or unsafe links
+  ---
+  duration_ms: 28.04171
+  type: 'test'
+  ...
+# Subtest: time labels resolve to seconds only in plain Markdown text
+ok 3 - time labels resolve to seconds only in plain Markdown text
+  ---
+  duration_ms: 6.220131
+  type: 'test'
+  ...
+# Subtest: nested Markdown cannot forge time buttons or bypass link validation
+ok 4 - nested Markdown cannot forge time buttons or bypass link validation
+  ---
+  duration_ms: 4.914986
+  type: 'test'
+  ...
+# Subtest: same movie refresh preserves drafts; closing aborts requests and ignores stale responses
+ok 5 - same movie refresh preserves drafts; closing aborts requests and ignores stale responses
+  ---
+  duration_ms: 70.328326
+  type: 'test'
+  ...
+# Subtest: pagination replaces pages, retries safely and goes back without losing drafts
+ok 6 - pagination replaces pages, retries safely and goes back without losing drafts
+  ---
+  duration_ms: 9.383579
+  type: 'test'
+  ...
+# Subtest: posting is single-flight, preserves failures, omits login credentials and handles pending review
+ok 7 - posting is single-flight, preserves failures, omits login credentials and handles pending review
+  ---
+  duration_ms: 10.250241
+  type: 'test'
+  ...
+# Subtest: disabled service or unidentified movie makes no external request
+ok 8 - disabled service or unidentified movie makes no external request
+  ---
+  duration_ms: 2.016748
+  type: 'test'
+  ...
+# Subtest: normal posting sends no proof and a challenge response triggers only one retry
+ok 9 - normal posting sends no proof and a challenge response triggers only one retry
+  ---
+  duration_ms: 12.420245
+  type: 'test'
+  ...
+# Subtest: unconfigured identity preserves comment draft and does not start a challenge or post
+ok 10 - unconfigured identity preserves comment draft and does not start a challenge or post
+  ---
+  duration_ms: 3.500351
+  type: 'test'
+  ...
+# Subtest: reply selection preserves drafts, submits the parent and clears only after success
+ok 11 - reply selection preserves drafts, submits the parent and clears only after success
+  ---
+  duration_ms: 3.794786
+  type: 'test'
+  ...
+# Subtest: cancel reply preserves text and a new movie cannot inherit a reply target
+ok 12 - cancel reply preserves text and a new movie cannot inherit a reply target
+  ---
+  duration_ms: 3.607805
+  type: 'test'
+  ...
+# Subtest: reply references escape parent content and safely label unavailable comments
+ok 13 - reply references escape parent content and safely label unavailable comments
+  ---
+  duration_ms: 6.059087
+  type: 'test'
+  ...
+# Subtest: comments render Markdown and form help documents the 300 character cap
+ok 14 - comments render Markdown and form help documents the 300 character cap
+  ---
+  duration_ms: 7.696335
+  type: 'test'
+  ...
+# Subtest: verification accepts only the matching origin, window, nonce and action
+ok 15 - verification accepts only the matching origin, window, nonce and action
+  ---
+  duration_ms: 10.897914
+  type: 'test'
+  ...
+# Subtest: adaptive requests challenge only after 428 and retry once through the real verification flow
+ok 16 - adaptive requests challenge only after 428 and retry once through the real verification flow
+  ---
+  duration_ms: 26.228006
+  type: 'test'
+  ...
+# Subtest: canceling verification rejects the action and allows a later attempt
+ok 17 - canceling verification rejects the action and allows a later attempt
+  ---
+  duration_ms: 3.02932
+  type: 'test'
+  ...
+# CookieCloud client checks passed: interval, status, saved-settings sync and connection test.
+# Subtest: tests/test_cookiecloud_client.cjs
+ok 5 - tests/test_cookiecloud_client.cjs
+  ---
+  duration_ms: 126.727396
+  type: 'test'
+  ...
+# Subtest: demo uses the current application assets and all documentation links resolve
+ok 19 - demo uses the current application assets and all documentation links resolve
+  ---
+  duration_ms: 97.091075
+  type: 'test'
+  ...
+# Subtest: task pagination, filtering and cancellation survive pending timers
+ok 20 - task pagination, filtering and cancellation survive pending timers
+  ---
+  duration_ms: 74.125429
+  type: 'test'
+  ...
+# Subtest: old chapter bookmarks redirect to the matching topic page
+ok 21 - old chapter bookmarks redirect to the matching topic page
+  ---
+  duration_ms: 42.36368
+  type: 'test'
+  ...
+# Subtest: AI conversation lifecycle and unsupported actions
+ok 22 - AI conversation lifecycle and unsupported actions
+  ---
+  duration_ms: 8.774137
+  type: 'test'
+  ...
+# Subtest: settings and skills can be explored without storing credentials
+ok 23 - settings and skills can be explored without storing credentials
+  ---
+  duration_ms: 11.517765
+  type: 'test'
+  ...
+# Subtest: AI translation follows the shared AI switch and preserves preset translation settings
+ok 24 - AI translation follows the shared AI switch and preserves preset translation settings
+  ---
+  duration_ms: 7.320292
+  type: 'test'
+  ...
+# Subtest: preset forms, schedules, path mappings and demo exit
+ok 25 - preset forms, schedules, path mappings and demo exit
+  ---
+  duration_ms: 4.509655
+  type: 'test'
+  ...
+# Subtest: personal profile changes stay in the offline demo
+ok 26 - personal profile changes stay in the offline demo
+  ---
+  duration_ms: 5.092615
+  type: 'test'
+  ...
+# Subtest: still thumbnails are labelled buttons that carry their own viewer coordinates
+ok 27 - still thumbnails are labelled buttons that carry their own viewer coordinates
+  ---
+  duration_ms: 4.757565
+  type: 'test'
+  ...
+# Subtest: a still opens the viewer with its own count, then steps without leaving the range
+ok 28 - a still opens the viewer with its own count, then steps without leaving the range
+  ---
+  duration_ms: 9.67833
+  type: 'test'
+  ...
+# Subtest: out of range requests and empty galleries never open the viewer
+ok 29 - out of range requests and empty galleries never open the viewer
+  ---
+  duration_ms: 4.214218
+  type: 'test'
+  ...
+# Subtest: arrow keys step the viewer and Escape closes only the viewer
+ok 30 - arrow keys step the viewer and Escape closes only the viewer
+  ---
+  duration_ms: 4.801178
+  type: 'test'
+  ...
+# Subtest: closing the viewer restores focus and drops the full size image
+ok 31 - closing the viewer restores focus and drops the full size image
+  ---
+  duration_ms: 4.08737
+  type: 'test'
+  ...
+# Subtest: a failing still shows a message instead of a broken frame
+ok 32 - a failing still shows a message instead of a broken frame
+  ---
+  duration_ms: 3.342909
+  type: 'test'
+  ...
+# Subtest: switching tasks and closing the film detail tear the viewer down
+ok 33 - switching tasks and closing the film detail tear the viewer down
+  ---
+  duration_ms: 5.336641
+  type: 'test'
+  ...
+# Subtest: the film detail keeps exactly one close control, inside the sticky navigation
+ok 34 - the film detail keeps exactly one close control, inside the sticky navigation
+  ---
+  duration_ms: 2.61291
+  type: 'test'
+  ...
+# Subtest: comment help uses an icon button, groups the rules and stays in the document flow
+ok 35 - comment help uses an icon button, groups the rules and stays in the document flow
+  ---
+  duration_ms: 2.907088
+  type: 'test'
+  ...
+# Subtest: privacy mode keeps the enlarged stills masked
+ok 36 - privacy mode keeps the enlarged stills masked
+  ---
+  duration_ms: 0.892763
+  type: 'test'
+  ...
+# Library playback regression checks passed.
+# Subtest: tests/test_library_playback.cjs
+ok 8 - tests/test_library_playback.cjs
+  ---
+  duration_ms: 126.742165
+  type: 'test'
+  ...
+# PR \#14 helper checks passed: batch manifests, queue locking, cancellation, legacy server rejection, targeted cleanup, pagination and aliases.
+# Subtest: tests/test_mount_batch_client.cjs
+ok 9 - tests/test_mount_batch_client.cjs
+  ---
+  duration_ms: 105.470563
+  type: 'test'
+  ...
+# Subtest: actress range is sent to the server so counts and pagination cover the full catalog
+ok 39 - actress range is sent to the server so counts and pagination cover the full catalog
+  ---
+  duration_ms: 2.694551
+  type: 'test'
+  ...
+# Subtest: full catalog pages render only server results and zero-film actresses can be opened
+ok 40 - full catalog pages render only server results and zero-film actresses can be opened
+  ---
+  duration_ms: 1.804164
+  type: 'test'
+  ...
+# Scan client checks passed: directory, single batch, edited paths, duplicate clicks, retry, native multiselect and progress rendering.
+# Subtest: tests/test_scan_client.cjs
+ok 11 - tests/test_scan_client.cjs
+  ---
+  duration_ms: 77.88994
+  type: 'test'
+  ...
+# Subtest: login, console and generated demo initialize the same theme before their first stylesheet
+ok 42 - login, console and generated demo initialize the same theme before their first stylesheet
+  ---
+  duration_ms: 3.764021
+  type: 'test'
+  ...
+# Subtest: first paint follows system light or dark without a saved preference
+ok 43 - first paint follows system light or dark without a saved preference
+  ---
+  duration_ms: 4.308631
+  type: 'test'
+  ...
+# Subtest: valid saved preference overrides system and survives a new page
+ok 44 - valid saved preference overrides system and survives a new page
+  ---
+  duration_ms: 1.605899
+  type: 'test'
+  ...
+# Subtest: invalid preferences and denied storage safely fall back to the system
+ok 45 - invalid preferences and denied storage safely fall back to the system
+  ---
+  duration_ms: 6.643093
+  type: 'test'
+  ...
+# Subtest: native button click switches theme, persists preference and exposes the pressed state
+ok 46 - native button click switches theme, persists preference and exposes the pressed state
+  ---
+  duration_ms: 1.636018
+  type: 'test'
+  ...
+# Subtest: system changes follow live until a manual selection is made, including legacy matchMedia
+ok 47 - system changes follow live until a manual selection is made, including legacy matchMedia
+  ---
+  duration_ms: 3.240827
+  type: 'test'
+  ...
+# Subtest: another tab changes the theme, clearing its preference resumes system following
+ok 48 - another tab changes the theme, clearing its preference resumes system following
+  ---
+  duration_ms: 2.2695
+  type: 'test'
+  ...
+# Subtest: invalid API choices do not change the current theme or stored preference
+ok 49 - invalid API choices do not change the current theme or stored preference
+  ---
+  duration_ms: 2.408721
+  type: 'test'
+  ...
+# Subtest: every migrated color token resolves and fixed artwork colors are explicitly marked
+ok 50 - every migrated color token resolves and fixed artwork colors are explicitly marked
+  ---
+  duration_ms: 6.61326
+  type: 'test'
+  ...
+# Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.
+# Subtest: tests/test_web_client.cjs
+ok 13 - tests/test_web_client.cjs
+  ---
+  duration_ms: 117.644491
+  type: 'test'
+  ...
+1..51
+# tests 51
+# suites 0
+# pass 51
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 835.302402

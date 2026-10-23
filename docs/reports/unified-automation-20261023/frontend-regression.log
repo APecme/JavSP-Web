@@ -1,0 +1,35 @@
+✔ desktop restores collapse from the legacy storage key without rewriting it (9.439295ms)
+✔ desktop toggle persists collapse and never touches the mobile drawer (2.05357ms)
+✔ phone toggle opens a drawer with a backdrop, expanded state and focus on the current view (3.507931ms)
+✔ a hidden or disabled active option does not steal drawer focus (2.408981ms)
+✔ choosing a phone option closes the drawer and moves focus to the view heading (1.600606ms)
+✔ desktop option selection keeps the sidebar mode untouched (2.048804ms)
+✔ Escape and the backdrop close the drawer and restore focus to the toggle (1.543981ms)
+✔ Escape leaves a native dialog to close itself (1.804784ms)
+✔ Tab is trapped inside the open drawer (1.712651ms)
+✔ desktop collapse and phone drawer stay independent across the breakpoint (2.945121ms)
+✔ aria-current follows the active view, including changes made by app.js (1.471232ms)
+✔ label fallbacks give every option a name and title (1.311867ms)
+✔ the console keeps the navigation DOM contract and drops the old toggle owner (6.250217ms)
+✔ a page without a sidebar is left alone (1.565441ms)
+✔ feature pages expose deliberate regions instead of stacked generic panels (4.168857ms)
+✔ settings are split into navigable groups while every form stays in the document (1.901281ms)
+✔ manual task filters are one collapsible region and are not reinserted (3.601139ms)
+✔ crawler configuration renders source cards with an editor dialog (4.411207ms)
+✔ crawler configuration marks disabled built-in crawlers and exposes skeleton loading and retry markup (4.605506ms)
+✔ crawler editor invalidates pending source loads on close and mode switch (3.480399ms)
+✔ crawler editor dialog binds backdrop click and close reset exactly once (2.261416ms)
+✔ auto-scrape module headings report their rule and run counts (4.463117ms)
+✔ an empty preset library gets an actionable empty state (4.400941ms)
+✔ dynamic settings modules mount inside their group and fall back safely (5.374753ms)
+✔ page layout CSS is scoped per page and keeps responsive and motion fallbacks (1.090472ms)
+✔ profile and login use the same page layout system without changing business hooks (0.672591ms)
+✔ existing settings, task and AI hooks remain in the document (1.917559ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 172.284113

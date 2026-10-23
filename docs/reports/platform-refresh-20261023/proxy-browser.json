@@ -1,0 +1,37 @@
+{
+  "deniedWithoutLogin": 401,
+  "result": {
+    "runtime": {
+      "deployment": "python",
+      "docker": false,
+      "version": "1.1.42",
+      "app_version": "1.1.42",
+      "timezone": "Asia/Shanghai",
+      "ai_enabled": false,
+      "comments_url": "/api/comments",
+      "comments_verify_url": "https://comments.example.test"
+    },
+    "cfg": {
+      "status": 200,
+      "data": {
+        "premoderate": false,
+        "max_body_length": 300
+      }
+    }
+  },
+  "requests": [
+    {
+      "url": "http://127.0.0.1:8874/api/comments/api/config",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:8874/api/comments/api/config",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:8874/api/comments/api/threads/DEMO-001/comments?limit=20",
+      "method": "GET"
+    }
+  ],
+  "errors": []
+}

@@ -15,8 +15,8 @@ test('actress range is sent to the server so counts and pagination cover the ful
 test('full catalog pages render only server results and zero-film actresses can be opened',()=>{
  const nodes=new Map(), node=s=>{if(!nodes.has(s))nodes.set(s,{innerHTML:'',scrollIntoView(){}});return nodes.get(s);};
  let loads=0;
- const context=vm.createContext({state:{overviewGroups:{by:'actress',groups:[{key:'Alice',name:'Alice',count:0,avatar_id:'0123456789abcdef',covers:[]}],all:{count:0,covers:[]},total:200,limit:12},actressScope:'all',overviewGroupPage:1,selectedOverviewTasks:new Set()},
-  $:node,escapeHtml:s=>String(s??''),overviewGroupType:()=>['actress','女优','ACTRESS'],patchChildren:(el,html)=>{el.innerHTML=html;},libraryCard:g=>`<button>${g.name}</button>`,loadTasks:()=>{loads++;},renderOverview:()=>{}});
+ const context=vm.createContext({window:{},state:{overviewGroups:{by:'actress',groups:[{key:'Alice',name:'Alice',count:0,avatar_id:'0123456789abcdef',covers:[]}],all:{count:0,covers:[]},total:200,limit:12},actressScope:'all',overviewGroupPage:1,selectedOverviewTasks:new Set()},
+  $:node,escapeHtml:s=>String(s??''),javspIcon:()=>'',overviewGroupType:()=>['actress','女优','ACTRESS'],patchChildren:(el,html)=>{el.innerHTML=html;},libraryCard:g=>`<button>${g.name}</button>`,loadTasks:()=>{loads++;},renderOverview:()=>{}});
  vm.runInContext(source.slice(source.indexOf('function renderOverviewGroups'),source.indexOf('function libraryCard')),context);
  vm.runInContext(source.slice(source.indexOf('function openOverviewGroup'),source.indexOf('function closeOverviewGroup')),context);
  context.renderOverviewGroups();

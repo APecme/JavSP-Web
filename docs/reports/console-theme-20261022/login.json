@@ -1,0 +1,50 @@
+[
+  {
+    "theme": "light",
+    "width": 1440,
+    "scroll": 1440,
+    "cardRadius": "18px",
+    "buttonColor": "rgb(155, 77, 202)",
+    "errors": []
+  },
+  {
+    "theme": "dark",
+    "width": 1440,
+    "scroll": 1440,
+    "cardRadius": "18px",
+    "buttonColor": "rgb(157, 78, 192)",
+    "errors": []
+  },
+  {
+    "theme": "light",
+    "width": 390,
+    "scroll": 390,
+    "cardRadius": "14px",
+    "buttonColor": "rgb(155, 77, 202)",
+    "errors": []
+  },
+  {
+    "theme": "dark",
+    "width": 390,
+    "scroll": 390,
+    "cardRadius": "14px",
+    "buttonColor": "rgb(153, 76, 190)",
+    "errors": []
+  },
+  {
+    "theme": "light",
+    "width": 320,
+    "scroll": 320,
+    "cardRadius": "14px",
+    "buttonColor": "rgb(155, 77, 202)",
+    "errors": []
+  },
+  {
+    "theme": "dark",
+    "width": 320,
+    "scroll": 320,
+    "cardRadius": "14px",
+    "buttonColor": "rgb(159, 80, 194)",
+    "errors": []
+  }
+]

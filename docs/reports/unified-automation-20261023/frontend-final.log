@@ -1,0 +1,39 @@
+✔ desktop restores collapse from the legacy storage key without rewriting it (33.116565ms)
+✔ desktop toggle persists collapse and never touches the mobile drawer (4.66089ms)
+✔ phone toggle opens a drawer with a backdrop, expanded state and focus on the current view (5.329705ms)
+✔ a hidden or disabled active option does not steal drawer focus (5.191055ms)
+✔ choosing a phone option closes the drawer and moves focus to the view heading (3.948922ms)
+✔ desktop option selection keeps the sidebar mode untouched (3.296064ms)
+✔ Escape and the backdrop close the drawer and restore focus to the toggle (1.492913ms)
+✔ Escape leaves a native dialog to close itself (4.320347ms)
+✔ Tab is trapped inside the open drawer (5.200533ms)
+✔ desktop collapse and phone drawer stay independent across the breakpoint (8.126091ms)
+✔ aria-current follows the active view, including changes made by app.js (1.86402ms)
+✔ label fallbacks give every option a name and title (2.5467ms)
+✔ the console keeps the navigation DOM contract and drops the old toggle owner (11.112063ms)
+✔ a page without a sidebar is left alone (3.286535ms)
+✔ feature pages expose deliberate regions instead of stacked generic panels (5.889774ms)
+✔ settings are split into navigable groups while every form stays in the document (3.155465ms)
+✔ manual task filters are one collapsible region and are not reinserted (10.253097ms)
+✔ crawler configuration renders source cards with an editor dialog (7.723971ms)
+✔ crawler configuration marks disabled built-in crawlers and exposes skeleton loading and retry markup (2.768042ms)
+✔ crawler editor invalidates pending source loads on close and mode switch (13.236897ms)
+✔ crawler editor dialog binds backdrop click and close reset exactly once (6.24991ms)
+✔ auto-scrape module headings report their rule and run counts (9.018805ms)
+✔ an empty preset library gets an actionable empty state (9.207168ms)
+✔ dynamic settings modules mount inside their group and fall back safely (10.924493ms)
+✔ page layout CSS is scoped per page and keeps responsive and motion fallbacks (3.43386ms)
+✔ profile and login use the same page layout system without changing business hooks (0.789951ms)
+✔ existing settings, task and AI hooks remain in the document (5.357471ms)
+✔ one radio choice drives payload and disables inactive controls (9.811502ms)
+✔ edit schedule then new rule resets trigger and identity (3.849791ms)
+✔ cards expose correct mode facts and keep history without watch reset for cron (6.158783ms)
+✔ document has one visible directory rule module; old hooks are compatibility-only (0.754374ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 290.594872

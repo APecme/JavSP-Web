@@ -94,13 +94,30 @@ app = FastAPI(title="JavSP WEB", version=__version__)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 from .ai_router import router as ai_router
 app.include_router(ai_router)
+from .directory_watch_router import router as directory_watch_router
+from .directory_watch import start_scheduler as start_directory_watch_scheduler, stop_scheduler as stop_directory_watch_scheduler
+app.include_router(directory_watch_router)
+from .comments_proxy import router as comments_router, runtime_entry as comments_runtime
+app.include_router(comments_router)
+app.router.add_event_handler("shutdown", stop_directory_watch_scheduler)
+start_directory_watch_scheduler()
 WEB_DIR = Path(__file__).resolve().parent / "web"
-ASSET_VERSION = hashlib.sha256(b''.join(path.read_bytes() for path in sorted((WEB_DIR / 'assets').iterdir()) if path.is_file())).hexdigest()[:16]
+from .asset_version import current_asset_version
+
+
+def asset_version() -> str:
+    """Current content version of WEB_DIR/assets, recomputed lazily on file changes."""
+    return current_asset_version(WEB_DIR / "assets")
+
+
+def __getattr__(name):
+    if name == "ASSET_VERSION":
+        return asset_version()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 RELEASE_LABEL = os.environ.get("JAVSP_WEB_RELEASE_LABEL", "").strip()
 NOVNC_DIR = Path(os.environ.get("JAVSP_NOVNC_DIR", "/usr/share/novnc"))
 GOOGLE_VNC_HOST = os.environ.get("JAVSP_GOOGLE_VNC_HOST", "127.0.0.1")
 GOOGLE_VNC_PORT = int(os.environ.get("JAVSP_GOOGLE_VNC_PORT", "5900"))
-COMMENTS_URL = os.environ.get("JAVSP_COMMENTS_URL", "https://comments.rtioo.com").strip().rstrip("/")
 
 
 def _display_version() -> str:
@@ -117,7 +134,13 @@ def _app_version() -> str:
 async def disable_asset_cache(request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/assets/"):
-        response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if request.query_params.get("v") == ASSET_VERSION else "public, no-cache"
+        fresh = request.query_params.get("v") == asset_version()
+        # Only responses for the current content version may be cached long-term;
+        # stale versions and non-2xx/304 results (404, 500, ...) always revalidate.
+        if fresh and response.status_code in (200, 304):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, no-cache"
     return response
 
 
@@ -320,7 +343,7 @@ class UpdateSettingsBody(BaseModel):
 def runtime(_: dict = Depends(current_user)) -> dict:
     from .ai import settings as ai_settings
     config = ai_settings()
-    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name(), "ai_enabled": config["enabled"], "comments_url": COMMENTS_URL}
+    return {"deployment": "docker" if IS_DOCKER else ("exe" if IS_FROZEN else "python"), "docker": IS_DOCKER, "version": _display_version(), "app_version": _app_version(), "timezone": timezone_name(), "ai_enabled": config["enabled"], **comments_runtime()}
 
 
 @app.get("/api/update")
@@ -476,14 +499,13 @@ def public_info() -> dict:
 
 @app.get("/login")
 def login_page() -> HTMLResponse:
-    document = (WEB_DIR / 'login.html').read_text(encoding='utf-8').replace('__ASSET_VERSION__', ASSET_VERSION)
+    document = (WEB_DIR / 'login.html').read_text(encoding='utf-8').replace('__ASSET_VERSION__', asset_version())
     return HTMLResponse(document, headers={'Cache-Control': 'no-cache'})
 
 
 @app.get("/")
 def index_page() -> HTMLResponse:
-    asset_version = ASSET_VERSION
-    document = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", asset_version)
+    document = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", asset_version())
     return HTMLResponse(document, headers={"Cache-Control": "no-store"})
 
 
@@ -1383,13 +1405,13 @@ def task_cover(task_id: str, index: int, request: Request, thumbnail: bool = Fal
 
 
 @app.get("/api/tasks/{task_id}/fanart/{index:int}")
-def task_fanart(task_id: str, index: int, request: Request, _: dict = Depends(current_user)) -> Response:
+def task_fanart(task_id: str, index: int, request: Request, thumbnail: bool = False, _: dict = Depends(current_user)) -> Response:
     if task_id.startswith('media-'):
         return _media_image_response(task_id, 'fanart', index)
     path = get_fanart_path(task_id, index)
     if not path or not path.is_file():
         raise HTTPException(status_code=404, detail="剧照不存在")
-    return image_response(path, request)
+    return image_response(path, request, thumbnail)
 
 
 def _media_image_response(task_id, kind, index):
@@ -1998,15 +2020,50 @@ def _schedule_next_run(cron: str) -> str | None:
         return None
 
 
+def _legacy_schedule_for(rule: dict) -> dict:
+    """Render a unified rule as the legacy schedule shape for the old API."""
+    from . import directory_watch
+
+    return {
+        "id": rule["id"],
+        "name": rule.get("name") or "自动刮削规则",
+        "enabled": bool(rule.get("enabled")),
+        "cron": rule.get("cron") or "",
+        "input_directory": rule["path"],
+        "preset_id": rule.get("preset_id") or "default",
+        "timezone": rule.get("timezone") or timezone_name(),
+        "created_at": rule.get("created_at") or "",
+        "updated_at": rule.get("updated_at") or "",
+        **directory_watch.schedule_history(rule["id"]),
+    }
+
+
+def _unified_schedule(rule_id: str | None = None) -> dict | None:
+    from . import directory_watch
+
+    for rule in directory_watch.read_rules():
+        if rule.get("trigger") == "schedule" and rule["id"] == rule_id:
+            return rule
+    return None
+
+
+def _list_schedule_rules() -> list[dict]:
+    from . import directory_watch
+
+    return [rule for rule in directory_watch.read_rules() if rule.get("trigger") == "schedule"]
+
+
 def _public_auto_scrape_schedule(schedule: dict) -> dict:
-    return {**schedule, "runs": run_counts(schedule.get('runs') or []), "next_run_at": _schedule_next_run(str(schedule.get("cron") or ""))}
+    from . import directory_watch
+    return {**schedule, "runs": run_counts(schedule.get('runs') or []),
+            "next_run_at": directory_watch.next_schedule_run(schedule) or None}
 
 
 def _validate_auto_scrape_schedule(body: AutoScrapeScheduleBody) -> tuple[str, str, str]:
     cron = body.cron.strip()
     input_directory = body.input_directory.strip()
     preset_id = body.preset_id.strip() or "default"
-    if not croniter.is_valid(cron):
+    if len(cron.split()) != 5 or not croniter.is_valid(cron):
         raise HTTPException(status_code=400, detail="Cron 表达式无效，请使用标准五段格式，例如：0 2 * * *")
     path = Path(os.path.abspath(os.path.expanduser(input_directory)))
     if not path.is_dir():
@@ -2017,7 +2074,7 @@ def _validate_auto_scrape_schedule(body: AutoScrapeScheduleBody) -> tuple[str, s
 
 
 def _find_auto_scrape_schedule(schedule_id: str) -> tuple[int, dict | None]:
-    schedules = list_auto_scrape_schedules()
+    schedules = [_legacy_schedule_for(rule) for rule in _list_schedule_rules()]
     for index, schedule in enumerate(schedules):
         if schedule.get("id") == schedule_id:
             return index, schedule
@@ -2025,87 +2082,69 @@ def _find_auto_scrape_schedule(schedule_id: str) -> tuple[int, dict | None]:
 
 
 def _run_auto_scrape_schedule(schedule_id: str, run_key: str) -> tuple[dict, list[dict]]:
-    # A slow scrape must not cause the same cron rule to pile up new batches.
-    # The lock also closes the small race between the active-task check and creation.
+    """Compatibility shell: one cron run now executes via the unified watcher."""
+    from . import directory_watch
+
+    rule = _unified_schedule(schedule_id)
+    if rule is None:
+        raise ValueError("自动刮削规则不存在")
     with _auto_scrape_run_lock:
-        active_ids = active_schedule_task_ids(schedule_id)
-        if active_ids:
-            skipped = skip_auto_scrape_schedule_run(schedule_id, run_key, "上一次定时刮削尚未完成，已跳过本次运行")
-            if not skipped:
-                raise ValueError("本次定时运行已处理")
-            return skipped, []
-        claimed = claim_auto_scrape_schedule_run(schedule_id, run_key)
-        if not claimed:
-            raise ValueError("无法创建定时自动刮削运行记录")
-        try:
-            created = create_tasks(
-                str(claimed["input_directory"]),
-                str(claimed["preset_id"]),
-                source="schedule",
-                schedule_id=str(claimed["id"]),
-            )
-        except ValueError as exc:
-            if isinstance(exc, NoScrapeTasksError):
-                record_auto_scrape_schedule_empty(str(claimed["id"]), "未发现符合条件的影片，已跳过本次运行")
-                claimed["last_result"] = "未发现符合条件的影片，已跳过本次运行"
-                return claimed, []
-            record_auto_scrape_schedule_result(str(claimed["id"]), f"执行失败：{exc}")
-            raise
-        except Exception as exc:  # noqa: BLE001
-            record_auto_scrape_schedule_result(str(claimed["id"]), f"执行异常：{exc}")
-            raise
-        record_auto_scrape_schedule_result(str(claimed["id"]), f"已创建 {len(created)} 个任务", [str(task["id"]) for task in created])
-        return claimed, created
+        outcome = directory_watch.run_schedule_rule(schedule_id, run_key)
+        if outcome.get("state") == "duplicate":
+            raise ValueError("本次定时运行已处理")
+        from .task_store import load as _load_task_records
+        created = _load_task_records(outcome.get("task_ids") or []) if outcome.get("task_ids") else []
+        schedule = _legacy_schedule_for(rule)
+        schedule["last_result"] = outcome.get("message") or ""
+        schedule["last_run_key"] = run_key
+        return schedule, created
 
 
 @app.get("/api/auto-scrape-schedules")
 def get_auto_scrape_schedules(_: dict = Depends(require_admin)) -> list[dict]:
-    return [_public_auto_scrape_schedule(schedule) for schedule in list_auto_scrape_schedules()]
+    return [_public_auto_scrape_schedule(_legacy_schedule_for(rule)) for rule in _list_schedule_rules()]
 
 
 @app.post("/api/auto-scrape-schedules")
 def create_auto_scrape_schedule(body: AutoScrapeScheduleBody, _: dict = Depends(require_admin)) -> dict:
+    from . import directory_watch
+
     cron, input_directory, preset_id = _validate_auto_scrape_schedule(body)
-    schedules = list_auto_scrape_schedules()
-    now = now_iso()
-    schedule = {
-        "id": uuid.uuid4().hex[:12],
-        "name": body.name.strip() or Path(input_directory).name or "自动刮削规则",
-        "enabled": body.enabled,
-        "cron": cron,
-        "input_directory": input_directory,
-        "preset_id": preset_id,
-        "created_at": now,
-        "updated_at": now,
-        "last_run_key": "",
-        "last_run_at": "",
-        "last_result": "尚未执行",
-        "runs": [],
-    }
-    schedules.append(schedule)
-    save_auto_scrape_schedules(schedules)
-    return _public_auto_scrape_schedule(schedule)
+    try:
+        rule = directory_watch.create_rule({
+            "name": body.name.strip() or Path(input_directory).name or "自动刮削规则",
+            "enabled": body.enabled,
+            "trigger": "schedule",
+            "path": input_directory,
+            "preset_id": preset_id,
+            "cron": cron,
+        })
+    except directory_watch.RuleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _public_auto_scrape_schedule(_legacy_schedule_for(rule))
 
 
 @app.put("/api/auto-scrape-schedules/{schedule_id}")
 def update_auto_scrape_schedule(schedule_id: str, body: AutoScrapeScheduleBody, _: dict = Depends(require_admin)) -> dict:
+    from . import directory_watch
+
     cron, input_directory, preset_id = _validate_auto_scrape_schedule(body)
-    index, existing = _find_auto_scrape_schedule(schedule_id)
-    if existing is None:
+    if _unified_schedule(schedule_id) is None:
         raise HTTPException(status_code=404, detail="自动刮削规则不存在")
-    schedules = list_auto_scrape_schedules()
-    schedule = {
-        **existing,
-        "name": body.name.strip() or Path(input_directory).name or "自动刮削规则",
-        "enabled": body.enabled,
-        "cron": cron,
-        "input_directory": input_directory,
-        "preset_id": preset_id,
-        "updated_at": now_iso(),
-    }
-    schedules[index] = schedule
-    save_auto_scrape_schedules(schedules)
-    return _public_auto_scrape_schedule(schedule)
+    try:
+        rule = directory_watch.update_rule(schedule_id, {
+            "name": body.name.strip() or Path(input_directory).name or "自动刮削规则",
+            "enabled": body.enabled,
+            "trigger": "schedule",
+            "path": input_directory,
+            "preset_id": preset_id,
+            "cron": cron,
+        })
+    except directory_watch.RuleError as exc:
+        message = str(exc)
+        status_code = 404 if "不存在" in message else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+    return _public_auto_scrape_schedule(_legacy_schedule_for(rule))
 
 
 @app.post("/api/auto-scrape-schedules/{schedule_id}/run", status_code=202)
@@ -2123,44 +2162,23 @@ def run_auto_scrape_schedule_now(schedule_id: str, _: dict = Depends(require_adm
 
 @app.delete("/api/auto-scrape-schedules/{schedule_id}/runs/{run_id}")
 def delete_auto_scrape_run(schedule_id: str, run_id: str, _: dict = Depends(require_admin)) -> dict:
-    if not delete_auto_scrape_schedule_run(schedule_id, run_id):
+    from . import directory_watch
+    if _unified_schedule(schedule_id) is None or not directory_watch.delete_schedule_run(schedule_id, run_id):
         raise HTTPException(status_code=404, detail="运行记录不存在")
     return {"ok": True}
 
 
 @app.delete("/api/auto-scrape-schedules/{schedule_id}")
 def delete_auto_scrape_schedule(schedule_id: str, _: dict = Depends(require_admin)) -> dict:
-    schedules = list_auto_scrape_schedules()
-    filtered = [schedule for schedule in schedules if schedule.get("id") != schedule_id]
-    if len(filtered) == len(schedules):
+    from . import directory_watch
+
+    if _unified_schedule(schedule_id) is None or not directory_watch.delete_rule(schedule_id):
         raise HTTPException(status_code=404, detail="自动刮削规则不存在")
-    save_auto_scrape_schedules(filtered)
     return {"ok": True}
 
 
-def _auto_scrape_schedule_worker() -> None:
-    while True:
-        now = local_now()
-        minute_key = now.strftime("%Y-%m-%dT%H:%M")
-        for schedule in list_auto_scrape_schedules():
-            if not schedule.get("enabled"):
-                continue
-            try:
-                due = croniter.match(str(schedule.get("cron") or ""), now)
-            except (TypeError, ValueError, KeyError):
-                continue
-            if not due:
-                continue
-            try:
-                _run_auto_scrape_schedule(str(schedule["id"]), minute_key)
-            except Exception:
-                # The execution helper has already saved the failure detail.
-                continue
-        # Wake frequently enough after start-up, while the minute claim prevents repeats.
-        time.sleep(10)
-
-
-threading.Thread(target=_auto_scrape_schedule_worker, name="auto-scrape-scheduler", daemon=True).start()
+# The legacy cron worker thread is retired: schedule rules now fire inside the
+# unified directory-watch scheduler (see directory_watch.Scheduler.run_schedules).
 
 
 def _qbittorrent_management_worker() -> None:

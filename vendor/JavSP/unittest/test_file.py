@@ -178,18 +178,20 @@ def test_scan_movies__wrong_structure(prepare_files):
     assert len(movies) == 0
 
 
-# 无效：分片的起始编号不合法
+# 明确分 P 编号不要求从 1 开始，也不能重编号。
 @pytest.mark.parametrize('files', [('ABC-123.CD2.mp4','ABC-123.CD3.mp4','ABC-123.CD4.mp4')])
-def test_scan_movies__wrong_initial_id(prepare_files):
+def test_scan_movies__non_one_initial_id(prepare_files):
     movies = scan_movies(tmp_folder)
-    assert len(movies) == 0
+    assert len(movies) == 1
+    assert movies[0].part_numbers == [2, 3, 4]
 
 
-# 无效：分片的编号不连续
+# 允许缺片，不能补齐缺失编号。
 @pytest.mark.parametrize('files', [('ABC-123.CD1.mp4','ABC-123.CD3.mp4','ABC-123.CD4.mp4')])
 def test_scan_movies__not_consecutive(prepare_files):
     movies = scan_movies(tmp_folder)
-    assert len(movies) == 0
+    assert len(movies) == 1
+    assert movies[0].part_numbers == [1, 3, 4]
 
 
 # 无效：分片的编号重复

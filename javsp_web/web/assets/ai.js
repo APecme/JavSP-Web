@@ -64,10 +64,12 @@
     $('#ai-send').disabled = busy;
     $('#ai-new-chat').disabled = sending;
     $('#ai-send').hidden = conversation?.status === 'running';
-    $('#ai-send').textContent = sending ? '提交中…' : '发送 ↑';
+    const sendLabel = $('#ai-send-label');
+    if (sendLabel) sendLabel.textContent = (sending ? '提交中…' : '发送');
     $('#ai-stop').hidden = conversation?.status !== 'running';
     $('#ai-stop').disabled = stopping || sending;
-    $('#ai-stop').textContent = stopping ? '正在停止…' : '停止生成 ■';
+    const stopLabel = $('#ai-stop-label');
+    if (stopLabel) stopLabel.textContent = (stopping ? '正在停止…' : '停止生成');
     $('#ai-workspace')?.setAttribute('aria-busy', String(busy));
     document.querySelectorAll('.ai-action button').forEach(button => { button.disabled = busy; });
     renderHistory();
@@ -94,7 +96,8 @@
       select.addEventListener('click', () => openConversation(item.id));
       row.append(select);
       for (const rename of [true, false]) {
-        const button = textElement('button', rename ? '✎' : '×', 'icon-button');
+        const button = textElement('button', '', 'icon-button');
+        button.innerHTML = window.JavspIcons ? window.JavspIcons.render(rename ? 'pencil' : 'close') : '';
         button.type = 'button';
         button.title = rename ? '重命名对话' : '删除对话';
         button.setAttribute('aria-label', `${button.title}：${item.title}`);
@@ -451,7 +454,7 @@
         <form id="ai-skill-form" class="stack" hidden><label>SKILL.md<textarea id="ai-skill-source" class="code-editor" rows="12" maxlength="32000" spellcheck="false" required></textarea></label><div class="form-actions"><button class="button primary" type="submit">保存 Skill</button><button class="button secondary" id="ai-cancel-skill" type="button">取消</button></div></form>
         <p id="ai-skills-message" role="status" class="muted"></p>
       </details>`;
-    document.querySelector('[data-panel="settings"]').prepend(panel);
+    (document.querySelector('#settings-ai-mount') || document.querySelector('[data-panel="settings"]')).prepend(panel);
     panel.addEventListener('invalid', event => {
       for (let parent = event.target.parentElement; parent; parent = parent.parentElement) {
         if (parent.tagName === 'DETAILS') parent.open = true;

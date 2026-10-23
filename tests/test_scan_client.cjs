@@ -18,6 +18,7 @@ function client() {
     loadTasks: async () => {},
     escapeHtml: value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
     taskDisplayName: task => task.name,
+    javspIcon: () => '',
   });
   vm.runInContext(section('function clearManualFileSelection()', 'function setPathTarget('), context);
   vm.runInContext(section('async function submitManualTask(', "$('#task-form').addEventListener('submit', submitManualTask);"), context);

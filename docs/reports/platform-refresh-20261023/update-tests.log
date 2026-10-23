@@ -1,0 +1,19 @@
+test_child_without_base_metadata_does_not_bind_the_overlay_as_the_base (test_update_persistence.UpdatePersistenceTests.test_child_without_base_metadata_does_not_bind_the_overlay_as_the_base) ... ok
+test_corrupted_current_version_rolls_back_to_base_and_stays (test_update_persistence.UpdatePersistenceTests.test_corrupted_current_version_rolls_back_to_base_and_stays) ... ok
+test_corrupted_current_version_rolls_back_to_the_previous_version (test_update_persistence.UpdatePersistenceTests.test_corrupted_current_version_rolls_back_to_the_previous_version) ... ok
+test_corrupted_staged_version_is_downloaded_again (test_update_persistence.UpdatePersistenceTests.test_corrupted_staged_version_is_downloaded_again) ... ok
+test_crashed_download_does_not_block_future_updates_forever (test_update_persistence.UpdatePersistenceTests.test_crashed_download_does_not_block_future_updates_forever) ... ok
+test_incomplete_update_copy_is_reported_as_value_error (test_update_persistence.UpdatePersistenceTests.test_incomplete_update_copy_is_reported_as_value_error) ... ok
+test_install_reuses_the_recorded_image_binding_without_base_metadata (test_update_persistence.UpdatePersistenceTests.test_install_reuses_the_recorded_image_binding_without_base_metadata) ... ok
+test_pending_install_is_left_for_the_health_check_to_settle (test_update_persistence.UpdatePersistenceTests.test_pending_install_is_left_for_the_health_check_to_settle) ... ok
+test_rollback_target_survives_the_next_restart (test_update_persistence.UpdatePersistenceTests.test_rollback_target_survives_the_next_restart) ... ok
+test_rolled_back_pending_install_reports_the_failure_reason (test_update_persistence.UpdatePersistenceTests.test_rolled_back_pending_install_reports_the_failure_reason) ... ok
+test_stale_parent_release_label_is_not_copied_into_the_child (test_update_persistence.UpdatePersistenceTests.test_stale_parent_release_label_is_not_copied_into_the_child) ... ok
+test_status_separates_image_selection_and_target (test_update_persistence.UpdatePersistenceTests.test_status_separates_image_selection_and_target) ... ok
+test_stray_file_occupying_a_version_name_is_replaced (test_update_persistence.UpdatePersistenceTests.test_stray_file_occupying_a_version_name_is_replaced) ... ok
+test_unknown_binding_is_discarded_when_the_image_build_files_change (test_update_persistence.UpdatePersistenceTests.test_unknown_binding_is_discarded_when_the_image_build_files_change) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.111s
+
+OK

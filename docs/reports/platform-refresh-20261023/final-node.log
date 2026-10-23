@@ -1,0 +1,746 @@
+AI translation client checks passed: exclusive translation mode, disabled engine fields, explicit recovery, preset round trip and shared AI settings.
+TAP version 13
+# Subtest: comment Markdown supports formatting without executing HTML or unsafe links
+ok 1 - comment Markdown supports formatting without executing HTML or unsafe links
+  ---
+  duration_ms: 8.33167
+  type: 'test'
+  ...
+# Subtest: time labels resolve to seconds only in plain Markdown text
+ok 2 - time labels resolve to seconds only in plain Markdown text
+  ---
+  duration_ms: 1.029756
+  type: 'test'
+  ...
+# Subtest: nested Markdown cannot forge time buttons or bypass link validation
+ok 3 - nested Markdown cannot forge time buttons or bypass link validation
+  ---
+  duration_ms: 0.913548
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 20.284868
+TAP version 13
+# Subtest: same movie refresh preserves drafts; closing aborts requests and ignores stale responses
+ok 1 - same movie refresh preserves drafts; closing aborts requests and ignores stale responses
+  ---
+  duration_ms: 21.297925
+  type: 'test'
+  ...
+# Subtest: pagination replaces pages, retries safely and goes back without losing drafts
+ok 2 - pagination replaces pages, retries safely and goes back without losing drafts
+  ---
+  duration_ms: 5.932057
+  type: 'test'
+  ...
+# Subtest: posting is single-flight, preserves failures, omits login credentials and handles pending review
+ok 3 - posting is single-flight, preserves failures, omits login credentials and handles pending review
+  ---
+  duration_ms: 3.54852
+  type: 'test'
+  ...
+# Subtest: disabled service or unidentified movie makes no external request
+ok 4 - disabled service or unidentified movie makes no external request
+  ---
+  duration_ms: 1.562863
+  type: 'test'
+  ...
+# Subtest: normal posting sends no proof and a challenge response triggers only one retry
+ok 5 - normal posting sends no proof and a challenge response triggers only one retry
+  ---
+  duration_ms: 4.67167
+  type: 'test'
+  ...
+# Subtest: unconfigured identity preserves comment draft and does not start a challenge or post
+ok 6 - unconfigured identity preserves comment draft and does not start a challenge or post
+  ---
+  duration_ms: 3.219569
+  type: 'test'
+  ...
+# Subtest: reply selection preserves drafts, submits the parent and clears only after success
+ok 7 - reply selection preserves drafts, submits the parent and clears only after success
+  ---
+  duration_ms: 2.886817
+  type: 'test'
+  ...
+# Subtest: cancel reply preserves text and a new movie cannot inherit a reply target
+ok 8 - cancel reply preserves text and a new movie cannot inherit a reply target
+  ---
+  duration_ms: 2.514478
+  type: 'test'
+  ...
+# Subtest: reply references escape parent content and safely label unavailable comments
+ok 9 - reply references escape parent content and safely label unavailable comments
+  ---
+  duration_ms: 4.092883
+  type: 'test'
+  ...
+# Subtest: comments render Markdown and form help documents the 300 character cap
+ok 10 - comments render Markdown and form help documents the 300 character cap
+  ---
+  duration_ms: 3.659364
+  type: 'test'
+  ...
+# Subtest: same-origin comments base and its verification origin reach JavspCommunity separately
+ok 11 - same-origin comments base and its verification origin reach JavspCommunity separately
+  ---
+  duration_ms: 4.167163
+  type: 'test'
+  ...
+# Subtest: a same-origin proxy base authenticates reads and writes with the site session cookie
+ok 12 - a same-origin proxy base authenticates reads and writes with the site session cookie
+  ---
+  duration_ms: 2.724624
+  type: 'test'
+  ...
+# Subtest: a legacy absolute comments base keeps omitting credentials for reads and writes
+ok 13 - a legacy absolute comments base keeps omitting credentials for reads and writes
+  ---
+  duration_ms: 2.602036
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 70.344382
+TAP version 13
+# Subtest: verification accepts only the matching origin, window, nonce and action
+ok 1 - verification accepts only the matching origin, window, nonce and action
+  ---
+  duration_ms: 4.984474
+  type: 'test'
+  ...
+# Subtest: adaptive requests challenge only after 428 and retry once through the real verification flow
+ok 2 - adaptive requests challenge only after 428 and retry once through the real verification flow
+  ---
+  duration_ms: 7.000841
+  type: 'test'
+  ...
+# Subtest: canceling verification rejects the action and allows a later attempt
+ok 3 - canceling verification rejects the action and allows a later attempt
+  ---
+  duration_ms: 1.494564
+  type: 'test'
+  ...
+# Subtest: same-origin API base keeps data calls relative, sends site credentials and verifies on its own origin
+ok 4 - same-origin API base keeps data calls relative, sends site credentials and verifies on its own origin
+  ---
+  duration_ms: 2.291119
+  type: 'test'
+  ...
+# Subtest: a relative API base without a verification origin refuses to start a challenge
+ok 5 - a relative API base without a verification origin refuses to start a challenge
+  ---
+  duration_ms: 0.897668
+  type: 'test'
+  ...
+# Subtest: legacy single-argument configure keeps verification on the API origin
+ok 6 - legacy single-argument configure keeps verification on the API origin
+  ---
+  duration_ms: 1.392143
+  type: 'test'
+  ...
+# Subtest: an absolute legacy base keeps omitting credentials so site cookies never leave the site
+ok 7 - an absolute legacy base keeps omitting credentials so site cookies never leave the site
+  ---
+  duration_ms: 1.209136
+  type: 'test'
+  ...
+# Subtest: request options cannot override the credential and referrer decision
+ok 8 - request options cannot override the credential and referrer decision
+  ---
+  duration_ms: 1.001727
+  type: 'test'
+  ...
+# Subtest: an unknown page origin never guesses same-origin for an absolute base
+ok 9 - an unknown page origin never guesses same-origin for an absolute base
+  ---
+  duration_ms: 1.313267
+  type: 'test'
+  ...
+# Subtest: reconfiguring with only a base keeps the runtime verification source while the base is unchanged
+ok 10 - reconfiguring with only a base keeps the runtime verification source while the base is unchanged
+  ---
+  duration_ms: 2.274479
+  type: 'test'
+  ...
+# Subtest: switching the API base drops the previous verification origin
+ok 11 - switching the API base drops the previous verification origin
+  ---
+  duration_ms: 1.313655
+  type: 'test'
+  ...
+# Subtest: an empty base disables the service: no request, no verification
+ok 12 - an empty base disables the service: no request, no verification
+  ---
+  duration_ms: 0.996291
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 37.042218
+CookieCloud client checks passed: interval, status, saved-settings sync and connection test.
+TAP version 13
+# Subtest: demo uses the current application assets and all documentation links resolve
+ok 1 - demo uses the current application assets and all documentation links resolve
+  ---
+  duration_ms: 22.28672
+  type: 'test'
+  ...
+# Subtest: task pagination, filtering and cancellation survive pending timers
+ok 2 - task pagination, filtering and cancellation survive pending timers
+  ---
+  duration_ms: 28.214984
+  type: 'test'
+  ...
+# Subtest: old chapter bookmarks redirect to the matching topic page
+ok 3 - old chapter bookmarks redirect to the matching topic page
+  ---
+  duration_ms: 10.9589
+  type: 'test'
+  ...
+# Subtest: AI conversation lifecycle and unsupported actions
+ok 4 - AI conversation lifecycle and unsupported actions
+  ---
+  duration_ms: 6.985147
+  type: 'test'
+  ...
+# Subtest: settings and skills can be explored without storing credentials
+ok 5 - settings and skills can be explored without storing credentials
+  ---
+  duration_ms: 8.504084
+  type: 'test'
+  ...
+# Subtest: AI translation follows the shared AI switch and preserves preset translation settings
+ok 6 - AI translation follows the shared AI switch and preserves preset translation settings
+  ---
+  duration_ms: 3.942832
+  type: 'test'
+  ...
+# Subtest: preset forms, schedules, path mappings and demo exit
+ok 7 - preset forms, schedules, path mappings and demo exit
+  ---
+  duration_ms: 3.744165
+  type: 'test'
+  ...
+# Subtest: personal profile changes stay in the offline demo
+ok 8 - personal profile changes stay in the offline demo
+  ---
+  duration_ms: 2.347769
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 107.989132
+TAP version 13
+# Subtest: still thumbnails are labelled buttons that carry their own viewer coordinates
+ok 1 - still thumbnails are labelled buttons that carry their own viewer coordinates
+  ---
+  duration_ms: 4.835619
+  type: 'test'
+  ...
+# Subtest: a still opens the viewer with its own count, then steps without leaving the range
+ok 2 - a still opens the viewer with its own count, then steps without leaving the range
+  ---
+  duration_ms: 5.162079
+  type: 'test'
+  ...
+# Subtest: out of range requests and empty galleries never open the viewer
+ok 3 - out of range requests and empty galleries never open the viewer
+  ---
+  duration_ms: 4.194074
+  type: 'test'
+  ...
+# Subtest: arrow keys step the viewer and Escape closes only the viewer
+ok 4 - arrow keys step the viewer and Escape closes only the viewer
+  ---
+  duration_ms: 2.887353
+  type: 'test'
+  ...
+# Subtest: closing the viewer restores focus and drops the full size image
+ok 5 - closing the viewer restores focus and drops the full size image
+  ---
+  duration_ms: 3.017382
+  type: 'test'
+  ...
+# Subtest: a failing still shows a message instead of a broken frame
+ok 6 - a failing still shows a message instead of a broken frame
+  ---
+  duration_ms: 3.990001
+  type: 'test'
+  ...
+# Subtest: switching tasks and closing the film detail tear the viewer down
+ok 7 - switching tasks and closing the film detail tear the viewer down
+  ---
+  duration_ms: 2.379839
+  type: 'test'
+  ...
+# Subtest: the film detail closes from the title action group, right of 编辑资料
+ok 8 - the film detail closes from the title action group, right of 编辑资料
+  ---
+  duration_ms: 0.882063
+  type: 'test'
+  ...
+# Subtest: the sticky title region carries the close and stays out of the detail grid
+ok 9 - the sticky title region carries the close and stays out of the detail grid
+  ---
+  duration_ms: 1.07152
+  type: 'test'
+  ...
+# Subtest: section links scroll clear of the now sticky title region
+ok 10 - section links scroll clear of the now sticky title region
+  ---
+  duration_ms: 3.294419
+  type: 'test'
+  ...
+# Subtest: the title close rides the shared dialog close handler
+ok 11 - the title close rides the shared dialog close handler
+  ---
+  duration_ms: 3.179361
+  type: 'test'
+  ...
+# Subtest: scan tasks hide the empty navigation and the edit action but keep the close
+ok 12 - scan tasks hide the empty navigation and the edit action but keep the close
+  ---
+  duration_ms: 4.314969
+  type: 'test'
+  ...
+# Subtest: comment help uses an icon button, groups the rules and stays in the document flow
+ok 13 - comment help uses an icon button, groups the rules and stays in the document flow
+  ---
+  duration_ms: 2.860637
+  type: 'test'
+  ...
+# Subtest: privacy mode keeps the enlarged stills masked
+ok 14 - privacy mode keeps the enlarged stills masked
+  ---
+  duration_ms: 0.417643
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 62.009136
+TAP version 13
+# Subtest: every whitelisted icon renders one trusted 24px currentColor stroke SVG
+ok 1 - every whitelisted icon renders one trusted 24px currentColor stroke SVG
+  ---
+  duration_ms: 5.283945
+  type: 'test'
+  ...
+# Subtest: unknown or hostile names never reach the SVG markup
+ok 2 - unknown or hostile names never reach the SVG markup
+  ---
+  duration_ms: 0.964073
+  type: 'test'
+  ...
+# Subtest: options cannot smuggle attributes or markup into the rendered icon
+ok 3 - options cannot smuggle attributes or markup into the rendered icon
+  ---
+  duration_ms: 1.249784
+  type: 'test'
+  ...
+# Subtest: hydration fills [data-icon] slots without touching labels, disabled state or accessibility text
+ok 4 - hydration fills [data-icon] slots without touching labels, disabled state or accessibility text
+  ---
+  duration_ms: 1.818091
+  type: 'test'
+  ...
+# Subtest: hydration waits for the document when the script loads in the head
+ok 5 - hydration waits for the document when the script loads in the head
+  ---
+  duration_ms: 0.881564
+  type: 'test'
+  ...
+# Subtest: console and login load icons.js before the scripts that use it
+ok 6 - console and login load icons.js before the scripts that use it
+  ---
+  duration_ms: 1.562045
+  type: 'test'
+  ...
+# Subtest: static pages only reference whitelisted icon names and keep labelled controls
+ok 7 - static pages only reference whitelisted icon names and keep labelled controls
+  ---
+  duration_ms: 1.990579
+  type: 'test'
+  ...
+# Subtest: dynamic markup builds icons through the shared whitelist instead of glyph text
+ok 8 - dynamic markup builds icons through the shared whitelist instead of glyph text
+  ---
+  duration_ms: 12.85335
+  type: 'test'
+  ...
+# Subtest: send and stop keep their icons while busy state changes the label and disabled flag
+ok 9 - send and stop keep their icons while busy state changes the label and disabled flag
+  ---
+  duration_ms: 2.59179
+  type: 'test'
+  ...
+# Subtest: expanding the download policy swaps the caret and keeps the button intact
+ok 10 - expanding the download policy swaps the caret and keeps the button intact
+  ---
+  duration_ms: 5.055584
+  type: 'test'
+  ...
+# Subtest: CSS carries no symbol glyphs for functional controls and sizes shared icons
+ok 11 - CSS carries no symbol glyphs for functional controls and sizes shared icons
+  ---
+  duration_ms: 1.885649
+  type: 'test'
+  ...
+# Subtest: every whitelisted icon is actually used by a page or script
+ok 12 - every whitelisted icon is actually used by a page or script
+  ---
+  duration_ms: 8.632374
+  type: 'test'
+  ...
+# Subtest: the naming-rule help is an info icon button with a name, a popover and insert actions
+ok 13 - the naming-rule help is an info icon button with a name, a popover and insert actions
+  ---
+  duration_ms: 3.673428
+  type: 'test'
+  ...
+# Subtest: naming-rule variable buttons still insert into the field at the caret
+ok 14 - naming-rule variable buttons still insert into the field at the caret
+  ---
+  duration_ms: 2.477701
+  type: 'test'
+  ...
+# Subtest: naming-rule help CSS drops the "?" pseudo-element and keeps the popover on hover and focus
+ok 15 - naming-rule help CSS drops the "?" pseudo-element and keeps the popover on hover and focus
+  ---
+  duration_ms: 0.430678
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 71.665859
+TAP version 13
+# Subtest: the sidebar and header present the overview view as 片库
+ok 1 - the sidebar and header present the overview view as 片库
+  ---
+  duration_ms: 1.747053
+  type: 'test'
+  ...
+# Subtest: showView labels overview as 片库 and keeps the overview persistence key
+ok 2 - showView labels overview as 片库 and keeps the overview persistence key
+  ---
+  duration_ms: 2.141276
+  type: 'test'
+  ...
+# Subtest: showView keeps the other view titles untouched
+ok 3 - showView keeps the other view titles untouched
+  ---
+  duration_ms: 3.053802
+  type: 'test'
+  ...
+# Subtest: saved overview view still restores the library panel on load
+ok 4 - saved overview view still restores the library panel on load
+  ---
+  duration_ms: 0.876683
+  type: 'test'
+  ...
+# Subtest: user-facing copy no longer calls this view 概览
+ok 5 - user-facing copy no longer calls this view 概览
+  ---
+  duration_ms: 2.730947
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 28.20937
+Library playback regression checks passed.
+PR #14 helper checks passed: batch manifests, queue locking, cancellation, legacy server rejection, targeted cleanup, pagination and aliases.
+TAP version 13
+# Subtest: desktop restores collapse from the legacy storage key without rewriting it
+ok 1 - desktop restores collapse from the legacy storage key without rewriting it
+  ---
+  duration_ms: 7.448619
+  type: 'test'
+  ...
+# Subtest: desktop toggle persists collapse and never touches the mobile drawer
+ok 2 - desktop toggle persists collapse and never touches the mobile drawer
+  ---
+  duration_ms: 1.991753
+  type: 'test'
+  ...
+# Subtest: phone toggle opens a drawer with a backdrop, expanded state and focus on the current view
+ok 3 - phone toggle opens a drawer with a backdrop, expanded state and focus on the current view
+  ---
+  duration_ms: 1.502809
+  type: 'test'
+  ...
+# Subtest: a hidden or disabled active option does not steal drawer focus
+ok 4 - a hidden or disabled active option does not steal drawer focus
+  ---
+  duration_ms: 1.890845
+  type: 'test'
+  ...
+# Subtest: choosing a phone option closes the drawer and moves focus to the view heading
+ok 5 - choosing a phone option closes the drawer and moves focus to the view heading
+  ---
+  duration_ms: 0.942548
+  type: 'test'
+  ...
+# Subtest: desktop option selection keeps the sidebar mode untouched
+ok 6 - desktop option selection keeps the sidebar mode untouched
+  ---
+  duration_ms: 1.207736
+  type: 'test'
+  ...
+# Subtest: Escape and the backdrop close the drawer and restore focus to the toggle
+ok 7 - Escape and the backdrop close the drawer and restore focus to the toggle
+  ---
+  duration_ms: 1.052288
+  type: 'test'
+  ...
+# Subtest: Escape leaves a native dialog to close itself
+ok 8 - Escape leaves a native dialog to close itself
+  ---
+  duration_ms: 0.988102
+  type: 'test'
+  ...
+# Subtest: Tab is trapped inside the open drawer
+ok 9 - Tab is trapped inside the open drawer
+  ---
+  duration_ms: 2.790598
+  type: 'test'
+  ...
+# Subtest: desktop collapse and phone drawer stay independent across the breakpoint
+ok 10 - desktop collapse and phone drawer stay independent across the breakpoint
+  ---
+  duration_ms: 2.67375
+  type: 'test'
+  ...
+# Subtest: aria-current follows the active view, including changes made by app.js
+ok 11 - aria-current follows the active view, including changes made by app.js
+  ---
+  duration_ms: 1.087057
+  type: 'test'
+  ...
+# Subtest: label fallbacks give every option a name and title
+ok 12 - label fallbacks give every option a name and title
+  ---
+  duration_ms: 1.33603
+  type: 'test'
+  ...
+# Subtest: the console keeps the navigation DOM contract and drops the old toggle owner
+ok 13 - the console keeps the navigation DOM contract and drops the old toggle owner
+  ---
+  duration_ms: 3.137561
+  type: 'test'
+  ...
+# Subtest: a page without a sidebar is left alone
+ok 14 - a page without a sidebar is left alone
+  ---
+  duration_ms: 1.346774
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 51.539131
+TAP version 13
+# Subtest: actress range is sent to the server so counts and pagination cover the full catalog
+ok 1 - actress range is sent to the server so counts and pagination cover the full catalog
+  ---
+  duration_ms: 3.088324
+  type: 'test'
+  ...
+# Subtest: full catalog pages render only server results and zero-film actresses can be opened
+ok 2 - full catalog pages render only server results and zero-film actresses can be opened
+  ---
+  duration_ms: 1.875713
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18.837905
+TAP version 13
+# Subtest: feature pages expose deliberate regions instead of stacked generic panels
+ok 1 - feature pages expose deliberate regions instead of stacked generic panels
+  ---
+  duration_ms: 2.288994
+  type: 'test'
+  ...
+# Subtest: settings are split into navigable groups while every form stays in the document
+ok 2 - settings are split into navigable groups while every form stays in the document
+  ---
+  duration_ms: 2.473343
+  type: 'test'
+  ...
+# Subtest: manual task filters are one collapsible region and are not reinserted
+ok 3 - manual task filters are one collapsible region and are not reinserted
+  ---
+  duration_ms: 3.688197
+  type: 'test'
+  ...
+# Subtest: crawler configuration uses a source list beside the editor and test panel
+ok 4 - crawler configuration uses a source list beside the editor and test panel
+  ---
+  duration_ms: 4.572186
+  type: 'test'
+  ...
+# Subtest: auto-scrape module headings report their rule and run counts
+ok 5 - auto-scrape module headings report their rule and run counts
+  ---
+  duration_ms: 3.824574
+  type: 'test'
+  ...
+# Subtest: an empty preset library gets an actionable empty state
+ok 6 - an empty preset library gets an actionable empty state
+  ---
+  duration_ms: 2.640273
+  type: 'test'
+  ...
+# Subtest: dynamic settings modules mount inside their group and fall back safely
+ok 7 - dynamic settings modules mount inside their group and fall back safely
+  ---
+  duration_ms: 3.986563
+  type: 'test'
+  ...
+# Subtest: page layout CSS is scoped per page and keeps responsive and motion fallbacks
+ok 8 - page layout CSS is scoped per page and keeps responsive and motion fallbacks
+  ---
+  duration_ms: 0.903974
+  type: 'test'
+  ...
+# Subtest: profile and login use the same page layout system without changing business hooks
+ok 9 - profile and login use the same page layout system without changing business hooks
+  ---
+  duration_ms: 0.833524
+  type: 'test'
+  ...
+# Subtest: existing settings, task and AI hooks remain in the document
+ok 10 - existing settings, task and AI hooks remain in the document
+  ---
+  duration_ms: 1.248956
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 40.847308
+Scan client checks passed: directory, single batch, edited paths, duplicate clicks, retry, native multiselect and progress rendering.
+TAP version 13
+# Subtest: login, console and generated demo initialize the same theme before their first stylesheet
+ok 1 - login, console and generated demo initialize the same theme before their first stylesheet
+  ---
+  duration_ms: 3.221802
+  type: 'test'
+  ...
+# Subtest: first paint follows system light or dark without a saved preference
+ok 2 - first paint follows system light or dark without a saved preference
+  ---
+  duration_ms: 3.104772
+  type: 'test'
+  ...
+# Subtest: valid saved preference overrides system and survives a new page
+ok 3 - valid saved preference overrides system and survives a new page
+  ---
+  duration_ms: 1.89134
+  type: 'test'
+  ...
+# Subtest: invalid preferences and denied storage safely fall back to the system
+ok 4 - invalid preferences and denied storage safely fall back to the system
+  ---
+  duration_ms: 2.389002
+  type: 'test'
+  ...
+# Subtest: native button click switches theme, persists preference and exposes the pressed state
+ok 5 - native button click switches theme, persists preference and exposes the pressed state
+  ---
+  duration_ms: 1.144683
+  type: 'test'
+  ...
+# Subtest: system changes follow live until a manual selection is made, including legacy matchMedia
+ok 6 - system changes follow live until a manual selection is made, including legacy matchMedia
+  ---
+  duration_ms: 2.606474
+  type: 'test'
+  ...
+# Subtest: another tab changes the theme, clearing its preference resumes system following
+ok 7 - another tab changes the theme, clearing its preference resumes system following
+  ---
+  duration_ms: 1.180547
+  type: 'test'
+  ...
+# Subtest: invalid API choices do not change the current theme or stored preference
+ok 8 - invalid API choices do not change the current theme or stored preference
+  ---
+  duration_ms: 1.241634
+  type: 'test'
+  ...
+# Subtest: every migrated color token resolves and fixed artwork colors are explicitly marked
+ok 9 - every migrated color token resolves and fixed artwork colors are explicitly marked
+  ---
+  duration_ms: 6.31194
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 37.783311
+Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.

@@ -1,0 +1,34 @@
+test_application_data_directory_is_never_ingested (test_directory_watch.DirectoryWatchTests.test_application_data_directory_is_never_ingested) ... ok
+test_changed_file_resubmits_only_after_the_previous_task_finishes (test_directory_watch.DirectoryWatchTests.test_changed_file_resubmits_only_after_the_previous_task_finishes) ... ok
+test_committed_ledger_does_not_grow_without_bound (test_directory_watch.DirectoryWatchTests.test_committed_ledger_does_not_grow_without_bound) ... ok
+test_concurrent_scans_create_at_most_one_task (test_directory_watch.DirectoryWatchTests.test_concurrent_scans_create_at_most_one_task) ... ok
+test_continuously_written_file_is_not_submitted_until_it_settles (test_directory_watch.DirectoryWatchTests.test_continuously_written_file_is_not_submitted_until_it_settles) ... ok
+test_corrupt_state_file_is_recovered (test_directory_watch.DirectoryWatchTests.test_corrupt_state_file_is_recovered) ... ok
+test_directory_symlink_loop_does_not_hang (test_directory_watch.DirectoryWatchTests.test_directory_symlink_loop_does_not_hang) ... ok
+test_disable_during_scan_stops_further_submissions (test_directory_watch.DirectoryWatchTests.test_disable_during_scan_stops_further_submissions) ... ok
+test_disabled_rule_stops_submitting_immediately (test_directory_watch.DirectoryWatchTests.test_disabled_rule_stops_submitting_immediately) ... ok
+test_files_present_at_creation_are_baselined_unless_requested (test_directory_watch.DirectoryWatchTests.test_files_present_at_creation_are_baselined_unless_requested) ... ok
+test_index_html_mounts_the_panel_and_assets (test_directory_watch.DirectoryWatchTests.test_index_html_mounts_the_panel_and_assets) ... ok
+test_late_multipart_part_joins_the_movie_task (test_directory_watch.DirectoryWatchTests.test_late_multipart_part_joins_the_movie_task) ... ok
+test_missing_preset_blocks_submission (test_directory_watch.DirectoryWatchTests.test_missing_preset_blocks_submission) ... ok
+test_multipart_parts_aggregate_into_one_task (test_directory_watch.DirectoryWatchTests.test_multipart_parts_aggregate_into_one_task) ... ok
+test_new_file_waits_for_stable_window_then_submits_once (test_directory_watch.DirectoryWatchTests.test_new_file_waits_for_stable_window_then_submits_once) ... ok
+test_offline_root_keeps_state_and_recovers (test_directory_watch.DirectoryWatchTests.test_offline_root_keeps_state_and_recovers) ... ok
+test_permission_failure_is_reported_and_recovers (test_directory_watch.DirectoryWatchTests.test_permission_failure_is_reported_and_recovers) ... ok
+test_restart_restores_state_without_duplicates (test_directory_watch.DirectoryWatchTests.test_restart_restores_state_without_duplicates) ... ok
+test_router_crud_and_validation (test_directory_watch.DirectoryWatchTests.test_router_crud_and_validation) ... ok
+test_router_requires_admin (test_directory_watch.DirectoryWatchTests.test_router_requires_admin) ... ok
+test_rule_edit_resets_observation_but_pause_does_not (test_directory_watch.DirectoryWatchTests.test_rule_edit_resets_observation_but_pause_does_not) ... ok
+test_scheduler_thread_scans_and_stops_cleanly (test_directory_watch.DirectoryWatchTests.test_scheduler_thread_scans_and_stops_cleanly) ... ok
+test_skipped_file_is_not_retried_on_every_scan (test_directory_watch.DirectoryWatchTests.test_skipped_file_is_not_retried_on_every_scan) ... ok
+test_subdirectories_and_exclude_patterns (test_directory_watch.DirectoryWatchTests.test_subdirectories_and_exclude_patterns) ... ok
+test_submission_cap_bounds_a_large_folder (test_directory_watch.DirectoryWatchTests.test_submission_cap_bounds_a_large_folder) ... ok
+test_submission_never_holds_the_rule_lock (test_directory_watch.DirectoryWatchTests.test_submission_never_holds_the_rule_lock)
+create_tasks must run outside the module lock, or a slow NAS scan would ... ok
+test_temporary_download_files_and_output_folders_are_ignored (test_directory_watch.DirectoryWatchTests.test_temporary_download_files_and_output_folders_are_ignored) ... ok
+test_server_includes_router_and_stops_scheduler (test_directory_watch.ServerWiringTests.test_server_includes_router_and_stops_scheduler) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 7.284s
+
+OK

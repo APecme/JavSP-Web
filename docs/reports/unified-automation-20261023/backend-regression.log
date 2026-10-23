@@ -1,0 +1,9 @@
+.....................s.................................................. [ 45%]
+...................s...................................................................                      [100%]
+=============================== warnings summary ===============================
+tests/test_directory_watch.py::DirectoryWatchTests::test_router_crud_and_validation
+  /data12t/AutoOrder/JavSP-Web/.venv-multipart/lib/python3.14/site-packages/starlette/testclient.py:45: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+157 passed, 2 skipped, 1 warning, 36 subtests passed in 61.72s (0:01:01)

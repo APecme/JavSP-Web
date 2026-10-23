@@ -1,0 +1,12 @@
+{
+  "javsp_web/directory_watch.py": "b0b1726f164a427a525158f7b7374f01556b971d56e53a4e3e8ba1fe123cb6b8",
+  "javsp_web/directory_watch_router.py": "31bed47de9f6f9e0b3d61f029c5120c2861897e88c9baee0301e32d51804b577",
+  "javsp_web/server.py": "e66cb23884fbadd3f310388e312ca50c62256fa630c8d3ff0069d64499ecf0d4",
+  "javsp_web/storage.py": "c6ebae567cf530bd2ac6d5665d850bab1cfa4bd11a71ef616535319dd127e92f",
+  "javsp_web/web/assets/directory-watch.js": "9053e3e53ff7ba267063d4e0f9574de737fde1ed4615760d159e56c7e0961309",
+  "javsp_web/web/assets/directory-watch.css": "148a55dd5fa29dfd332e5b0e1d1709e084ed66786f2d811cc07c52b8dc1da543",
+  "javsp_web/web/assets/app.js": "64ea0300849dc34d3dfd0e638c7d99305403bc17b78be03ea33bbafdee868c69",
+  "javsp_web/web/index.html": "25b7e362250d37682d0ca8c0eae879aab7b273ac0e0124e4b756f365a823f90d",
+  "tests/test_directory_watch.py": "0d5149d74a5d27fb47621e77c161faa89b31b6a7e773858c280bc5849cbfa957",
+  "tests/test_unified_automation_client.cjs": "0a68ea21d7d622e3e8579dcb0bf709f33097e077a670417e536612955e8abd7b"
+}

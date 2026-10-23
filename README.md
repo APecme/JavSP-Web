@@ -1,84 +1,90 @@
-![JavSP WEB](./javsp_web/web/assets/javsp-logo.png)
+<div align="center">
+
+<img src="./javsp_web/web/assets/javsp-logo.png" alt="JavSP WEB Logo" width="120" height="120">
 
 # JavSP WEB
 
-在浏览器中刮削影片资料、整理媒体文件并管理媒体库。JavSP WEB 基于 [JavSP](https://github.com/Yuukiy/JavSP)，支持 Windows、Docker 和 NAS 部署。
+**影片信息刮削与媒体库管理**
 
-完整的安装、配置、刮削、AI、自动化、故障排查和接口说明，请查看官网文档：
+[![Release](https://img.shields.io/github/v/release/APecme/JavSP-Web?label=Release&color=ff5c35&style=flat-square)](https://github.com/APecme/JavSP-Web/releases/latest)
+[![Docker](https://img.shields.io/badge/Docker-apecme%2Fjavsp--web-2496ED?logo=docker&logoColor=white&style=flat-square)](https://hub.docker.com/r/apecme/javsp-web)
+[![Windows](https://img.shields.io/badge/Windows-EXE-0078D4?style=flat-square)](https://github.com/APecme/JavSP-Web/releases/latest/download/JavSP-Web.exe)
+[![License](https://img.shields.io/badge/License-GPL--3.0-263146?style=flat-square)](./vendor/JavSP/LICENSE)
 
-## [打开 JavSP WEB 官网文档](https://apecme.github.io/JavSP-Web/)
+**[在线体验](https://apecme.github.io/JavSP-Web/demo.html) · [使用文档](https://apecme.github.io/JavSP-Web/docs.html) · [下载正式版](https://github.com/APecme/JavSP-Web/releases/latest) · [反馈问题](https://github.com/APecme/JavSP-Web/issues)**
 
-## 主要功能
+</div>
 
-- 识别番号，调用多个资料源获取标题、演员、剧情、封面和剧照。
-- 处理单个视频、文件夹和批量任务，查看进度、日志与失败原因。
-- 在封面墙浏览影片、查看资料和剧照，开启隐私模式模糊图片。
-- 在个人中心选择头像，用用户名和 6 位 PIN 创建匿名评论身份；可跨设备查看自己的评论，支持点赞和安全验证。
-- 使用刮削预设管理扫描、命名、NFO、图片和翻译设置。
-- 定时扫描目录，连接 qBittorrent，并在下载完成后自动刮削。
-- 连接 Emby / Jellyfin，整理完成后刷新媒体库。
-- 支持 AI 刮削、AI 翻译、上下文自动压缩和模型列表获取。
-- 支持 CookieCloud、代理、路径映射、封面重试与任务文件还原。
+<div align="center">
+
+> **把影片文件，变成漂亮的媒体库。**
+>
+> 识别番号、刮削资料、生成 NFO 与图片，再按你的规则整理文件。<br>
+> 在封面墙浏览收藏，用评论交流观影感受，用 AI 辅助刮削与翻译。
+>
+> **Windows EXE · Docker / NAS · 明亮／黑暗主题 · 浏览器访问**
+
+</div>
+
+---
+
+JavSP WEB 基于 [JavSP](https://github.com/Yuukiy/JavSP) 构建，将影片刮削、文件整理和媒体库浏览集中到一个 Web 界面。无论是整理单部影片，还是管理 NAS 上的收藏，都可以在浏览器中完成。
+
+**[在线体验 →](https://apecme.github.io/JavSP-Web/demo.html)** 无需安装，先看看界面和主要功能。示例使用模拟数据，刷新后恢复初始状态。
+
+## 功能介绍
+
+### 🎬 影片刮削与文件整理
+
+- 自动识别番号，从多个资料源补全片名、女优、发行日期和简介，下载封面、剧照并生成 NFO。
+- 支持单部与批量整理、多 P 影片归档，可自定义目录和命名规则，让媒体库保持统一。
+
+### 🖼️ 片库与影片详情
+
+- 以封面墙展示收藏，按女优、片商、媒体库或年份浏览，支持搜索、排序与批量管理。
+- 整合 Gfriends 女优资料，方便查看已有收藏、浏览更多女优。
+- 在详情页查看和编辑影片资料、封面与剧照。支持明亮／黑暗主题，隐私模式可模糊封面与剧照。
+
+### 💬 评论与互动
+
+- 在影片下分享观影感受，点赞、回复其他人的评论，在个人中心管理自己的发言和头像。
+- 支持 Markdown 排版，可通过时间标签标记想讨论的影片片段。
+
+### ✨ AI 助手与翻译
+
+- 接入自己的模型服务，辅助查找影片资料、刮削信息，翻译标题与简介。
+- 通过对话查询任务、分析失败原因，处理媒体库整理中的问题。
+
+### ⚙️ 自动化与任务管理
+
+- 联动 qBittorrent，下载完成后自动刮削；也可定时扫描目录，持续整理新影片。
+- 为不同整理需求保存预设，常用规则无需重复设置。
+- 随时查看任务进度和日志，重试失败图片，追踪每次整理的结果。
 
 ## 快速开始
 
+### Docker
+
+将 `/your/videos` 替换为你的影片目录，执行：
+
+```sh
+docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:/app/data" -v "/your/videos:/video" apecme/javsp-web:latest
+```
+
+打开 `http://服务器地址:8090`。配置与任务保存在 `./data`，程序内的影片路径使用 `/video`。
+
 ### Windows
 
-1. 从 [Releases](https://github.com/APecme/JavSP-Web/releases/latest) 下载 `JavSP-Web.exe`。
-2. 双击运行，浏览器打开 `http://127.0.0.1:8090/login`。
-3. 首次使用账号和密码均为 `admin`，登录后立即在“系统设置 → 用户管理”修改密码。
+从 **[Releases 下载 JavSP-Web.exe](https://github.com/APecme/JavSP-Web/releases/latest/download/JavSP-Web.exe)**，放入独立文件夹后双击运行，浏览器访问 `http://127.0.0.1:8090`。升级时替换 EXE，并保留旁边的 `data` 文件夹。
 
-配置和任务记录默认保存在程序旁的 `data` 文件夹。升级时保留该文件夹即可。
+首次登录账号与密码均为 `admin`，登录后请在“系统设置 → 用户管理”中修改密码。更多配置请查看 **[完整使用文档](https://apecme.github.io/JavSP-Web/docs.html)**。
 
-### Docker Compose
+## 反馈与贡献
 
-安装 Docker 和 Compose，在空目录创建 `docker-compose.yml`：
+欢迎通过 [Issues](https://github.com/APecme/JavSP-Web/issues) 反馈问题或建议，也欢迎提交 Pull Request。反馈时请附上版本、部署方式、复现步骤和脱敏日志。
 
-```yaml
-services:
-  javsp-web:
-    image: apecme/javsp-web:latest
-    container_name: javsp-web
-    restart: unless-stopped
-    ports:
-      - "8090:8090"
-    environment:
-      JAVSP_WEB_HOST: 0.0.0.0
-      JAVSP_WEB_PORT: 8090
-      JAVSP_WEB_TIMEZONE: Asia/Shanghai
-      TZ: Asia/Shanghai
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./data:/app/data
-      - ./video:/video
-```
+## 致谢与许可
 
-把 `./video` 改成影片目录后执行：
-
-```sh
-docker compose up -d
-```
-
-访问 `http://服务器地址:8090/login`，使用 `admin` / `admin` 登录并修改密码。容器内路径应填写映射后的路径，例如宿主机 `/mnt/media` 对应 `/video`。
-
-通过反向代理提供 HTTPS 时，在环境变量 `JAVSP_WEB_TRUSTED_PROXIES` 中配置代理连接到应用时的实际源 IP（多个 IP 用逗号分隔；默认不信任代理）。代理必须覆盖客户端传入的 `X-Real-IP` 和 `X-Forwarded-Proto`，分别填写真实客户端 IP 和外部协议。应用仅信任这些指定来源，并为 HTTPS 登录设置 Secure Cookie；直接 HTTP 登录仍可用。使用自定义 Uvicorn 启动命令时，须加 `--no-proxy-headers`，以保留应用校验所需的真实连接来源。
-
-登录失败限制为每 5 分钟每 IP 30 次、每用户名 10 次，超限返回 429 和 `Retry-After`。成功登录不消耗失败额度，计数保存在当前进程内，重启会清零；当前单进程部署适用，多进程或多副本部署须先改用共享限流存储。
-
-## 贡献
-
-欢迎提交 Issue、改进文档、补充测试或提交 Pull Request。请先搜索已有 Issue，并在反馈中附上版本、部署方式、复现步骤和脱敏日志；不要上传密钥、Cookie 或完整数据目录。
-
-运行测试请使用 Python 3.11 或 3.12（与 Docker 一致推荐 3.12），并在隔离环境中安装应用及测试依赖。测试使用 Python 3.11 新增的 `unittest.TestCase.enterContext`，不能直接用 Python 3.8 运行。
-
-```sh
-python -m pip install -r requirements.txt -r tests/requirements.txt
-python -m unittest discover -s tests -v
-python scripts/build_demo.py
-node tests/test_demo.cjs
-```
-
-官网文档源文件位于 `docs/`，内置 Skills 位于 `javsp_web/skills/`。提交前请同步更新受影响的文档和示例。
+感谢 [Yuukiy / JavSP](https://github.com/Yuukiy/JavSP) 提供刮削核心，以及 [Gfriends](https://github.com/gfriends/gfriends) 项目提供的女优资料与头像资源。
 
 项目包含 JavSP 核心，遵循 [GPL-3.0](./vendor/JavSP/LICENSE) 与 [Anti 996 License](https://github.com/996icu/996.ICU/blob/master/LICENSE_CN) 的相关条款。

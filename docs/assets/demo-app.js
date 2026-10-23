@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), actressScope: localStorage.getItem('javsp-web.actress-scope') || 'existing', activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
+const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', crawlerEditorToken: 0, runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), actressScope: localStorage.getItem('javsp-web.actress-scope') || 'existing', activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -14,6 +14,8 @@ state.overviewGroupPage = 1;
 state.overviewGroupQuery = '';
 state.overviewLibrariesAvailable = true;
 const $ = (selector) => document.querySelector(selector);
+// Shared icon whitelist: icons.js loads before this script (see index.html).
+const javspIcon = (name, options) => (window.JavspIcons ? window.JavspIcons.render(name, options) : '');
 const FORM_SECTIONS = ['scanner', 'network', 'crawler', 'summarizer', 'translator', 'other'];
 const BUILT_IN_MEDIA_TYPE_IDS = new Set(['fc2', 'getchu', 'gyutto', 'cid', 'normal']);
 const CRAWLER_IDS = ['airav','avsox','avwiki','dl_getchu','fanza','fc2','fc2fan','fc2ppvdb','gyutto','jav321','javbus','javdb','javlib','javmenu','mgstage','njav','prestige','arzon','arzon_iv'];
@@ -222,19 +224,19 @@ function mediaTypeRuleMarkup(type) {
       const identifier = type.identifier_kind === 'cid' ? 'CID' : 'DVDID';
       return `<article class="media-type-rule media-type-built-in" data-media-type-rule data-built-in="true"><input data-media-type-id value="${escapeHtml(type.id)}" type="hidden"><input data-media-type-name value="${escapeHtml(type.name)}" type="hidden"><input data-media-type-priority value="${escapeHtml(type.priority)}" type="hidden"><input data-media-type-kind value="${escapeHtml(type.identifier_kind)}" type="hidden"><input data-media-type-detector value="${escapeHtml(type.detector)}" type="hidden"><input data-media-type-pattern value="${escapeHtml(type.pattern)}" type="hidden"><input data-media-type-format value="${escapeHtml(type.avid_format)}" type="hidden"><div class="media-type-rule-heading"><strong>${escapeHtml(type.name)}</strong><span>${detector} \u00b7 ${identifier}</span></div><p class="muted">${type.detector === 'fallback' ? '\u5176\u4ed6\u5f71\u7247\u5206\u7c7b\u672a\u547d\u4e2d\u65f6\u4f7f\u7528\u3002' : '\u7531\u626b\u63cf\u5668\u5185\u7f6e\u89c4\u5219\u8bc6\u522b\uff1b\u722c\u866b\u987a\u5e8f\u8bf7\u5728\u300c\u722c\u866b\u300d\u9009\u9879\u5361\u914d\u7f6e\u3002'}</p></article>`;
     }
-    return `<article class="media-type-rule" data-media-type-rule data-built-in="false"><div class="media-type-rule-heading"><strong>\u81ea\u5b9a\u4e49\u5206\u7c7b</strong><button class="icon-button media-type-remove" type="button" data-remove-media-type title="\u5220\u9664\u5206\u7c7b" aria-label="\u5220\u9664\u5206\u7c7b">\u00d7</button></div><div class="media-type-rule-fields"><label>\u5206\u7c7b ID<input data-media-type-id maxlength="40" value="${escapeHtml(type.id)}" placeholder="my_source"></label><label>\u5206\u7c7b\u540d\u79f0<input data-media-type-name maxlength="80" value="${escapeHtml(type.name)}" placeholder="\u4f8b\u5982 My Source"></label><label>\u4f18\u5148\u7ea7<input data-media-type-priority type="number" step="1" value="${escapeHtml(type.priority)}"></label><label>\u7f16\u53f7\u7c7b\u578b<select data-media-type-kind><option value="dvdid"${type.identifier_kind === 'dvdid' ? ' selected' : ''}>DVDID</option><option value="cid"${type.identifier_kind === 'cid' ? ' selected' : ''}>CID</option></select></label><label class="media-type-rule-pattern">\u6587\u4ef6\u540d\u8bc6\u522b\u89c4\u5219<input data-media-type-pattern value="${escapeHtml(type.pattern)}" placeholder="\u5fc5\u987b\u5305\u542b (?P<avid>...)"></label><label>\u756a\u53f7\u683c\u5f0f<input data-media-type-format value="${escapeHtml(type.avid_format)}" placeholder="{avid}"></label></div><p class="muted">\u7528\u4e8e\u81ea\u5b9a\u4e49\u6587\u4ef6\u540d\u89c4\u5219\uff1b\u89c4\u5219\u547d\u4e2d\u540e\u4f1a\u751f\u6210\u6807\u51c6\u756a\u53f7\u3002</p></article>`;
+    return `<article class="media-type-rule" data-media-type-rule data-built-in="false"><div class="media-type-rule-heading"><strong>\u81ea\u5b9a\u4e49\u5206\u7c7b</strong><button class="icon-button media-type-remove" type="button" data-remove-media-type title="\u5220\u9664\u5206\u7c7b" aria-label="\u5220\u9664\u5206\u7c7b">${javspIcon('close')}</button></div><div class="media-type-rule-fields"><label>\u5206\u7c7b ID<input data-media-type-id maxlength="40" value="${escapeHtml(type.id)}" placeholder="my_source"></label><label>\u5206\u7c7b\u540d\u79f0<input data-media-type-name maxlength="80" value="${escapeHtml(type.name)}" placeholder="\u4f8b\u5982 My Source"></label><label>\u4f18\u5148\u7ea7<input data-media-type-priority type="number" step="1" value="${escapeHtml(type.priority)}"></label><label>\u7f16\u53f7\u7c7b\u578b<select data-media-type-kind><option value="dvdid"${type.identifier_kind === 'dvdid' ? ' selected' : ''}>DVDID</option><option value="cid"${type.identifier_kind === 'cid' ? ' selected' : ''}>CID</option></select></label><label class="media-type-rule-pattern">\u6587\u4ef6\u540d\u8bc6\u522b\u89c4\u5219<input data-media-type-pattern value="${escapeHtml(type.pattern)}" placeholder="\u5fc5\u987b\u5305\u542b (?P<avid>...)"></label><label>\u756a\u53f7\u683c\u5f0f<input data-media-type-format value="${escapeHtml(type.avid_format)}" placeholder="{avid}"></label></div><p class="muted">\u7528\u4e8e\u81ea\u5b9a\u4e49\u6587\u4ef6\u540d\u89c4\u5219\uff1b\u89c4\u5219\u547d\u4e2d\u540e\u4f1a\u751f\u6210\u6807\u51c6\u756a\u53f7\u3002</p></article>`;
   }
   /* Legacy editor markup retained below temporarily for source compatibility.
   const builtIn = BUILT_IN_MEDIA_TYPE_IDS.has(type.id);
   const patternHint = type.fallback ? '\u5179\u5e95\u5206\u7c7b\u65e0\u9700\u89c4\u5219' : '\u5fc5\u987b\u5305\u542b (?P<avid>...)';
-  return `<article class="media-type-rule" data-media-type-rule data-built-in="${builtIn}"><div class="media-type-rule-heading"><strong>${builtIn ? '\u5185\u7f6e\u5206\u7c7b' : '\u81ea\u5b9a\u4e49\u5206\u7c7b'}</strong>${builtIn ? '' : '<button class="icon-button media-type-remove" type="button" data-remove-media-type title="\u5220\u9664\u5206\u7c7b" aria-label="\u5220\u9664\u5206\u7c7b">\u00d7</button>'}</div><div class="media-type-rule-fields"><label>\u5206\u7c7b ID<input data-media-type-id maxlength="40" value="${escapeHtml(type.id)}"${builtIn ? ' readonly' : ''} placeholder="my_source"></label><label>\u5206\u7c7b\u540d\u79f0<input data-media-type-name maxlength="80" value="${escapeHtml(type.name)}" placeholder="\u4f8b\u5982 My Source"></label><label>\u4f18\u5148\u7ea7<input data-media-type-priority type="number" step="1" value="${escapeHtml(type.priority)}"></label><label>\u7f16\u53f7\u7c7b\u578b<select data-media-type-kind><option value="dvdid"${type.identifier_kind === 'dvdid' ? ' selected' : ''}>DVDID</option><option value="cid"${type.identifier_kind === 'cid' ? ' selected' : ''}>CID</option></select></label><label class="media-type-rule-pattern">\u8bc6\u522b\u89c4\u5219<input data-media-type-pattern value="${escapeHtml(type.pattern)}" placeholder="${patternHint}"${type.fallback ? ' readonly' : ''}></label><label>\u756a\u53f7\u683c\u5f0f<input data-media-type-format value="${escapeHtml(type.avid_format)}" placeholder="{avid}"></label></div><p class="muted">${type.fallback ? '\u5728\u5176\u4ed6\u89c4\u5219\u672a\u547d\u4e2d\u65f6\u4f7f\u7528\u3002' : `\u89c4\u5219\u547d\u4e2d\u540e\u4f7f\u7528 ${escapeHtml(type.avid_format || '{avid}')} \u751f\u6210\u6807\u51c6\u756a\u53f7\u3002`}</p></article>`;
+  return `<article class="media-type-rule" data-media-type-rule data-built-in="${builtIn}"><div class="media-type-rule-heading"><strong>${builtIn ? '\u5185\u7f6e\u5206\u7c7b' : '\u81ea\u5b9a\u4e49\u5206\u7c7b'}</strong>${builtIn ? '' : '<button class="icon-button media-type-remove" type="button" data-remove-media-type title="\u5220\u9664\u5206\u7c7b" aria-label="\u5220\u9664\u5206\u7c7b">${javspIcon('close')}</button>'}</div><div class="media-type-rule-fields"><label>\u5206\u7c7b ID<input data-media-type-id maxlength="40" value="${escapeHtml(type.id)}"${builtIn ? ' readonly' : ''} placeholder="my_source"></label><label>\u5206\u7c7b\u540d\u79f0<input data-media-type-name maxlength="80" value="${escapeHtml(type.name)}" placeholder="\u4f8b\u5982 My Source"></label><label>\u4f18\u5148\u7ea7<input data-media-type-priority type="number" step="1" value="${escapeHtml(type.priority)}"></label><label>\u7f16\u53f7\u7c7b\u578b<select data-media-type-kind><option value="dvdid"${type.identifier_kind === 'dvdid' ? ' selected' : ''}>DVDID</option><option value="cid"${type.identifier_kind === 'cid' ? ' selected' : ''}>CID</option></select></label><label class="media-type-rule-pattern">\u8bc6\u522b\u89c4\u5219<input data-media-type-pattern value="${escapeHtml(type.pattern)}" placeholder="${patternHint}"${type.fallback ? ' readonly' : ''}></label><label>\u756a\u53f7\u683c\u5f0f<input data-media-type-format value="${escapeHtml(type.avid_format)}" placeholder="{avid}"></label></div><p class="muted">${type.fallback ? '\u5728\u5176\u4ed6\u89c4\u5219\u672a\u547d\u4e2d\u65f6\u4f7f\u7528\u3002' : `\u89c4\u5219\u547d\u4e2d\u540e\u4f7f\u7528 ${escapeHtml(type.avid_format || '{avid}')} \u751f\u6210\u6807\u51c6\u756a\u53f7\u3002`}</p></article>`;
 */
 }
 
 function mediaTypesMarkup(value) {
   const types = normalizeMediaTypes(value);
-  return `<div class="media-type-control" data-media-type-control><div class="media-type-control-heading"><div><strong>\u5f71\u7247\u5206\u7c7b</strong><span>\u626b\u63cf\u5668\u6839\u636e\u6587\u4ef6\u540d\u786e\u5b9a\u5f71\u7247\u5206\u7c7b\uff0c\u722c\u866b\u9875\u9762\u518d\u6309\u6b64\u5206\u7c7b\u9009\u62e9\u6570\u636e\u6e90\u3002</span></div><button class="button secondary" type="button" data-add-media-type>\u6dfb\u52a0\u81ea\u5b9a\u4e49\u5206\u7c7b</button></div><div class="media-type-rule-list">${types.map(mediaTypeRuleMarkup).join('')}</div></div>`;
-  return `<div class="media-type-control" data-media-type-control><div class="media-type-control-heading"><div><strong>\u5f71\u7247\u5206\u7c7b</strong><span>\u626b\u63cf\u5668\u6309\u4f18\u5148\u7ea7\u4ece\u6587\u4ef6\u540d\u8bc6\u522b\u7f16\u53f7\uff0c\u5e76\u5c06\u547d\u4e2d\u5206\u7c7b\u4ea4\u7ed9\u540c\u540d\u722c\u866b\u5217\u8868\u3002</span></div><button class="button secondary" type="button" data-add-media-type>\u6dfb\u52a0\u5206\u7c7b</button></div><div class="media-type-rule-list">${types.map(mediaTypeRuleMarkup).join('')}</div></div>`;
+  return `<div class="media-type-control" data-media-type-control><div class="media-type-control-heading"><div><strong>\u5f71\u7247\u5206\u7c7b</strong><span>\u626b\u63cf\u5668\u6839\u636e\u6587\u4ef6\u540d\u786e\u5b9a\u5f71\u7247\u5206\u7c7b\uff0c\u722c\u866b\u9875\u9762\u518d\u6309\u6b64\u5206\u7c7b\u9009\u62e9\u6570\u636e\u6e90\u3002</span></div><button class="button secondary" type="button" data-add-media-type>${javspIcon('plus')}\u6dfb\u52a0\u81ea\u5b9a\u4e49\u5206\u7c7b</button></div><div class="media-type-rule-list">${types.map(mediaTypeRuleMarkup).join('')}</div></div>`;
+  return `<div class="media-type-control" data-media-type-control><div class="media-type-control-heading"><div><strong>\u5f71\u7247\u5206\u7c7b</strong><span>\u626b\u63cf\u5668\u6309\u4f18\u5148\u7ea7\u4ece\u6587\u4ef6\u540d\u8bc6\u522b\u7f16\u53f7\uff0c\u5e76\u5c06\u547d\u4e2d\u5206\u7c7b\u4ea4\u7ed9\u540c\u540d\u722c\u866b\u5217\u8868\u3002</span></div><button class="button secondary" type="button" data-add-media-type>${javspIcon('plus')}\u6dfb\u52a0\u5206\u7c7b</button></div><div class="media-type-rule-list">${types.map(mediaTypeRuleMarkup).join('')}</div></div>`;
 }
 
 function readMediaTypesControl() {
@@ -294,12 +296,12 @@ document.addEventListener('change', (event) => {
 });
 
 function configArrayTagMarkup(value) {
-  return `<span class="config-array-tag" data-array-value="${escapeHtml(value)}"><code>${escapeHtml(value)}</code><button class="config-array-remove" type="button" data-remove-config-array-tag title="\u5220\u9664 ${escapeHtml(value)}" aria-label="\u5220\u9664 ${escapeHtml(value)}">\u00d7</button></span>`;
+  return `<span class="config-array-tag" data-array-value="${escapeHtml(value)}"><code>${escapeHtml(value)}</code><button class="config-array-remove" type="button" data-remove-config-array-tag title="\u5220\u9664 ${escapeHtml(value)}" aria-label="\u5220\u9664 ${escapeHtml(value)}">${javspIcon('close')}</button></span>`;
 }
 
 function arrayConfigMarkup(path, values) {
   const items = Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : [];
-  return `<div class="config-array" data-config-path="${escapeHtml(path)}"><div class="config-array-list">${items.map(configArrayTagMarkup).join('')}</div><div class="config-array-add"><input class="config-array-input" type="text" maxlength="256" autocomplete="off" placeholder="\u8f93\u5165\u503c"><button class="icon-button config-array-add-button" type="button" title="\u6dfb\u52a0" aria-label="\u6dfb\u52a0">+</button></div></div>`;
+  return `<div class="config-array" data-config-path="${escapeHtml(path)}"><div class="config-array-list">${items.map(configArrayTagMarkup).join('')}</div><div class="config-array-add"><input class="config-array-input" type="text" maxlength="256" autocomplete="off" placeholder="\u8f93\u5165\u503c"><button class="icon-button config-array-add-button" type="button" title="\u6dfb\u52a0" aria-label="\u6dfb\u52a0">${javspIcon('plus')}</button></div></div>`;
 }
 
 function requiredKeysMarkup(values) {
@@ -329,7 +331,10 @@ function isNamingRulePath(path) {
 
 function namingRuleHelp(targetPath) {
   const variables = NAMING_RULE_VARIABLES.map(([name, label]) => `<button type="button" class="naming-rule-variable" data-insert-naming-variable="{${name}}" data-naming-target="${escapeHtml(targetPath)}"><code>{${name}}</code><span>${escapeHtml(label)}</span></button>`).join('');
-  return `<span class="naming-rule-help" tabindex="0"><span class="naming-rule-popover"><strong>可用命名变量</strong><span class="naming-rule-variable-list">${variables}</span><small>点击变量会插入到当前模板的光标位置。</small></span></span>`;
+  const suffix = String(targetPath || '').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
+  const popoverId = `naming-rule-popover-${suffix}`;
+  const hintId = `naming-rule-hint-${suffix}`;
+  return `<span class="naming-rule-help"><button class="naming-rule-help-trigger" type="button" aria-label="查看可用命名变量" title="查看可用命名变量" aria-describedby="${hintId}">${javspIcon('info')}</button><span class="naming-rule-popover" id="${popoverId}" role="group" aria-label="可用命名变量"><strong>可用命名变量</strong><span class="naming-rule-variable-list">${variables}</span><small id="${hintId}">点击变量会插入到当前模板的光标位置。</small></span></span>`;
 }
 
 function translatorEngineControl(value) {
@@ -491,11 +496,6 @@ function proxyConnectivityResultMarkup(result) {
 
 function crawlerConfigMarkup(selection = {}) {
   return `<div data-crawler-selection-control>${crawlerConfigTagsMarkup(selection)}</div>`;
-  return Object.entries(CRAWLER_GROUPS).map(([group, label]) => {
-    const selected = Array.isArray(selection[group]) ? selection[group] : [];
-    const options = CRAWLER_IDS.filter((id) => !selected.includes(id)).map((id) => `<option value="${id}">${id}</option>`).join('');
-    return `<div class="crawler-config-group" data-crawler-group="${group}"><h3>${label}爬虫</h3><div class="crawler-config-list">${selected.map((id, index) => `<div class="crawler-config-row"><select class="crawler-selection">${CRAWLER_IDS.map((option) => `<option value="${option}"${option === id ? ' selected' : ''}>${option}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up"${index ? '' : ' disabled'}>上移</button><button class="button secondary crawler-move" type="button" data-direction="down"${index === selected.length - 1 ? ' disabled' : ''}>下移</button><button class="button danger crawler-remove" type="button">删除</button></div>`).join('')}</div><div class="crawler-add"><select class="crawler-add-select"><option value="">添加爬虫</option>${options}</select><button class="button secondary crawler-add-button" type="button">添加</button></div></div>`;
-  }).join('');
 }
 
 function crawlerConfigTagsMarkup(selection = {}) {
@@ -509,12 +509,12 @@ function crawlerConfigTagsMarkup(selection = {}) {
   return mediaTypesFromForm().map((definition) => {
     const group = definition.id;
     const selected = Array.isArray(selection[group]) ? selection[group].map((name) => String(name).trim()).filter((name) => name && !disabled.has(name)) : [];
-    const tags = selected.map((name) => `<span class="crawler-tag" data-crawler-value="${escapeHtml(name)}"><code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" data-remove-crawler-tag title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button></span>`).join('');
+    const tags = selected.map((name) => `<span class="crawler-tag" data-crawler-value="${escapeHtml(name)}"><code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" data-remove-crawler-tag title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">${javspIcon('close')}</button></span>`).join('');
     const source = definition.identifier_kind === 'cid' ? 'CID' : 'DVDID';
     const detail = definition.detector === 'cid'
       ? 'CID \u5185\u7f6e\u8bc6\u522b'
       : (definition.detector === 'fallback' ? '\u9ed8\u8ba4\u515c\u5e95\u5206\u7c7b' : (BUILT_IN_MEDIA_TYPE_IDS.has(definition.id) ? '\u5185\u7f6e\u6587\u4ef6\u540d\u8bc6\u522b' : '\u81ea\u5b9a\u4e49\u6587\u4ef6\u540d\u8bc6\u522b'));
-    return `<section class="crawler-config-group" data-crawler-group="${escapeHtml(group)}"><div class="crawler-group-heading"><div><span class="crawler-group-source">${source}</span><h3>${escapeHtml(definition.name || definition.id)}</h3><p>${escapeHtml(detail)}</p></div></div><div class="crawler-group-selection"><span class="crawler-group-selection-label">\u7528\u4e8e\u6b64\u5206\u7c7b\u7684\u722c\u866b</span><div class="crawler-config-list crawler-tag-list">${tags}</div><div class="crawler-add"><input class="crawler-add-input" list="crawler-name-options" maxlength="80" autocomplete="off" placeholder="\u8f93\u5165\u722c\u866b\u540d\u79f0"><button class="icon-button crawler-add-button" type="button" title="\u6dfb\u52a0\u722c\u866b" aria-label="\u6dfb\u52a0\u722c\u866b">+</button><datalist id="crawler-name-options">${options}</datalist></div></div></section>`;
+    return `<section class="crawler-config-group" data-crawler-group="${escapeHtml(group)}"><div class="crawler-group-heading"><div><span class="crawler-group-source">${source}</span><h3>${escapeHtml(definition.name || definition.id)}</h3><p>${escapeHtml(detail)}</p></div></div><div class="crawler-group-selection"><span class="crawler-group-selection-label">\u7528\u4e8e\u6b64\u5206\u7c7b\u7684\u722c\u866b</span><div class="crawler-config-list crawler-tag-list">${tags}</div><div class="crawler-add"><input class="crawler-add-input" list="crawler-name-options" maxlength="80" autocomplete="off" placeholder="\u8f93\u5165\u722c\u866b\u540d\u79f0"><button class="icon-button crawler-add-button" type="button" title="\u6dfb\u52a0\u722c\u866b" aria-label="\u6dfb\u52a0\u722c\u866b">${javspIcon('plus')}</button><datalist id="crawler-name-options">${options}</datalist></div></div></section>`;
   }).join('');
 }
 
@@ -530,22 +530,47 @@ async function loadCrawlerNames() {
 async function loadCrawlerConfig() {
   const host = $('#crawler-config-content');
   if (!host) return;
-  host.innerHTML = '<p class="muted">正在读取爬虫配置...</p>';
+  // A hover/focus prefetch usually resolves before the click, so the cards render without a wait;
+  // only fall back to the skeleton when nothing was warmed up ahead of time.
+  const prefetched = crawlerConfigPrefetch;
+  crawlerConfigPrefetch = null;
+  if (!prefetched) host.innerHTML = crawlerSkeletonMarkup();
   try {
-    const result = await api('/api/crawler-config');
+    const result = (await prefetched) || await api('/api/crawler-config');
     state.crawlerSources = result.crawlers || [];
     state.disabledBuiltInCrawlers = result.disabled_built_ins || [];
     host.innerHTML = crawlerCodeMarkup(state.crawlerSources);
-    if (state.crawlerSources[0]) loadCrawlerSource(state.crawlerSources[0].name);
-  } catch (error) { host.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`; }
+    bindCrawlerEditorDialog();
+  } catch (error) {
+    host.innerHTML = `<div class="crawler-load-error" data-crawler-load-error><p class="form-error">${escapeHtml(error.message)}</p><button class="button secondary" type="button" data-retry-crawler-config>重试</button></div>`;
+  }
+}
+
+// The crawler list is tiny but a cold open still shows the skeleton; warm it as soon as the user
+// aims at the navigation entry or tabs to it, so the page appears complete on the first paint.
+let crawlerConfigPrefetch = null;
+function prefetchCrawlerConfig() {
+  if (crawlerConfigPrefetch) return;
+  crawlerConfigPrefetch = api('/api/crawler-config').catch(() => null);
+}
+
+function crawlerCardMarkup(item) {
+  const disabled = (state.disabledBuiltInCrawlers || []).includes(item.name);
+  return `<article class="crawler-source-card${disabled ? ' crawler-source-card-disabled' : ''}" data-crawler-code-name="${escapeHtml(item.name)}"><div class="crawler-source-card-main"><strong>${escapeHtml(item.name)}</strong><span class="crawler-source-card-kind">${item.kind === 'custom' ? '自定义' : '内置'}</span></div><div class="crawler-source-card-foot">${disabled ? '<span class="crawler-source-card-status">已停用</span>' : `<button class="icon-button crawler-source-card-open" type="button" data-open-crawler-editor="${escapeHtml(item.name)}" title="编辑与测试 ${escapeHtml(item.name)}" aria-label="编辑与测试 ${escapeHtml(item.name)}">${javspIcon('pencil')}编辑 / 测试</button>`}${crawlerSourceDeleteButton(item)}</div></article>`;
+}
+
+function crawlerSourceDeleteButton(item) {
+  return `<button class="icon-button crawler-code-list-delete" type="button" ${item.kind === 'custom' ? `data-delete-custom-crawler="${escapeHtml(item.name)}"` : `data-disable-built-in-crawler="${escapeHtml(item.name)}"`} title="删除 ${escapeHtml(item.name)}" aria-label="删除 ${escapeHtml(item.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button>`;
+}
+
+function crawlerSkeletonMarkup() {
+  return `<div class="crawler-source-grid" data-crawler-loading>${Array.from({ length: 6 }, () => '<div class="crawler-source-card crawler-source-card-skeleton" aria-hidden="true"><div class="crawler-source-card-main"><span class="crawler-skeleton-line crawler-skeleton-name"></span><span class="crawler-skeleton-line crawler-skeleton-kind"></span></div><div class="crawler-source-card-foot"><span class="crawler-skeleton-line crawler-skeleton-action"></span></div></div>').join('')}</div><p class="muted" data-crawler-loading-message>正在读取爬虫配置...</p>`;
 }
 
 function crawlerCodeMarkup(crawlers) {
   const items = Array.isArray(crawlers) ? crawlers : [];
-  const selected = items[0] || null;
-  const disabled = (state.disabledBuiltInCrawlers || []).map((name) => `<div class="crawler-code-list-row"><span class="crawler-code-item disabled"><strong>${escapeHtml(name)}</strong><span>已移除</span></span><button class="icon-button" type="button" data-restore-built-in-crawler="${escapeHtml(name)}" title="恢复 ${escapeHtml(name)}" aria-label="恢复 ${escapeHtml(name)}">恢复</button></div>`).join('');
-  const deleteButton = (item) => `<button class="icon-button crawler-code-list-delete" type="button" ${item.kind === 'custom' ? `data-delete-custom-crawler="${escapeHtml(item.name)}"` : `data-disable-built-in-crawler="${escapeHtml(item.name)}"`} title="删除 ${escapeHtml(item.name)}" aria-label="删除 ${escapeHtml(item.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button>`;
-  return `<section class="crawler-code-editor"><div class="crawler-code-heading"><div><h3>爬虫代码</h3><p class="muted">选择爬虫后再读取代码；内置爬虫可移除并随时恢复。</p></div><button class="button secondary" type="button" id="add-custom-crawler">添加爬虫</button></div><div class="crawler-code-layout"><div id="crawler-code-list" class="crawler-code-list">${items.map((item, index) => `<div class="crawler-code-list-row"><button type="button" class="crawler-code-item${index ? '' : ' active'}" data-crawler-code-name="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong><span>${item.kind === 'custom' ? '自定义' : '内置'}</span></button>${deleteButton(item)}</div>`).join('') || '<p class="muted">没有可用爬虫。</p>'}${disabled ? `<div class="crawler-code-disabled"><p class="muted">已移除的内置爬虫</p>${disabled}</div>` : ''}</div><div id="crawler-code-detail" class="crawler-code-detail">${selected ? crawlerCodeDetail(selected) : ''}</div></div></section>`;
+  const disabled = (state.disabledBuiltInCrawlers || []).map((name) => `<div class="crawler-source-card crawler-source-card-disabled"><div class="crawler-source-card-main"><strong>${escapeHtml(name)}</strong><span class="crawler-source-card-kind">内置</span></div><div class="crawler-source-card-foot"><span class="crawler-source-card-status">已停用</span><button class="icon-button" type="button" data-restore-built-in-crawler="${escapeHtml(name)}" title="恢复 ${escapeHtml(name)}" aria-label="恢复 ${escapeHtml(name)}">${javspIcon('refresh')}恢复</button></div></div>`).join('');
+  return `<div class="crawler-page-toolbar"><button class="button secondary" type="button" id="add-custom-crawler">${javspIcon('plus')}添加爬虫</button></div><div id="crawler-source-grid" class="crawler-source-grid">${items.map(crawlerCardMarkup).join('') || '<p class="muted">没有可用爬虫。</p>'}${disabled ? `<div class="crawler-source-disabled"><p class="muted">已移除的内置爬虫</p>${disabled}</div>` : ''}</div><dialog id="crawler-editor-dialog" class="app-dialog crawler-editor-dialog"><div class="dialog-form"><div class="dialog-heading"><h2 id="crawler-editor-dialog-title">编辑与测试</h2><button class="dialog-close" type="button" data-dialog-close aria-label="关闭" title="关闭">${javspIcon('close')}</button></div><div class="dialog-content" id="crawler-code-detail"></div></div></dialog>`;
 }
 
 function crawlerCodeDetail(crawler, source = null) {
@@ -555,16 +580,20 @@ function crawlerCodeDetail(crawler, source = null) {
 }
 
 async function loadCrawlerSource(name) {
+  const token = ++state.crawlerEditorToken;
   const crawler = (state.crawlerSources || []).find((item) => item.name === name);
   const detail = $('#crawler-code-detail');
   if (!crawler || !detail) return;
   state.activeCrawlerCodeName = name;
+  $('#crawler-editor-dialog-title').textContent = `${crawler.name} · 编辑与测试`;
   detail.innerHTML = crawlerCodeDetail(crawler);
+  const dialog = $('#crawler-editor-dialog');
+  if (dialog && !dialog.open) dialog.showModal();
   try {
     const source = await api(`/api/crawler-config/${encodeURIComponent(name)}`);
-    if (state.activeCrawlerCodeName === name) detail.innerHTML = crawlerCodeDetail(source, source.source || '');
+    if (state.crawlerEditorToken === token && state.activeCrawlerCodeName === name) detail.innerHTML = crawlerCodeDetail(source, source.source || '');
   } catch (error) {
-    if (state.activeCrawlerCodeName === name) detail.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+    if (state.crawlerEditorToken === token && state.activeCrawlerCodeName === name) detail.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
   }
 }
 
@@ -755,7 +784,7 @@ function showToast(message, tone = 'success') {
 }
 
 function expandControlIcon(expanded) {
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${expanded ? 'm7 15 5-5 5 5' : 'm7 9 5 5 5-5'}"/></svg>`;
+  return javspIcon(expanded ? 'chevron-up' : 'chevron-down');
 }
 
 function taskLogMarkup(task, key = task.id, className = 'task-raw-log') {
@@ -775,16 +804,16 @@ function taskLogMarkup(task, key = task.id, className = 'task-raw-log') {
       return entry.detail ? `<details class="log-row log-${level}" data-task-details="${escapeHtml(key)}-${group}-${index}"><summary>${message}<span class="log-expand">详情</span></summary><p>${escapeHtml(entry.detail)}</p></details>` : `<div class="log-row log-${level}">${message}</div>`;
     }).join('')}</section>`;
   }).join('');
-  return `<details class="${className}" data-task-details="${escapeHtml(key)}"><summary>任务日志${sourceSummary}</summary><div class="task-log-wrap task-log-readable"><div class="log-toolbar"><span>进度自动更新 · 相同事件合并显示</span><button class="copy-log" type="button" data-copy-task="${escapeHtml(key)}">复制摘要</button></div><div class="task-log log-sections" data-task-log="${escapeHtml(key)}" data-copy-text="${escapeHtml(text)}">${content}</div></div></details>`;
+  return `<details class="${className}" data-task-details="${escapeHtml(key)}"><summary>任务日志${sourceSummary}</summary><div class="task-log-wrap task-log-readable"><div class="log-toolbar"><span>进度自动更新 · 相同事件合并显示</span><button class="copy-log" type="button" data-copy-task="${escapeHtml(key)}">${javspIcon('copy')}复制摘要</button></div><div class="task-log log-sections" data-task-log="${escapeHtml(key)}" data-copy-text="${escapeHtml(text)}">${content}</div></div></details>`;
 }
 
 function taskCard(task) {
   const labels = { queued: '排队中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消' };
   const lines = (task.log_tail || []).join('\n');
   const taskName = task.name || String(task.input_directory || '').split(/[\\/]/).pop();
-  const log = lines ? `<div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(task.id)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(task.id)}">复制日志</button></div>` : '';
+  const log = lines ? `<div class="task-log-wrap"><pre class="task-log" data-task-log="${escapeHtml(task.id)}">${escapeHtml(lines)}</pre><button class="copy-log" type="button" data-copy-task="${escapeHtml(task.id)}">${javspIcon('copy')}复制日志</button></div>` : '';
   const active = ['queued', 'running'].includes(task.status);
-  const actions = `<div class="form-actions task-actions">${task.status === 'running' ? `<button class="button secondary" onclick="cancelTask('${escapeHtml(task.id)}')">停止任务</button>` : ''}<button class="button secondary task-delete" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ''}>删除</button></div>`;
+  const actions = `<div class="form-actions task-actions">${task.status === 'running' ? `<button class="button secondary" onclick="cancelTask('${escapeHtml(task.id)}')">${javspIcon('stop')}停止任务</button>` : ''}<button class="button secondary task-delete" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ''}>删除</button></div>`;
   return `<article class="task-card"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskName)}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div></div><span class="badge ${task.status}">${labels[task.status] || task.status}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div>${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${log}${actions}</article>`;
 }
 
@@ -830,7 +859,7 @@ function taskCard(task) {
   const taskName = task.name || String(task.input_directory || '').split(/[\\/]/).pop();
   const rawLog = taskLogMarkup(task);
   const active = task.status === 'running';
-  const actions = `<div class="form-actions task-actions">${active ? `<button class="button secondary" onclick="cancelTask('${escapeHtml(task.id)}')">停止任务</button>` : ''}<button class="button secondary task-delete" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ''}>删除</button></div>`;
+  const actions = `<div class="form-actions task-actions">${active ? `<button class="button secondary" onclick="cancelTask('${escapeHtml(task.id)}')">${javspIcon('stop')}停止任务</button>` : ''}<button class="button secondary task-delete" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ''}>删除</button></div>`;
   return `<article class="task-card"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskName)}</strong><div class="task-meta"><span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div></div><span class="badge ${task.status}">${labels[task.status] || task.status}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div>${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${rawLog}${actions}</article>`;
 }
 
@@ -1201,7 +1230,7 @@ function scheduleGitHubStarInvite() {
 async function loadPathTools() {
   try {
     const runtime = await api('/api/runtime');
-    state.runtime = runtime; window.JavspCommunity.configure(runtime.comments_url);
+    state.runtime = runtime; window.JavspCommunity.configure(runtime.comments_url, runtime.comments_verify_url);
 
     const tools = $('#path-tools');
     tools.classList.remove('hidden');
@@ -1272,7 +1301,7 @@ function renderDockerPathBrowser(data) {
     const canSelect = state.pathBrowser.kind === 'any' || state.pathBrowser.kind === item.kind;
     const selectLabel = item.kind === 'directory' ? '选此文件夹' : '选此文件';
     const enter = item.kind === 'directory' ? `<button class="button secondary path-browser-enter" type="button" data-path-browser-enter="${escapeHtml(item.path)}" data-path-browser-kind="directory">进入</button>` : '';
-    return `<div class="path-browser-row"><span class="path-browser-entry-icon">${item.kind === 'directory' ? '文件夹' : '视频'}</span><span class="path-browser-entry-name">${escapeHtml(item.name)}</span><div class="path-browser-row-actions">${enter}${canSelect ? `<button class="button secondary path-browser-select" type="button" data-path-browser-select="${escapeHtml(item.path)}">${selectLabel}</button>` : ''}</div></div>`;
+    return `<div class="path-browser-row"><span class="path-browser-entry-icon" title="${item.kind === 'directory' ? '文件夹' : '视频'}">${item.kind === 'directory' ? javspIcon('folder') : javspIcon('file')}</span><span class="path-browser-entry-name">${escapeHtml(item.name)}</span><div class="path-browser-row-actions">${enter}${canSelect ? `<button class="button secondary path-browser-select" type="button" data-path-browser-select="${escapeHtml(item.path)}">${selectLabel}</button>` : ''}</div></div>`;
   }).join('') : '<p class="muted path-browser-empty">此文件夹中没有可用的子目录或视频文件。</p>';
 }
 
@@ -1381,7 +1410,8 @@ async function deletePresetFromList(id) {
 }
 
 function renderPresetList() {
-  $('#preset-list').innerHTML = state.presets.map((preset) => `<div class="preset-list-row"><button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '可视化表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>${preset.id === 'default' ? '' : `<button class="icon-button preset-delete" type="button" data-delete-preset="${preset.id}">删除</button>`}</div>`).join('');
+  const presetRows = state.presets.map((preset) => `<div class="preset-list-row"><button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '可视化表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>${preset.id === 'default' ? '' : `<button class="icon-button preset-delete" type="button" data-delete-preset="${preset.id}">${javspIcon('trash')}删除</button>`}</div>`);
+  $('#preset-list').innerHTML = presetRows.length ? presetRows.join('') : '<div class="page-empty-state preset-empty"><strong>还没有预设</strong><p>使用“新建预设”创建第一套刮削配置。</p></div>';
   document.querySelectorAll('[data-preset]').forEach((button) => button.addEventListener('click', () => editPreset(button.dataset.preset)));
   document.querySelectorAll('[data-delete-preset]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); deletePresetFromList(button.dataset.deletePreset); }));
   $('#task-preset').innerHTML = state.presets.map((preset) => `<option value="${preset.id}">${escapeHtml(preset.name)}</option>`).join('');
@@ -1518,7 +1548,7 @@ $('#delete-preset').addEventListener('click', () => {
 async function loadUsers() {
   try {
     const users = await api('/api/users');
-    $('#users-table').innerHTML = users.map((user) => `<div class="user-row"><strong>${escapeHtml(user.username)}</strong><span class="role">${user.role === 'admin' ? '管理员' : '操作员'}</span><span class="role">${new Date(user.created_at).toLocaleDateString()}</span><span><button class="icon-button edit-user" data-username="${escapeHtml(user.username)}" data-role="${user.role}">编辑</button> <button class="icon-button delete-user" data-username="${escapeHtml(user.username)}">删除</button></span></div>`).join('');
+    $('#users-table').innerHTML = users.map((user) => `<div class="user-row"><strong>${escapeHtml(user.username)}</strong><span class="role">${user.role === 'admin' ? '管理员' : '操作员'}</span><span class="role">${new Date(user.created_at).toLocaleDateString()}</span><span><button class="icon-button edit-user" data-username="${escapeHtml(user.username)}" data-role="${user.role}">${javspIcon('pencil')}编辑</button> <button class="icon-button delete-user" data-username="${escapeHtml(user.username)}" aria-label="删除用户" title="删除用户">${javspIcon('trash')}</button></span></div>`).join('');
     document.querySelectorAll('.edit-user').forEach((button) => button.addEventListener('click', () => editUser(button.dataset.username, button.dataset.role)));
     document.querySelectorAll('.delete-user').forEach((button) => button.addEventListener('click', () => removeUser(button.dataset.username)));
   } catch (error) { $('#users-table').innerHTML = `<p class="form-error">${error.message}</p>`; }
@@ -1590,7 +1620,7 @@ $('#library-search-form')?.addEventListener('reset', () => {
   state.tasksSignature = '';
   loadTasks();
 });
-document.addEventListener('click', event => { const button = event.target.closest('[data-detail-section]'); if (button) document.getElementById(button.dataset.detailSection)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); });
+document.addEventListener('click', event => { const button = event.target.closest('[data-detail-section]'); if (button) { const section = document.getElementById(button.dataset.detailSection); if (section) { const stickyBar = button.closest('#task-detail-dialog')?.querySelector('.film-detail-top'); if (stickyBar) section.style.scrollMarginTop = `${stickyBar.offsetHeight + 12}px`; section.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); } } });
 document.addEventListener('change', (event) => {
   if (event.target.id === 'overview-sort-key' || event.target.id === 'overview-sort-direction') {
     state.overviewSort = { key: $('#overview-sort-key').value, direction: $('#overview-sort-direction').value };
@@ -1917,8 +1947,8 @@ function scanTaskCard(task) {
   const id = escapeHtml(task.id);
   const active = ['queued', 'running'].includes(task.status);
   const labels = { queued: '等待扫描', running: '扫描中', succeeded: '扫描完成', failed: '扫描失败', cancelled: '扫描已取消' };
-  const stop = active ? "<button class=\"button secondary task-stop\" type=\"button\" onclick=\"cancelTask('" + id + "')\">停止扫描</button>" : '';
-  return '<article class="task-card" data-task-card="' + id + '"><div class="task-card-head"><div class="task-card-title"><strong>' + escapeHtml(taskDisplayName(task)) + '</strong><div class="task-path">路径：' + escapeHtml(task.input_directory) + '</div><p role="status">' + escapeHtml(task.scan?.message || '等待扫描') + '</p><p class="muted">发现 ' + Number(task.scan?.discovered_files || 0) + ' 个文件 · 创建 ' + Number(task.scan?.created_tasks || 0) + ' 个影片任务</p></div><div class="task-card-tools"><span class="badge ' + escapeHtml(task.status) + '">' + (labels[task.status] || '') + '</span><button class="icon-button" type="button" data-task-detail="' + id + '">详情</button>' + stop + '<button class="task-delete" type="button" data-delete-task="' + id + '"' + (active ? ' disabled' : '') + '>删除</button></div></div></article>';
+  const stop = active ? "<button class=\"button secondary task-stop\" type=\"button\" onclick=\"cancelTask('" + id + "')\">' + javspIcon('stop') + '停止扫描</button>" : '';
+  return '<article class="task-card" data-task-card="' + id + '"><div class="task-card-head"><div class="task-card-title"><strong>' + escapeHtml(taskDisplayName(task)) + '</strong><div class="task-path">路径：' + escapeHtml(task.input_directory) + '</div><p role="status">' + escapeHtml(task.scan?.message || '等待扫描') + '</p><p class="muted">发现 ' + Number(task.scan?.discovered_files || 0) + ' 个文件 · 创建 ' + Number(task.scan?.created_tasks || 0) + ' 个影片任务</p></div><div class="task-card-tools"><span class="badge ' + escapeHtml(task.status) + '">' + (labels[task.status] || '') + '</span><button class="icon-button" type="button" data-task-detail="' + id + '">' + javspIcon('info') + '详情</button>' + stop + '<button class="task-delete" type="button" data-delete-task="' + id + '"' + (active ? ' disabled' : '') + '>' + javspIcon('trash') + '删除</button></div></div></article>';
 }
 
 function taskCard(task) {
@@ -1929,9 +1959,9 @@ function taskCard(task) {
   const fileName = task.file_name || task.name || task.id;
   const titleMeta = task.title ? `<span>文件：${escapeHtml(fileName)}</span>` : '';
   const actions = '';
-  const detailButton = `<button class="icon-button" type="button" data-task-detail="${escapeHtml(task.id)}" title="查看任务详情">详情</button>`;
-  const stopButton = active ? `<button class="button secondary task-stop" type="button" onclick="cancelTask('${escapeHtml(task.id)}')">停止任务</button>` : '';
-  const deleteButton = `<button class="task-delete" type="button" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ' title="删除任务"'}>删除</button>`;
+  const detailButton = `<button class="icon-button" type="button" data-task-detail="${escapeHtml(task.id)}" title="查看任务详情">${javspIcon('info')}详情</button>`;
+  const stopButton = active ? `<button class="button secondary task-stop" type="button" onclick="cancelTask('${escapeHtml(task.id)}')">${javspIcon('stop')}停止任务</button>` : '';
+  const deleteButton = `<button class="task-delete" type="button" data-delete-task="${escapeHtml(task.id)}"${active ? ' disabled title="请先停止任务"' : ' title="删除任务"'}>${javspIcon('trash')}删除</button>`;
   return `<article class="task-card task-card-collapsible" data-task-card="${escapeHtml(task.id)}"><div class="task-card-head"><div class="task-card-title"><strong>${escapeHtml(taskDisplayName(task))}</strong><div class="task-meta">${titleMeta}<span>预设：${escapeHtml(task.preset_name || task.preset_id || '默认配置')}</span><span>时间：${new Date(task.created_at).toLocaleString()}</span></div><div class="task-path">路径：${escapeHtml(task.input_directory)}</div><div class="task-image-summary">${escapeHtml(imageProgressSummary(task))}</div></div><div class="task-card-tools"><span class="badge ${task.status}">${labels[task.status] || task.status}</span>${detailButton}${stopButton}${deleteButton}<button class="task-toggle" type="button" data-task-toggle="${escapeHtml(task.id)}" aria-expanded="${expanded}" title="${expanded ? '收起任务' : '展开任务'}">${expandControlIcon(expanded)}</button></div></div><div class="task-card-body${expanded ? '' : ' hidden'}" data-task-body="${escapeHtml(task.id)}">${progressMarkup(task)}${task.error ? `<div class="form-error">${escapeHtml(task.error)}</div>` : ''}${actions}</div></article>`;
 }
 
@@ -1947,7 +1977,7 @@ function ensureTaskFilters() {
   if ($('#task-filter-bar')) return;
   const taskTable = $('#task-table');
   if (!taskTable) return;
-  taskTable.insertAdjacentHTML('beforebegin', `<div id="task-filter-bar" class="task-filter-bar" aria-label="任务筛选"><select id="task-filter-field"><option value="all">全部信息</option><option value="path">路径</option><option value="title">标题</option><option value="dvdid">番号</option><option value="actress">女优</option></select><input id="task-filter-query" type="search" placeholder="搜索路径、标题、番号或女优"><select id="task-filter-status"><option value="">全部状态</option><option value="queued">排队中</option><option value="running">运行中</option><option value="succeeded">已完成</option><option value="failed">失败</option><option value="cancelled">已取消</option></select><label>大小 MB<input id="task-filter-size-min" type="number" min="0" placeholder="最小"></label><span>至</span><label><input id="task-filter-size-max" type="number" min="0" placeholder="最大"></label><label>时间<input id="task-filter-date-from" type="date"></label><span>至</span><label><input id="task-filter-date-to" type="date"></label><button id="task-filter-reset" class="button secondary" type="button">重置</button></div><p id="task-filter-summary" class="muted"></p><div id="task-pagination" class="overview-pagination"></div>`);
+  taskTable.insertAdjacentHTML('beforebegin', `<details id="task-filter-panel" class="task-filter-panel" open><summary><span>筛选与分页</span><small class="muted">按条件缩小任务列表</small></summary><div class="task-filter-panel-body"><div id="task-filter-bar" class="task-filter-bar" aria-label="任务筛选"><select id="task-filter-field"><option value="all">全部信息</option><option value="path">路径</option><option value="title">标题</option><option value="dvdid">番号</option><option value="actress">女优</option></select><input id="task-filter-query" type="search" placeholder="搜索路径、标题、番号或女优"><select id="task-filter-status"><option value="">全部状态</option><option value="queued">排队中</option><option value="running">运行中</option><option value="succeeded">已完成</option><option value="failed">失败</option><option value="cancelled">已取消</option></select><label>大小 MB<input id="task-filter-size-min" type="number" min="0" placeholder="最小"></label><span>至</span><label><input id="task-filter-size-max" type="number" min="0" placeholder="最大"></label><label>时间<input id="task-filter-date-from" type="date"></label><span>至</span><label><input id="task-filter-date-to" type="date"></label><button id="task-filter-reset" class="button secondary" type="button">重置</button></div><p id="task-filter-summary" class="muted"></p><div id="task-pagination" class="overview-pagination"></div></div></details>`);
   $('#task-filter-field')?.remove();
   let filterTimer;
   document.querySelectorAll('#task-filter-bar input, #task-filter-bar select').forEach((control) => control.addEventListener('input', () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => { state.taskPage = 0; loadTasks(); }, 200); }));
@@ -1969,15 +1999,101 @@ function renderTasks() {
   const manualTaskCount = state.tasks.filter((task) => !task.source || task.source === 'manual' || task.image_retry_started_at).length;
   $('#task-filter-summary').textContent = `显示 ${tasks.length} / ${state.taskTotal || manualTaskCount} 个手动任务`;
   const pagination = $('#task-pagination');
-  if (pagination) { const pages = Math.max(1, Math.ceil((state.taskTotal || tasks.length) / state.taskPageSize)); pagination.innerHTML = `<span>第 ${state.taskPage + 1} / ${pages} 页</span><button class="button secondary" type="button" data-task-page="${state.taskPage - 1}"${state.taskPage <= 0 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-task-page="${state.taskPage + 1}"${state.taskPage + 1 >= pages ? ' disabled' : ''}>下一页</button>`; }
+  if (pagination) { const pages = Math.max(1, Math.ceil((state.taskTotal || tasks.length) / state.taskPageSize)); pagination.innerHTML = `<span>第 ${state.taskPage + 1} / ${pages} 页</span><button class="button secondary" type="button" data-task-page="${state.taskPage - 1}"${state.taskPage <= 0 ? ' disabled' : ''}><span data-icon="chevron-left"></span>上一页</button><button class="button secondary" type="button" data-task-page="${state.taskPage + 1}"${state.taskPage + 1 >= pages ? ' disabled' : ''}><span data-icon="chevron-right"></span>下一页</button>`; window.JavspIcons?.refresh(pagination); }
   restoreLogScroll();
+}
+
+// Downloaded stills become labelled buttons; missing and failed slots keep their placeholder.
+// Only the first small batch loads with the dialog; later stills hydrate as they near the strip viewport.
+const FANART_EAGER_COUNT = 4;
+// The stills strip scrolls horizontally, so prefetch ahead along X instead of waiting for a still
+// to enter the viewport: a 900px lead is roughly five 180px stills on the cinema layout.
+const FANART_PREFETCH_PX = 900;
+let fanartProgressiveLoader = null;
+
+function fanartGridMarkup(task, imageInfo = {}, limit = 24) {
+  const expected = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
+  if (!expected) return '<p class="muted">暂无剧照</p>';
+  const downloaded = Math.min(Number(task.fanart_count) || 0, limit);
+  const failures = imageInfo.fanart_failures || [];
+  const version = task.updated_at || task.finished_at || '';
+  return Array.from({ length: Math.min(expected, limit) }, (_, index) => {
+    if (index >= downloaded) {
+      const failed = failures.includes(index + 1);
+      return artworkPlaceholder('detail-fanart-empty', failed ? `剧照 ${index + 1} 下载失败` : `剧照 ${index + 1} 未下载`);
+    }
+    const label = `放大查看剧照 ${index + 1}，共 ${downloaded} 张`;
+    const source = `/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}?v=${encodeURIComponent(version)}`;
+    // Strip thumbnails are small server-generated previews; the stills viewer builds its own
+    // full-size URL (window.JavspStills), so only the strip <img>/data-fanart-src use thumbnail=true.
+    const thumbnail = `${source}&thumbnail=true`;
+    const coordinates = `data-fanart-open="${index}" data-fanart-task="${escapeHtml(task.id)}" data-fanart-total="${downloaded}" data-fanart-version="${escapeHtml(version)}"`;
+    if (index < FANART_EAGER_COUNT) {
+      return `<button type="button" class="detail-fanart" ${coordinates} aria-label="${label}"><img src="${thumbnail}" loading="lazy" alt=""></button>`;
+    }
+    return `<button type="button" class="detail-fanart" ${coordinates} data-fanart-src="${thumbnail}" aria-label="${label}"><img loading="lazy" alt=""><span class="detail-fanart-loading" role="status" aria-label="剧照 ${index + 1} 加载中">剧照 ${index + 1} 加载中</span></button>`;
+  }).join('');
+}
+
+// Consume a parked still URL: assign src once, drop the loading placeholder, keep the failure state.
+function activateFanartButton(button) {
+  const source = button.dataset?.fanartSrc;
+  if (!source) return false;
+  const image = button.querySelector('img');
+  if (image) {
+    const index = (Number(button.dataset.fanartOpen) || 0) + 1;
+    image.addEventListener('error', () => {
+      button.innerHTML = artworkPlaceholder('detail-fanart-empty', `剧照 ${index} 加载失败`);
+      button.removeAttribute('data-fanart-open');
+      button.setAttribute('aria-label', `剧照 ${index} 加载失败`);
+    }, { once: true });
+    image.setAttribute('src', source);
+  }
+  button.removeAttribute('data-fanart-src');
+  button.querySelector('.detail-fanart-loading')?.remove();
+  return true;
+}
+
+// Deferred stills load ahead of the strip viewport; the strip itself is the observer root because
+// it is the element that scrolls horizontally and clips the off-screen buttons.
+function hydrateFanartGrid(grid, scroller) {
+  if (fanartProgressiveLoader?.disconnect) { fanartProgressiveLoader.disconnect(); fanartProgressiveLoader = null; }
+  if (!grid) return;
+  const pending = () => Array.from(grid.querySelectorAll('[data-fanart-src]'));
+  const Observer = window.IntersectionObserver;
+  if (typeof Observer === 'function') {
+    const observer = new Observer((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        observer.unobserve(entry.target);
+        activateFanartButton(entry.target);
+      }
+      if (!pending().length && fanartProgressiveLoader === observer) { observer.disconnect(); fanartProgressiveLoader = null; }
+    }, { root: grid, rootMargin: `0px ${FANART_PREFETCH_PX}px` });
+    pending().forEach((button) => observer.observe(button));
+    fanartProgressiveLoader = observer;
+    return;
+  }
+  const loadNearViewport = () => {
+    const bounds = typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
+    const limit = bounds ? bounds.right + FANART_PREFETCH_PX : Infinity;
+    let budget = FANART_EAGER_COUNT;
+    for (const button of pending()) {
+      if (budget <= 0) break;
+      const rect = typeof button.getBoundingClientRect === 'function' ? button.getBoundingClientRect() : null;
+      if (!rect || rect.left < limit) { activateFanartButton(button); budget -= 1; }
+    }
+  };
+  const horizontalScroller = typeof grid.addEventListener === 'function' ? grid : (scroller || window);
+  horizontalScroller.addEventListener('scroll', loadNearViewport, { passive: true });
+  fanartProgressiveLoader = { disconnect() { horizontalScroller.removeEventListener('scroll', loadNearViewport); } };
 }
 
 async function openTaskDetail(taskId, background = false) {
   if (!taskId || (background && state.detailLoading)) return;
   const summary = state.tasks.find((item) => item.id === taskId) || state.detailTask;
   if (!summary) return;
-  if (state.activeTaskDetail !== taskId) window.JavspComments?.close();
+  if (state.activeTaskDetail !== taskId) { window.JavspComments?.close(); window.JavspStills?.close({ restoreFocus: false }); }
   state.activeTaskDetail = taskId;
   const dialog = $('#task-detail-dialog');
   if (!background) {
@@ -1998,8 +2114,10 @@ async function openTaskDetail(taskId, background = false) {
   } finally { if (detailRequestId === state.detailRequestId) state.detailLoading = false; }
   if (state.activeTaskDetail !== taskId || !dialog.open || detailRequestId !== state.detailRequestId || (background && (state.taskMetadataEditing || state.taskDetailLogSelecting || hasTaskDetailLogSelection()))) return;
   state.detailTask = task;
-  document.querySelector('.film-navigation').hidden = task.task_type === 'scan';
-  const editButton = document.querySelector('#task-detail-dialog > .film-detail-shell > .panel-heading [data-edit-task-metadata]');
+  document.querySelectorAll('.film-navigation [data-detail-section]').forEach((button) => { button.hidden = task.task_type === 'scan'; });
+  const sectionNav = document.querySelector('#task-detail-dialog .film-navigation');
+  if (sectionNav) sectionNav.hidden = task.task_type === 'scan';
+  const editButton = document.querySelector('#task-detail-dialog > .film-detail-top [data-edit-task-metadata]');
   if (editButton) editButton.hidden = task.task_type === 'scan' || state.taskMetadataEditing;
   document.querySelector('[data-detail-section="task-comments"]').hidden = !task.progress?.metadata?.dvdid || !state.runtime?.comments_url;
   if (task.task_type === 'scan') {
@@ -2019,13 +2137,7 @@ async function openTaskDetail(taskId, background = false) {
   const imageInfo = task.progress?.images || {};
   const expectedFanart = Math.max(Number(imageInfo.fanart_total) || 0, Number(task.fanart_count) || 0);
   const fanartFailures = imageInfo.fanart_failures || [];
-  const fanarts = expectedFanart
-    ? Array.from({ length: Math.min(expectedFanart, 24) }, (_, index) => {
-      if (index < Number(task.fanart_count || 0)) return `<img src="/api/tasks/${encodeURIComponent(task.id)}/fanart/${index}?v=${encodeURIComponent(task.updated_at || task.finished_at || '')}" loading="lazy" alt="剧照 ${index + 1}">`;
-      const failed = fanartFailures.includes(index + 1);
-      return artworkPlaceholder('detail-fanart-empty', failed ? `剧照 ${index + 1} 下载失败` : `剧照 ${index + 1} 未下载`);
-    }).join('')
-    : '<p class="muted">暂无剧照</p>';
+  const fanarts = fanartGridMarkup(task, imageInfo);
   const imageCounts = imageCountsMarkup({ coverDone: task.cover_count, coverStatus: imageInfo.cover_status, fanartDone: task.fanart_count, fanartTotal: expectedFanart, fanartStatus: imageInfo.fanart_status, fanartFailures });
   const retry = task.image_retry_available ? `<button class="button secondary" type="button" data-retry-task-images="${escapeHtml(task.id)}">重新下载封面与剧照</button>` : (task.image_retry_running ? '<button class="button secondary" type="button" disabled>正在重新下载封面与剧照</button>' : '');
   const fileInfo = [['文件名', task.file_name || task.name], ['原始路径', task.input_directory], ['整理路径', task.progress?.output?.save_dir]].map(([name,value]) => `<div class="detail-data-row"><dt>${name}</dt><dd>${escapeHtml(value || '—')}</dd></div>`).join('');
@@ -2037,14 +2149,15 @@ async function openTaskDetail(taskId, background = false) {
   $('#task-detail-subtitle').textContent = heading.subtitle;
   const identifier = String(metadata.dvdid || '').trim();
   patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
-  window.JavspComments?.open(identifier, state.runtime?.comments_url || '', task.id);
+  hydrateFanartGrid($('#task-detail-content').querySelector('.detail-fanart-grid'), dialog);
+  window.JavspComments?.open(identifier, state.runtime?.comments_url || '', task.id, state.runtime?.comments_verify_url || '');
 }
 
 function artworkEditor(task) {
   return `<section class="artwork-editor"><h3>封面与剧照</h3>${['cover', 'fanart'].map(kind => {
     const label = kind === 'cover' ? '封面' : '剧照';
     const count = Number(kind === 'cover' ? task.cover_count : task.fanart_count) || 0;
-    return `<h4>${label}</h4><div class="artwork-edit-strip">${Array.from({ length: count }, (_, index) => `<article><img src="/api/tasks/${encodeURIComponent(task.id)}/${kind}/${index}?v=${encodeURIComponent(task.updated_at || '')}" alt="${label} ${index + 1}"><label class="button secondary">替换<input type="file" hidden accept="image/jpeg,image/png,image/webp" data-artwork-upload="${kind}" data-image-index="${index}"></label><button class="button danger" type="button" data-artwork-delete="${kind}" data-image-index="${index}">删除</button></article>`).join('')}<label class="button secondary artwork-add">添加${label}<input type="file" hidden accept="image/jpeg,image/png,image/webp" data-artwork-upload="${kind}" data-image-index="-1"${kind === 'fanart' ? ' multiple' : ''}></label></div>`;
+    return `<h4>${label}</h4><div class="artwork-edit-strip">${Array.from({ length: count }, (_, index) => `<article><img src="/api/tasks/${encodeURIComponent(task.id)}/${kind}/${index}?v=${encodeURIComponent(task.updated_at || '')}" alt="${label} ${index + 1}"><label class="button secondary">替换<input type="file" hidden accept="image/jpeg,image/png,image/webp" data-artwork-upload="${kind}" data-image-index="${index}"></label><button class="button danger" type="button" data-artwork-delete="${kind}" data-image-index="${index}">${javspIcon('trash')}删除</button></article>`).join('')}<label class="button secondary artwork-add">添加${label}<input type="file" hidden accept="image/jpeg,image/png,image/webp" data-artwork-upload="${kind}" data-image-index="-1"${kind === 'fanart' ? ' multiple' : ''}></label></div>`;
   }).join('')}<p class="muted" role="status" id="artwork-edit-message"></p></section>`;
 }
 
@@ -2054,6 +2167,18 @@ async function refreshArtworkEditor() {
   const editor = $('#task-metadata-editor .artwork-editor');
   if (editor) editor.outerHTML = artworkEditor(task);
 }
+
+document.addEventListener('click', (event) => {
+  const still = event.target.closest('[data-fanart-open]');
+  if (!still) return;
+  window.JavspStills?.open({
+    taskId: still.dataset.fanartTask,
+    index: Number(still.dataset.fanartOpen),
+    total: Number(still.dataset.fanartTotal),
+    version: still.dataset.fanartVersion,
+    opener: still,
+  });
+});
 
 document.addEventListener('change', async event => {
   const input = event.target.closest('[data-artwork-upload]');
@@ -2209,10 +2334,11 @@ function renderOverview() {
   const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
   const [, typeLabel, english] = group.key === '__all__' ? ['', '全部', 'ALL MOVIES'] : overviewGroupType(group.by);
-  const header = group.key === '__all__' ? '' : `<div class="lc-section-head"><button class="lc-back" type="button" data-overview-back>返回${escapeHtml(overviewGroupType(group.by)[1])}分类</button><span>${escapeHtml(group.name)} · ${state.taskTotal} 部影片</span></div>`;
+  const header = group.key === '__all__' ? '' : `<div class="lc-section-head"><button class="lc-back" type="button" data-overview-back>${javspIcon('arrow-left')}返回${escapeHtml(overviewGroupType(group.by)[1])}分类</button><span>${escapeHtml(group.name)} · ${state.taskTotal} 部影片</span></div>`;
   const wall = cards.length ? `${toolbar}<div class="lc-film-grid">${cards.map(({ task, taskCount, taskIds }) => overviewCoverCard(task, taskCount, taskIds)).join('')}</div>` : `<div class="library-empty lc-empty-state"><span aria-hidden="true">▤</span><h3>${state.overviewQuery ? '没有找到符合条件的影片' : '这个分类还没有影片'}</h3><p>${state.overviewQuery ? '试试其他番号、片名或女优名字。' : '刮削完成的影片会自动出现在这里。'}</p></div>`;
-  const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}>下一页</button></div>` : '';
+  const pagination = cards.length ? `<div class="overview-pagination"><label>每页<select id="overview-page-size">${OVERVIEW_PAGE_SIZES.map((size) => `<option value="${size}"${state.overviewPageSize === size ? ' selected' : ''}>${size}</option>`).join('')}</select></label><span>第 ${state.overviewPage} / ${totalPages} 页</span><button class="button secondary" type="button" data-overview-page="${state.overviewPage - 1}"${state.overviewPage <= 1 ? ' disabled' : ''}><span data-icon="chevron-left"></span>上一页</button><button class="button secondary" type="button" data-overview-page="${state.overviewPage + 1}"${state.overviewPage >= totalPages ? ' disabled' : ''}><span data-icon="chevron-right"></span>下一页</button></div>` : '';
   patchChildren($('#overview-tasks'), (state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('') + header + wall + pagination);
+  window.JavspIcons?.refresh($('#overview-tasks'));
   if (state.overviewSelectionFeedback.size) window.setTimeout(() => state.overviewSelectionFeedback.clear(), 260);
 }
 
@@ -2231,9 +2357,10 @@ function renderOverviewGroups() {
   const cards = groups.length
     ? `<div class="lc-library-grid">${groups.map((group) => libraryCard(group, group.key === '__all__' ? 'ALL MOVIES' : english)).join('')}</div>`
     : `<div class="library-empty lc-empty-state"><span aria-hidden="true">⌕</span><h3>没有找到“${escapeHtml(state.overviewGroupQuery)}”</h3><p>换个${escapeHtml(label)}名称试试。</p></div>`;
-  const pagination = pages > 1 ? `<div class="overview-pagination"><span>第 ${state.overviewGroupPage} / ${pages} 页</span><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage - 1}"${state.overviewGroupPage <= 1 ? ' disabled' : ''}>上一页</button><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage + 1}"${state.overviewGroupPage >= pages ? ' disabled' : ''}>下一页</button></div>` : '';
+  const pagination = pages > 1 ? `<div class="overview-pagination"><span>第 ${state.overviewGroupPage} / ${pages} 页</span><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage - 1}"${state.overviewGroupPage <= 1 ? ' disabled' : ''}><span data-icon="chevron-left"></span>上一页</button><button class="button secondary" type="button" data-overview-group-page="${state.overviewGroupPage + 1}"${state.overviewGroupPage >= pages ? ' disabled' : ''}><span data-icon="chevron-right"></span>下一页</button></div>` : '';
   const actressSwitch = result.by === 'actress' ? `<div class="overview-actress-scope" role="group" aria-label="女优范围"><button type="button" class="${state.actressScope === 'existing' ? 'active' : ''}" data-actress-scope="existing">仅显示已有女优</button><button type="button" class="${state.actressScope === 'all' ? 'active' : ''}" data-actress-scope="all">全部 Gfriends 女优</button></div>` : '';
   patchChildren(container, `${(state.mediaWarnings || []).map(message => `<p class="form-error" role="status">${escapeHtml(message)}</p>`).join('')}<div class="lc-section-head"><h3>按${escapeHtml(label)}浏览</h3><div>${actressSwitch}<span>${result.total} 个分类 · ${result.all.count} 部影片</span></div></div>${cards}${pagination}`);
+  window.JavspIcons?.refresh(container);
 }
 
 function libraryCard(group, english) {
@@ -2247,21 +2374,24 @@ function coverHash(text) {
 }
 
 // Library covers follow LibraryCoverStudio's 1920×1080 templates, drawn with live posters.
+// Cap poster count per card and mark non-hero images low priority so a full
+// library page does not fire hundreds of concurrent cover requests.
+const LIBRARY_POSTER_CAP = 4;
 function libraryCover(group, english) {
-  const covers = group.avatar_id ? [`/api/avatars/${encodeURIComponent(group.avatar_id)}`] : (group.covers || []).map((cover) => `/api/tasks/${encodeURIComponent(cover.id)}/cover/0?thumbnail=true&v=${encodeURIComponent(cover.v || '')}`);
+  const covers = group.avatar_id ? [`/api/avatars/${encodeURIComponent(group.avatar_id)}`] : (group.covers || []).slice(0, LIBRARY_POSTER_CAP).map((cover) => `/api/tasks/${encodeURIComponent(cover.id)}/cover/0?thumbnail=true&v=${encodeURIComponent(cover.v || '')}`);
   const seed = coverHash(`${english}:${group.key}`);
   const pickSeed = Math.imul(seed ^ (seed >>> 15), 2246822507) >>> 13;
-  const template = group.template || (covers.length >= 5 ? ['tilted', 'upright', 'fan', 'strip'][pickSeed % 4] : covers.length ? ['stacked', 'diagonal', 'fan'][pickSeed % 3] : 'plain');
+  const template = group.template || (covers.length >= 4 ? ['tilted', 'upright', 'fan', 'strip'][pickSeed % 4] : covers.length ? ['stacked', 'diagonal', 'fan'][pickSeed % 3] : 'plain');
   const pick = (count) => Array.from({ length: count }, (_, index) => covers.length ? covers[index % covers.length] : '');
-  const image = (src) => src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async">` : '<i class="lc-blank"></i>';
+  const image = (src) => src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" fetchpriority="low">` : '<i class="lc-blank"></i>';
   const posters = (list, extra = '') => list.map((src, index) => `<span class="lc-poster${extra}" style="--i:${index}">${image(src)}</span>`).join('');
-  const backdrop = covers.length ? `<span class="lc-backdrop">${image(covers[0])}</span>` : '';
+  const backdrop = '';
   const [first, second, third, fourth, fifth] = pick(5);
   const layers = {
-    tilted: `${backdrop}<span class="lc-tilt">${posters(pick(9))}</span>`,
-    upright: `<span class="lc-wall">${posters(pick(12))}</span>`,
+    tilted: `${backdrop}<span class="lc-tilt">${posters(pick(4))}</span>`,
+    upright: `<span class="lc-wall">${posters(pick(4))}</span>`,
     fan: `<span class="lc-fan">${posters([fourth, second, first, third, fifth])}</span>`,
-    strip: `${backdrop}<span class="lc-strip">${posters(pick(5))}</span>`,
+    strip: `${backdrop}<span class="lc-strip">${posters(pick(4))}</span>`,
     stacked: `<span class="lc-stack">${posters([first, first])}<span class="lc-poster lc-main">${image(first)}</span></span>`,
     diagonal: `<span class="lc-diagonal">${image(first)}</span>`,
     plain: '',
@@ -2343,7 +2473,7 @@ async function playTask(button) {
     player?.close();
     let dialog = $('#playback-dialog');
     if (!dialog) {
-      document.body.insertAdjacentHTML('beforeend', '<dialog id="playback-dialog" class="app-dialog"><div class="panel-heading"><h2>选择媒体库</h2><button type="button" class="icon-button" data-dialog-close aria-label="关闭">×</button></div><div class="playback-options"></div></dialog>');
+      document.body.insertAdjacentHTML('beforeend', '<dialog id="playback-dialog" class="app-dialog"><div class="panel-heading"><h2>选择媒体库</h2><button type="button" class="icon-button" data-dialog-close aria-label="关闭">' + javspIcon('close') + '</button></div><div class="playback-options"></div></dialog>');
       dialog = $('#playback-dialog');
     }
     dialog.querySelector('.playback-options').innerHTML = links.map(link => `<a class="button primary" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>`).join('');
@@ -2425,9 +2555,9 @@ function renderDownloadRows(downloads, active) {
   if (summary) summary.textContent = `显示 ${filtered.length} / ${downloads.length} 个已接管任务`;
   target.classList.remove('empty');
   const columns = [['name', '名称'], ['size', '选定大小'], ['progress', '进度'], ['state', '状态'], ['seeds', '种子'], ['peers', '用户'], ['download_speed', '下载速度'], ['upload_speed', '上传速度'], ['eta', '剩余时间'], ['ratio', '比率'], ['popularity', '流行度'], ['category', '分类'], ['tags', '标签'], ['added_on', '添加于'], ['completed_on', '完成于']];
-  const sortMark = (key) => state.downloadSort?.key === key ? `<span class="download-sort-mark">${state.downloadSort.direction === 'asc' ? '↑' : '↓'}</span>` : '';
+  const sortMark = (key) => state.downloadSort?.key === key ? `<span class="download-sort-mark">${javspIcon(state.downloadSort.direction === 'asc' ? 'chevron-up' : 'chevron-down')}</span>` : '';
   const head = columns.map(([key, label]) => `<th><button class="download-column-sort" type="button" data-download-sort="${key}">${label}${sortMark(key)}</button></th>`).join('');
-  const rows = filtered.map((item) => `<tr><td class="download-name-cell" title="${escapeHtml(item.name)}"><span class="download-state-dot ${escapeHtml(String(item.state || '').toLowerCase())}"></span>${escapeHtml(item.name)}</td><td>${formatBytes(item.size)}</td><td><div class="download-progress-cell"><b>${item.progress}%</b><i><em style="width:${Math.max(0, Math.min(100, item.progress))}%"></em></i></div></td><td>${escapeHtml(item.state || '未知')}</td><td>${Number(item.seeds) || 0}</td><td>${Number(item.peers) || 0}</td><td>${formatBytes(item.download_speed)}/s</td><td>${formatBytes(item.upload_speed)}/s</td><td>${escapeHtml(formatEta(item.eta))}</td><td>${Number(item.ratio || 0).toFixed(2)}</td><td>${Number(item.popularity || 0).toFixed(2)}</td><td>${escapeHtml(item.category || '')}</td><td>${escapeHtml(item.tags || '')}</td><td>${escapeHtml(formatDownloadDate(item.added_on))}</td><td>${escapeHtml(formatDownloadDate(item.completed_on))}</td><td><button class="download-row-remove" type="button" data-remove-download="${escapeHtml(item.hash)}" data-downloader-id="${escapeHtml(active.id)}" title="删除种子但保留文件">删除</button></td></tr>`).join('');
+  const rows = filtered.map((item) => `<tr><td class="download-name-cell" title="${escapeHtml(item.name)}"><span class="download-state-dot ${escapeHtml(String(item.state || '').toLowerCase())}"></span>${escapeHtml(item.name)}</td><td>${formatBytes(item.size)}</td><td><div class="download-progress-cell"><b>${item.progress}%</b><i><em style="width:${Math.max(0, Math.min(100, item.progress))}%"></em></i></div></td><td>${escapeHtml(item.state || '未知')}</td><td>${Number(item.seeds) || 0}</td><td>${Number(item.peers) || 0}</td><td>${formatBytes(item.download_speed)}/s</td><td>${formatBytes(item.upload_speed)}/s</td><td>${escapeHtml(formatEta(item.eta))}</td><td>${Number(item.ratio || 0).toFixed(2)}</td><td>${Number(item.popularity || 0).toFixed(2)}</td><td>${escapeHtml(item.category || '')}</td><td>${escapeHtml(item.tags || '')}</td><td>${escapeHtml(formatDownloadDate(item.added_on))}</td><td>${escapeHtml(formatDownloadDate(item.completed_on))}</td><td><button class="download-row-remove" type="button" data-remove-download="${escapeHtml(item.hash)}" data-downloader-id="${escapeHtml(active.id)}" title="删除种子但保留文件">${javspIcon('trash')}删除</button></td></tr>`).join('');
   target.innerHTML = `<div class="download-table-wrap"><table class="download-table"><thead><tr>${head}<th aria-label="操作"></th></tr></thead><tbody>${rows || '<tr><td class="download-table-empty" colspan="16">没有符合当前筛选条件的已接管下载任务</td></tr>'}</tbody></table></div>`;
 }
 
@@ -2549,7 +2679,7 @@ function autoScrapePresetOptions(selectedId) {
 function renderAutoScrapeRules(rules = []) {
   const target = $('#auto-scrape-rule-list');
   if (!target) return;
-  target.innerHTML = rules.length ? rules.map((rule, index) => `<article class="auto-scrape-rule" data-auto-scrape-rule="${escapeHtml(rule.id)}"><div class="auto-scrape-rule-title"><strong>规则 ${index + 1}</strong><label class="check-label"><input data-auto-rule-enabled type="checkbox"${rule.enabled ? ' checked' : ''}>启用</label></div><div class="download-auto-scrape-fields"><label>命中标签<input data-auto-rule-tags value="${escapeHtml(rule.tags || '')}" placeholder="多个标签用逗号分隔；留空匹配全部"></label><label>命中分类<input data-auto-rule-category value="${escapeHtml(rule.category || '')}" placeholder="留空匹配全部分类"></label><label>刮削预设<select data-auto-rule-preset>${autoScrapePresetOptions(rule.preset_id || 'default')}</select></label></div><button class="icon-button auto-scrape-rule-remove" type="button" data-remove-auto-scrape-rule="${escapeHtml(rule.id)}" title="删除此自动刮削规则">删除</button></article>`).join('') : '<p class="muted auto-scrape-empty">尚未添加自动刮削规则。下载完成后不会自动创建刮削任务。</p>';
+  target.innerHTML = rules.length ? rules.map((rule, index) => `<article class="auto-scrape-rule" data-auto-scrape-rule="${escapeHtml(rule.id)}"><div class="auto-scrape-rule-title"><strong>规则 ${index + 1}</strong><label class="check-label"><input data-auto-rule-enabled type="checkbox"${rule.enabled ? ' checked' : ''}>启用</label></div><div class="download-auto-scrape-fields"><label>命中标签<input data-auto-rule-tags value="${escapeHtml(rule.tags || '')}" placeholder="多个标签用逗号分隔；留空匹配全部"></label><label>命中分类<input data-auto-rule-category value="${escapeHtml(rule.category || '')}" placeholder="留空匹配全部分类"></label><label>刮削预设<select data-auto-rule-preset>${autoScrapePresetOptions(rule.preset_id || 'default')}</select></label></div><button class="icon-button auto-scrape-rule-remove" type="button" data-remove-auto-scrape-rule="${escapeHtml(rule.id)}" title="删除此自动刮削规则" aria-label="删除此自动刮削规则">${javspIcon('trash')}</button></article>`).join('') : '<p class="muted auto-scrape-empty">尚未添加自动刮削规则。下载完成后不会自动创建刮削任务。</p>';
 }
 
 function readAutoScrapeRules() {
@@ -2633,8 +2763,10 @@ function renderAutoScrapeSchedules() {
   const target = $('#auto-scrape-schedule-list');
   if (!target) return;
   const schedules = state.autoScrapeSchedules;
+  const scheduleStatus = $('#auto-scrape-schedule-status');
+  if (scheduleStatus) scheduleStatus.textContent = schedules.length ? `${schedules.length} 条规则 · ${schedules.filter((schedule) => schedule.enabled).length} 条启用` : '尚未添加规则';
   target.classList.toggle('empty', !schedules.length);
-  target.innerHTML = schedules.length ? schedules.map((schedule) => `<article class="auto-scrape-schedule-row"><div class="auto-scrape-schedule-main"><div class="auto-scrape-schedule-title"><strong>${escapeHtml(schedule.name)}</strong><span class="badge ${schedule.enabled ? 'running' : ''}">${schedule.enabled ? '已启用' : '已停用'}</span></div><dl><div><dt>Cron</dt><dd><code>${escapeHtml(schedule.cron)}</code></dd></div><div><dt>文件夹</dt><dd>${escapeHtml(schedule.input_directory)}</dd></div><div><dt>预设</dt><dd>${escapeHtml(presetName(schedule.preset_id))}</dd></div><div><dt>下次执行</dt><dd>${escapeHtml(schedule.next_run_at ? schedule.next_run_at.replace('T', ' ') : '无法计算')}</dd></div></dl><p class="muted">最近结果：${escapeHtml(schedule.last_result || '尚未执行')}</p></div><div class="auto-scrape-schedule-actions"><button class="icon-button" type="button" data-edit-auto-scrape-schedule="${escapeHtml(schedule.id)}">编辑</button><button class="icon-button schedule-delete" type="button" data-delete-auto-scrape-schedule="${escapeHtml(schedule.id)}">删除</button></div></article>`).join('') : '<div class="task-list empty">还没有定时自动刮削规则</div>';
+  target.innerHTML = schedules.length ? schedules.map((schedule) => `<article class="auto-scrape-schedule-row"><div class="auto-scrape-schedule-main"><div class="auto-scrape-schedule-title"><strong>${escapeHtml(schedule.name)}</strong><span class="badge ${schedule.enabled ? 'running' : ''}">${schedule.enabled ? '已启用' : '已停用'}</span></div><dl><div><dt>Cron</dt><dd><code>${escapeHtml(schedule.cron)}</code></dd></div><div><dt>文件夹</dt><dd>${escapeHtml(schedule.input_directory)}</dd></div><div><dt>预设</dt><dd>${escapeHtml(presetName(schedule.preset_id))}</dd></div><div><dt>下次执行</dt><dd>${escapeHtml(schedule.next_run_at ? schedule.next_run_at.replace('T', ' ') : '无法计算')}</dd></div></dl><p class="muted">最近结果：${escapeHtml(schedule.last_result || '尚未执行')}</p></div><div class="auto-scrape-schedule-actions"><button class="icon-button" type="button" data-edit-auto-scrape-schedule="${escapeHtml(schedule.id)}">编辑</button><button class="icon-button schedule-delete" type="button" data-delete-auto-scrape-schedule="${escapeHtml(schedule.id)}" aria-label="删除定时规则" title="删除定时规则">${javspIcon('trash')}</button></div></article>`).join('') : '<div class="task-list empty">还没有定时自动刮削规则</div>';
 }
 
 async function loadAutoScrapeSchedules() {
@@ -2657,6 +2789,8 @@ function renderDownloadAutoScrapeRuns() {
   const target = $('#download-auto-scrape-run-list');
   if (!target) return;
   const runs = state.downloadAutoScrapeRuns || [];
+  const runStatus = $('#download-auto-scrape-status');
+  if (runStatus) runStatus.textContent = runs.length ? `${runs.length} 条自动记录` : '暂无自动记录';
   target.classList.toggle('empty', !runs.length);
   target.innerHTML = runs.length ? runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(run.download_name || run.path || '下载任务')}</strong><p class="muted">${escapeHtml(run.downloader_name || '下载器')} · ${escapeHtml(formatLocalDateTime(run.created_at) || '')}</p><p class="muted">${escapeHtml(run.path || run.download_path || '')}</p>${autoScrapeRunCountsMarkup(run)}</div><div class="auto-scrape-history-actions"><button class="icon-button" type="button" data-view-download-auto-scrape-run="${escapeHtml(run.id || '')}">查看任务日志 (${Array.isArray(run.task_ids) ? run.task_ids.length : 0})</button></div></article>`).join('') : '<div class="task-list empty">下载完成后创建的刮削任务会显示在这里。</div>';
 }
@@ -2785,7 +2919,7 @@ function renderAutoScrapeHistory(scheduleId) {
   const runs = Array.isArray(schedule.runs) ? schedule.runs.slice().sort((left, right) => Date.parse(right.started_at || '') - Date.parse(left.started_at || '')) : [];
   $('#auto-scrape-run-title').textContent = `${schedule.name} - 全部运行记录`;
   $('#auto-scrape-run-subtitle').textContent = `已保存 ${runs.length} 次定时或立即运行记录`;
-  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(formatLocalDateTime(run.started_at) || run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p>${autoScrapeRunCountsMarkup(run)}</div><div class="auto-scrape-history-actions">${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}<button class="icon-button schedule-delete" type="button" data-delete-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">删除日志</button></div></article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
+  $('#auto-scrape-run-content').innerHTML = runs.length ? `<div class="auto-scrape-history-list">${runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(formatLocalDateTime(run.started_at) || run.id)}</strong><p class="muted">${escapeHtml(run.result || '正在创建任务')}</p>${autoScrapeRunCountsMarkup(run)}</div><div class="auto-scrape-history-actions">${run.task_ids?.length ? `<button class="icon-button" type="button" data-view-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">查看任务日志 (${run.task_ids.length})</button>` : '<span class="muted">没有可查看的任务</span>'}<button class="icon-button schedule-delete" type="button" data-delete-auto-scrape-run="${escapeHtml(schedule.id)}" data-auto-scrape-run-id="${escapeHtml(run.id)}">${javspIcon('trash')}删除日志</button></div></article>`).join('')}</div>` : '<p class="muted">尚未运行此规则。</p>';
 }
 
 function openAutoScrapeHistory(scheduleId) {
@@ -2799,6 +2933,11 @@ function openAutoScrapeHistory(scheduleId) {
 }
 
 $('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; state.activeAutoScrapeHistory = null; state.activeDownloadAutoScrapeRun = null; });
+
+// Expose only history: the unified rule editor lives in directory-watch.js.
+window.JavspAutomationHistory = {
+  open: async (scheduleId) => { await loadAutoScrapeSchedules(); openAutoScrapeHistory(scheduleId); },
+};
 
 function renderAutoScrapeSchedulePresets(selectedId = 'default') {
   const select = $('#auto-scrape-schedule-preset');
@@ -2835,7 +2974,7 @@ function showView(view) {
   document.documentElement.removeAttribute('data-initial-view');
   document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
-  const title = { overview: '概览', scrape: '手动刮削', 'ai-scrape': 'AI 刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', 'crawler-config': '爬虫配置', presets: '刮削预设', settings: '系统设置' }[view] || '概览';
+  const title = { overview: '片库', scrape: '手动刮削', 'ai-scrape': 'AI 刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', hot: '热片', 'download-script': '下片', 'crawler-config': '爬虫配置', presets: '刮削预设', settings: '系统设置' }[view] || '片库';
   $('#section-title').textContent = title;
   $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' || view === 'crawler-config' ? '配置' : '工作区';
   if (view === 'overview' || view === 'scrape') { state.tasks = []; state.tasksSignature = ''; if (view === 'scrape') ensureTaskFilters(); loadTasks(); }
@@ -2853,15 +2992,16 @@ function showView(view) {
 function ensurePathMappingsUi() {
   const settingsPanel = document.querySelector('[data-panel="settings"]');
   if (!settingsPanel || $('#path-mapping-panel')) return;
+  const connectionHost = settingsPanel.querySelector('#settings-connection-mount') || settingsPanel;
   const anchor = $('#media-server-panel');
   const markup = '<div id="path-mapping-panel" class="panel narrow"><div class="panel-heading"><div><h2>路径映射</h2><p class="muted">下载器和本程序看到的文件路径不同时，在这里设置对应关系。</p></div><button class="button secondary" id="add-path-mapping" type="button">添加映射</button></div><form id="path-mappings-form" class="stack"><div id="path-mapping-list" class="path-mapping-list"></div><div class="form-actions"><button class="button primary" type="submit">保存路径映射</button><span id="path-mapping-message" class="muted"></span></div></form></div>';
-  if (anchor) anchor.insertAdjacentHTML('afterend', markup); else settingsPanel.insertAdjacentHTML('afterbegin', markup);
+  if (anchor) anchor.insertAdjacentHTML('afterend', markup); else connectionHost.insertAdjacentHTML('beforeend', markup);
 }
 
 function renderPathMappings() {
   const target = $('#path-mapping-list');
   if (!target) return;
-  target.innerHTML = state.pathMappings.length ? state.pathMappings.map((mapping) => `<div class="path-mapping-row" data-path-mapping="${escapeHtml(mapping.id || '')}"><label>qB 保存路径<input data-path-source value="${escapeHtml(mapping.source_path || '')}" placeholder="例如：/downloads"></label><label>JavSP WEB 路径<input data-path-target value="${escapeHtml(mapping.target_path || '')}" placeholder="例如：/video"></label><button class="icon-button" type="button" data-remove-path-mapping title="移除映射">删除</button></div>`).join('') : '<p class="muted">尚未添加。两边路径相同时不需要设置。</p>';
+  target.innerHTML = state.pathMappings.length ? state.pathMappings.map((mapping) => `<div class="path-mapping-row" data-path-mapping="${escapeHtml(mapping.id || '')}"><label>qB 保存路径<input data-path-source value="${escapeHtml(mapping.source_path || '')}" placeholder="例如：/downloads"></label><label>JavSP WEB 路径<input data-path-target value="${escapeHtml(mapping.target_path || '')}" placeholder="例如：/video"></label><button class="icon-button" type="button" data-remove-path-mapping title="移除映射" aria-label="移除映射">${javspIcon('trash')}</button></div>`).join('') : '<p class="muted">尚未添加。两边路径相同时不需要设置。</p>';
 }
 
 async function loadPathMappings() {
@@ -2872,11 +3012,12 @@ async function loadPathMappings() {
 function ensureMediaSettingsUi() {
   const settingsPanel = document.querySelector('[data-panel="settings"]');
   if (!settingsPanel) return;
+  const connectionHost = settingsPanel.querySelector('#settings-connection-mount') || settingsPanel;
   if (!$('#media-server-panel')) {
-    settingsPanel.insertAdjacentHTML('afterbegin', '<div id="media-server-panel" class="panel narrow"><div class="panel-heading"><div><h2>媒体服务器</h2><p class="muted">连接 Emby 或 Jellyfin，按需开启整理后刷新媒体库。</p></div><button class="button primary" id="add-media-server" type="button">添加媒体服务器</button></div><div id="media-server-list" class="media-server-list"></div></div>');
+    connectionHost.insertAdjacentHTML('afterbegin', '<div id="media-server-panel" class="panel narrow"><div class="panel-heading"><div><h2>媒体服务器</h2><p class="muted">连接 Emby 或 Jellyfin，按需开启整理后刷新媒体库。</p></div><button class="button primary" id="add-media-server" type="button">添加媒体服务器</button></div><div id="media-server-list" class="media-server-list"></div></div>');
   }
   if (!$('#media-server-dialog')) {
-    document.body.insertAdjacentHTML('beforeend', '<dialog id="media-server-dialog" class="app-dialog"><form method="dialog" id="media-server-form" class="dialog-form"><div class="dialog-heading"><h2 id="media-server-dialog-title">添加媒体服务器</h2><button class="dialog-close" type="button" data-dialog-close>关闭</button></div><input id="media-server-id" type="hidden"><div class="dialog-content"><label>名称<input id="media-server-name" maxlength="80" required></label><label>类型<select id="media-server-type"><option value="emby">Emby</option><option value="jellyfin">Jellyfin</option></select></label><label>服务地址<input id="media-server-url" type="url" placeholder="http://127.0.0.1:8096" required></label><label>外部播放地址<input id="media-server-external-url" type="url" placeholder="https://media.example.com"></label><label>API 密钥<input id="media-server-api-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"></label><label class="check-label"><input id="media-server-auto-scan" type="checkbox">刮削任务完成后自动扫描媒体库</label></div><span id="media-server-message" class="form-error dialog-message"></span><div class="dialog-actions"><button class="button secondary" id="sync-media-server" type="button">同步媒体库</button><button class="button danger" id="delete-media-server" type="button">删除</button><button class="button secondary" type="button" data-dialog-close>取消</button><button class="button primary" value="default">保存</button></div></form></dialog>');
+    document.body.insertAdjacentHTML('beforeend', '<dialog id="media-server-dialog" class="app-dialog"><form method="dialog" id="media-server-form" class="dialog-form"><div class="dialog-heading"><h2 id="media-server-dialog-title">添加媒体服务器</h2><button class="dialog-close" type="button" data-dialog-close aria-label="关闭" title="关闭">' + javspIcon('close') + '</button></div><input id="media-server-id" type="hidden"><div class="dialog-content"><label>名称<input id="media-server-name" maxlength="80" required></label><label>类型<select id="media-server-type"><option value="emby">Emby</option><option value="jellyfin">Jellyfin</option></select></label><label>服务地址<input id="media-server-url" type="url" placeholder="http://127.0.0.1:8096" required></label><label>外部播放地址<input id="media-server-external-url" type="url" placeholder="https://media.example.com"></label><label>API 密钥<input id="media-server-api-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"></label><label class="check-label"><input id="media-server-auto-scan" type="checkbox">刮削任务完成后自动扫描媒体库</label></div><span id="media-server-message" class="form-error dialog-message"></span><div class="dialog-actions"><button class="button secondary" id="sync-media-server" type="button">同步媒体库</button><button class="button danger" id="delete-media-server" type="button">' + javspIcon('trash') + '删除</button><button class="button secondary" type="button" data-dialog-close>取消</button><button class="button primary" value="default">保存</button></div></form></dialog>');
   }
   const mediaContent = $('#media-server-dialog')?.querySelector('.dialog-content');
   if (mediaContent && !$('#probe-media-server')) mediaContent.insertAdjacentHTML('beforeend', '<button class="button secondary" id="probe-media-server" type="button">验证并读取媒体库</button><fieldset class="media-library-fieldset"><legend>管理的媒体库</legend><div id="media-server-libraries" class="media-library-options"><span class="muted">验证连接后选择要管理的媒体库</span></div></fieldset><label>自动扫描延迟（秒）<input id="media-server-auto-scan-delay" type="number" min="0" max="86400" step="1" value="0"></label>');
@@ -2885,7 +3026,7 @@ function ensureMediaSettingsUi() {
 function renderMediaServers() {
   const target = $('#media-server-list');
   if (!target) return;
-  target.innerHTML = state.mediaServers.length ? state.mediaServers.map((server) => `<article class="media-server-row"><div><strong>${escapeHtml(server.name)}</strong><span>${server.type === 'jellyfin' ? 'Jellyfin' : 'Emby'} · ${escapeHtml(server.url)}</span><span>${server.api_key_set ? 'API 密钥已配置' : '未配置 API 密钥'}${server.auto_scan ? ' · 完成后自动扫描' : ''}</span></div><div class="media-server-actions"><button class="icon-button" type="button" data-edit-media-server="${escapeHtml(server.id)}">编辑</button><button class="icon-button" type="button" data-sync-media-server="${escapeHtml(server.id)}">同步媒体库</button></div></article>`).join('') : '<div class="task-list empty">还没有媒体服务器</div>';
+  target.innerHTML = state.mediaServers.length ? state.mediaServers.map((server) => `<article class="media-server-row"><div><strong>${escapeHtml(server.name)}</strong><span>${server.type === 'jellyfin' ? 'Jellyfin' : 'Emby'} · ${escapeHtml(server.url)}</span><span>${server.api_key_set ? 'API 密钥已配置' : '未配置 API 密钥'}${server.auto_scan ? ' · 完成后自动扫描' : ''}</span></div><div class="media-server-actions"><button class="icon-button" type="button" data-edit-media-server="${escapeHtml(server.id)}">${javspIcon('pencil')}编辑</button><button class="icon-button" type="button" data-sync-media-server="${escapeHtml(server.id)}">同步媒体库</button></div></article>`).join('') : '<div class="task-list empty">还没有媒体服务器</div>';
 }
 
 async function loadMediaServers() {
@@ -2991,18 +3132,20 @@ document.addEventListener('click', async (event) => {
     }
     return;
   }
-  const crawlerCodeItem = event.target.closest('[data-crawler-code-name]');
+  const crawlerCodeItem = event.target.closest('[data-open-crawler-editor]');
   if (crawlerCodeItem) {
-    document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.toggle('active', item === crawlerCodeItem));
-    loadCrawlerSource(crawlerCodeItem.dataset.crawlerCodeName);
+    loadCrawlerSource(crawlerCodeItem.dataset.openCrawlerEditor);
     return;
   }
   if (event.target.closest('#add-custom-crawler')) {
+    state.crawlerEditorToken += 1;
+    state.activeCrawlerCodeName = '';
     const name = `custom_${Date.now()}`;
     const crawler = { name, kind: 'custom', source: 'from javsp.datatype import MovieInfo\n\n\ndef parse_data(movie: MovieInfo):\n    # Populate movie fields here, or raise MovieNotFoundError.\n    raise NotImplementedError("Implement this crawler")\n' };
-    state.activeCrawlerCodeName = '';
     $('#crawler-code-detail').innerHTML = crawlerCodeDetail(crawler, crawler.source);
-    document.querySelectorAll('[data-crawler-code-name]').forEach((item) => item.classList.remove('active'));
+    $('#crawler-editor-dialog-title').textContent = '添加爬虫';
+    const dialog = $('#crawler-editor-dialog');
+    if (dialog && !dialog.open) dialog.showModal();
     return;
   }
   if (event.target.closest('#save-custom-crawler')) {
@@ -3043,6 +3186,7 @@ document.addEventListener('click', async (event) => {
     }
     const original = testCrawler.textContent;
     testCrawler.disabled = true;
+    testCrawler.dataset.busy = 'true';
     testCrawler.textContent = '正在测试';
     if (message) { message.textContent = ''; message.classList.remove('form-error'); }
     if (result) result.classList.add('hidden');
@@ -3057,6 +3201,7 @@ document.addEventListener('click', async (event) => {
       if (message) { message.textContent = error.message; message.classList.add('form-error'); }
     } finally {
       testCrawler.disabled = false;
+      delete testCrawler.dataset.busy;
       testCrawler.textContent = original;
     }
     return;
@@ -3079,6 +3224,10 @@ document.addEventListener('click', async (event) => {
     await api(`/api/crawler-config/built-in/${encodeURIComponent(name)}/restore`, { method: 'POST' });
     await loadCrawlerConfig();
     await loadCrawlerNames();
+    return;
+  }
+  if (event.target.closest('[data-retry-crawler-config]')) {
+    loadCrawlerConfig();
     return;
   }
   const closeButton = event.target.closest('[data-dialog-close]');
@@ -3376,13 +3525,13 @@ document.addEventListener('click', async (event) => {
       const tag = document.createElement('span');
       tag.className = 'crawler-tag';
       tag.dataset.crawlerValue = name;
-      tag.innerHTML = `<code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" data-remove-crawler-tag title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">\u00d7</button>`;
+      tag.innerHTML = `<code>${escapeHtml(name)}</code><button class="crawler-tag-remove" type="button" data-remove-crawler-tag title="\u5220\u9664 ${escapeHtml(name)}" aria-label="\u5220\u9664 ${escapeHtml(name)}">${javspIcon('close')}</button>`;
       group.querySelector('.crawler-config-list')?.append(tag);
       input.value = '';
       return;
     }
     const select = group?.querySelector('.crawler-add-select');
-    if (select?.value) { const row = document.createElement('div'); row.className = 'crawler-config-row'; row.innerHTML = `<select class="crawler-selection" data-group="${group.dataset.crawlerGroup}">${CRAWLER_IDS.map((id) => `<option value="${id}"${id === select.value ? ' selected' : ''}>${id}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up">上移</button><button class="button secondary crawler-move" type="button" data-direction="down">下移</button><button class="button danger crawler-remove" type="button">删除</button>`; group.querySelector('.crawler-config-list').append(row); select.value = ''; }
+    if (select?.value) { const row = document.createElement('div'); row.className = 'crawler-config-row'; row.innerHTML = `<select class="crawler-selection" data-group="${group.dataset.crawlerGroup}">${CRAWLER_IDS.map((id) => `<option value="${id}"${id === select.value ? ' selected' : ''}>${id}</option>`).join('')}</select><button class="button secondary crawler-move" type="button" data-direction="up">上移</button><button class="button secondary crawler-move" type="button" data-direction="down">${javspIcon('chevron-down')}下移</button><button class="button danger crawler-remove" type="button">${javspIcon('trash')}删除</button>`; group.querySelector('.crawler-config-list').append(row); select.value = ''; }
   }
   const crawlerRemove = event.target.closest('.crawler-remove');
   if (crawlerRemove) { crawlerRemove.closest('.crawler-config-row')?.remove(); }
@@ -3650,29 +3799,20 @@ document.addEventListener('click', (event) => {
   confirmAction({ title: '删除媒体服务器', text: `确定删除媒体服务器“${server?.name || id}”吗？`, confirmLabel: '确认删除', danger: true, run: async () => { await api(`/api/media-servers/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadMediaServers(); } });
 });
 
-function setSidebarCollapsed(collapsed) {
-  const shell = document.querySelector('.app-shell');
-  const toggle = $('#sidebar-toggle');
-  if (!shell || !toggle) return;
-  shell.classList.toggle('sidebar-collapsed', collapsed);
-  toggle.title = collapsed ? '展开侧边栏' : '收起侧边栏';
-  toggle.setAttribute('aria-label', toggle.title);
-  toggle.querySelector('span').textContent = collapsed ? '>' : '<';
-  localStorage.setItem('javsp-web.sidebar-collapsed', collapsed ? '1' : '0');
-}
-
-const sidebarToggle = $('#sidebar-toggle');
-if (sidebarToggle) {
-  sidebarToggle.addEventListener('click', () => setSidebarCollapsed(!document.querySelector('.app-shell').classList.contains('sidebar-collapsed')));
-  setSidebarCollapsed(localStorage.getItem('javsp-web.sidebar-collapsed') === '1');
-}
-
 const downloadPolicyToggle = $('#download-policy-toggle');
 const downloadPolicyContent = $('#download-policy-content');
 if (downloadPolicyToggle && downloadPolicyContent) {
   const setDownloadPolicyExpanded = (expanded) => {
     downloadPolicyContent.classList.toggle('hidden', !expanded);
-    downloadPolicyToggle.textContent = expanded ? '收起策略' : '展开策略';
+    // Update the label and swap the caret instead of overwriting the button,
+    // which would delete the icon rendered by icons.js.
+    const label = downloadPolicyToggle.querySelector('[data-policy-label]');
+    if (label) label.textContent = expanded ? '收起策略' : '展开策略';
+    const caret = downloadPolicyToggle.querySelector('[data-icon]');
+    if (caret) {
+      caret.dataset.icon = expanded ? 'chevron-up' : 'chevron-down';
+      caret.innerHTML = javspIcon(caret.dataset.icon);
+    }
     downloadPolicyToggle.setAttribute('aria-expanded', String(expanded));
     localStorage.setItem('javsp-web.download-policy-open', expanded ? '1' : '0');
   };
@@ -3690,7 +3830,12 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); $('#ai-scrape-nav').remove(); }
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config', 'ai-scrape'].includes(savedView))) showView(savedView);
     else showView('overview');
-    api('/api/runtime').then((runtime) => { state.runtime = runtime; window.JavspCommunity.configure(runtime.comments_url); checkForAppUpdate(runtime); }).catch(console.error);
+    const crawlerNav = $('#crawler-config-nav');
+    if (crawlerNav) {
+      crawlerNav.addEventListener('pointerenter', prefetchCrawlerConfig, { once: true });
+      crawlerNav.addEventListener('focus', prefetchCrawlerConfig, { once: true });
+    }
+    api('/api/runtime').then((runtime) => { state.runtime = runtime; window.JavspCommunity.configure(runtime.comments_url, runtime.comments_verify_url); checkForAppUpdate(runtime); }).catch(console.error);
     scheduleGitHubStarInvite();
   } catch (error) { return; }
   let refreshTimer = null;
@@ -3724,7 +3869,11 @@ window.JavspComments = (() => {
   const target = () => $('#task-comments');
   const esc = (value) => escapeHtml(value ?? '');
   const date = (value) => new Date(Number(value) * 1000).toLocaleString();
-  const commentHelp = '<div class="comment-label-row"><label for="film-comment-body">评论内容</label><details class="comment-help"><summary aria-label="评论格式和时间标签说明">?</summary><div class="comment-help-content"><p>评论和回复最多 300 字符，举报原因最多 300 字符。</p><p>支持 Markdown：<code>**粗体**</code>、<code>*斜体*</code>、<code>~~删除线~~</code>、列表、引用、代码和链接。</p><p>输入 <code>30:15</code> 或 <code>1:02:03</code> 可生成时间标签，点击可从对应位置播放当前影片。</p><p>代码和链接中的时间保持原样；不执行 HTML，也不加载远程图片。播放时需绑定媒体库并登录播放器。</p></div></details></div>';
+  const commentHelp = '<div class="comment-label-row"><label for="film-comment-body">评论内容</label><details class="comment-help"><summary aria-label="评论格式与时间标签说明"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6h.01"/></svg><span>格式说明</span></summary><div class="comment-help-content">' + '<section class="comment-help-group"><h4>字数</h4><ul><li>评论和回复最多 300 字符。</li><li>举报原因最多 300 字符。</li></ul></section>'
+    + '<section class="comment-help-group"><h4>Markdown</h4><ul><li><code>**粗体**</code>、<code>*斜体*</code>、<code>~~删除线~~</code></li><li>还支持列表、引用、代码和链接。</li></ul></section>'
+    + '<section class="comment-help-group"><h4>时间标签</h4><ul><li><code>30:15</code> 或 <code>1:02:03</code> 会变成时间标签。</li><li>点击标签从对应位置播放当前影片。</li></ul></section>'
+    + '<section class="comment-help-group"><h4>限制</h4><ul><li>代码和链接中的时间保持原样。</li><li>不执行 HTML，也不加载远程图片。</li><li>播放时需绑定媒体库并登录播放器。</li></ul></section>'
+    + '</div></details></div>';
   const replyQuote = (item) => !item.reply_to_id ? '' : `<blockquote class="comment-reply-quote">${item.reply_to ? `<strong>回复 ${esc(item.reply_to.nickname)}</strong><span>${esc(item.reply_to.body)}</span>` : '<span class="muted">原评论已不可见</span>'}</blockquote>`;
   const selectReply = (active, item) => {
     active.replyTo = item ? { id: item.id, nickname: item.nickname } : null;
@@ -3739,7 +3888,7 @@ window.JavspComments = (() => {
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch(active.base + path, {
-        ...options, credentials: 'omit', referrerPolicy: 'no-referrer', signal: controller.signal,
+        ...window.JavspCommunity.requestInit(active.base + path, options), signal: controller.signal,
         headers: { Accept: 'application/json', ...window.JavspCommunity.headers(), ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
       });
       const data = await response.json().catch(() => ({}));
@@ -3807,18 +3956,18 @@ window.JavspComments = (() => {
     const section = target();
     if (section) { section.hidden = true; section.innerHTML = ''; }
   };
-  const open = (identifier, baseUrl, taskId = '') => {
+  const open = (identifier, baseUrl, taskId = '', verifyUrl) => {
     const section = target();
     if (!section) return;
     const name = String(identifier || '').trim();
     const base = String(baseUrl || '').replace(/\/+$/, '');
-    window.JavspCommunity.configure(base);
+    if (base) window.JavspCommunity.configure(base, verifyUrl);
     if (current?.identifier === name && current?.base === base) { current.taskId = taskId; return; }
     close();
     if (!name || !base) return;
     current = { identifier: name, base, taskId, items: [], pages: [], page: 0, cursor: null, loading: false, posting: false, replyTo: null, requests: new Set() };
     section.hidden = false;
-    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><nav class="comment-pagination" aria-label="评论分页"><button type="button" class="button secondary" data-comment-prev disabled>上一页</button><span>每页 20 条</span><button type="button" class="button secondary" data-comment-more disabled>下一页</button></nav><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><div class="comment-reply-context" hidden><span class="comment-reply-label" role="status"></span><button type="button" class="comment-profile-link" data-comment-reply-cancel>取消回复</button></div>${commentHelp}<textarea id="film-comment-body" name="body" maxlength="600" rows="3" required placeholder="写下你对这部影片的看法"></textarea><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
+    section.innerHTML = `<div class="comments-heading"><div><h3>影片评论</h3><p class="muted">分享你的观影感受。请勿发布广告或联系方式。</p></div><button type="button" class="button secondary" data-comment-refresh>刷新评论</button></div><span class="comments-status muted" role="status">正在读取…</span><div class="comments-list"></div><p class="comments-load-message form-error" role="status"></p><nav class="comment-pagination" aria-label="评论分页"><button type="button" class="button secondary" data-comment-prev disabled>${javspIcon('chevron-left')}上一页</button><span>每页 20 条</span><button type="button" class="button secondary" data-comment-more disabled>下一页</button></nav><form class="comment-form"><div class="comment-author"><span data-comment-avatar>${window.JavspCommunity.avatar(window.JavspCommunity.identity().avatar_id)}</span><span data-comment-author>${esc(window.JavspCommunity.identity().nickname || '匿名用户')}</span><button type="button" class="comment-profile-link" data-open-profile>个人中心</button></div><div class="comment-reply-context" hidden><span class="comment-reply-label" role="status"></span><button type="button" class="comment-profile-link" data-comment-reply-cancel>取消回复</button></div>${commentHelp}<textarea id="film-comment-body" name="body" maxlength="600" rows="3" required placeholder="写下你对这部影片的看法"></textarea><div class="comment-form-actions"><button class="button primary" type="submit">发表评论</button><span class="comment-form-message muted" role="status"></span></div></form>`;
     load();
   };
   document.addEventListener('submit', async (event) => {
@@ -3951,7 +4100,112 @@ if (privacyMode) {
   });
 }
 
-$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; state.taskMetadataEditing = false; window.JavspComments?.close(); });
+// --- Stills viewer (regressions: tests/test_film_detail_ux.cjs) ---
+window.JavspStills = (() => {
+  const dialog = () => document.querySelector('#stills-dialog');
+  const inside = (selector) => dialog()?.querySelector(selector) || null;
+  let view = null;
+
+  function render() {
+    const image = inside('.stills-image');
+    const error = inside('[data-stills-error]');
+    const counter = inside('[data-stills-counter]');
+    const prev = inside('[data-stills-prev]');
+    const next = inside('[data-stills-next]');
+    if (error) error.hidden = true;
+    if (!view) {
+      if (image) { image.removeAttribute('src'); image.alt = ''; }
+      if (counter) counter.textContent = '';
+      if (prev) prev.disabled = true;
+      if (next) next.disabled = true;
+      return;
+    }
+    if (image) {
+      image.setAttribute('src', `/api/tasks/${encodeURIComponent(view.taskId)}/fanart/${view.index}?v=${encodeURIComponent(view.version)}`);
+      image.alt = `剧照 ${view.index + 1}`;
+    }
+    if (counter) counter.textContent = `${view.index + 1} / ${view.total}`;
+    if (prev) prev.disabled = view.index <= 0;
+    if (next) next.disabled = view.index >= view.total - 1;
+  }
+
+  function open(options = {}) {
+    const taskId = String(options.taskId || '');
+    const total = Math.min(Math.max(Math.trunc(Number(options.total)) || 0, 0), 999);
+    if (!taskId || total < 1) return false;
+    const index = Math.min(Math.max(Math.trunc(Number(options.index)) || 0, 0), total - 1);
+    const element = dialog();
+    if (!element) return false;
+    view = { taskId, index, total, version: String(options.version || ''), opener: options.opener || null };
+    if (!element.open) element.showModal();
+    render();
+    inside('[data-stills-close]')?.focus();
+    return true;
+  }
+
+  function step(delta) {
+    if (!view) return false;
+    const index = view.index + delta;
+    if (index < 0 || index > view.total - 1) return false;
+    view.index = index;
+    render();
+    return true;
+  }
+
+  function close(options = {}) {
+    const opener = view?.opener;
+    view = null;
+    render();
+    const element = dialog();
+    if (element?.open) element.close();
+    if (options.restoreFocus !== false && opener?.isConnected) opener.focus();
+  }
+
+  const isOpen = () => Boolean(view) && Boolean(dialog()?.open);
+
+  const element = dialog();
+  if (element) {
+    element.addEventListener('click', (event) => {
+      if (event.target.closest('[data-stills-close]')) { close(); return; }
+      if (event.target.closest('[data-stills-prev]')) { step(-1); return; }
+      if (event.target.closest('[data-stills-next]')) step(1);
+    });
+    element.addEventListener('keydown', (event) => {
+      if (!isOpen()) return;
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); return; }
+      if (event.key === 'ArrowRight') { if (step(1)) event.preventDefault(); return; }
+      if (event.key === 'ArrowLeft' && step(-1)) event.preventDefault();
+    });
+    // 'error' does not bubble: listen in the capture phase on the dialog itself.
+    element.addEventListener('error', (event) => {
+      if (!view || event.target !== inside('.stills-image')) return;
+      const error = inside('[data-stills-error]');
+      if (error) error.hidden = false;
+    }, true);
+    // Whatever closed the dialog (button, Escape, task switch) drops the decoded image.
+    element.addEventListener('close', () => { view = null; render(); });
+  }
+
+  return { open, close, step, isOpen };
+})();
+// --- end stills viewer ---
+
+$('#task-detail-dialog')?.addEventListener('close', () => { state.activeTaskDetail = null; state.taskMetadataEditing = false; window.JavspComments?.close(); window.JavspStills?.close({ restoreFocus: false }); });
+
+// Crawler editor dialog: any close (button, Esc, backdrop click) invalidates pending source loads
+// and clears the edited crawler so "add crawler" never inherits a stale original_name.
+function bindCrawlerEditorDialog() {
+  const dialog = $('#crawler-editor-dialog');
+  if (!dialog || dialog.dataset.bound === 'true') return;
+  dialog.dataset.bound = 'true';
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener('close', () => {
+    state.crawlerEditorToken += 1;
+    state.activeCrawlerCodeName = '';
+  });
+}
 
 document.addEventListener('pointerdown', (event) => {
   state.taskDetailLogSelecting = Boolean(event.target.closest('#task-detail-content .task-log'));

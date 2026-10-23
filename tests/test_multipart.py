@@ -83,6 +83,140 @@ class MultipartTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(part_number(name, self.config.scanner), number)
 
+    def test_letter_parts_and_numbered_strm_copies(self):
+        paths = self.files('SAVR-619-B.strm', 'SAVR-619-A.strm')
+        self.assertEqual([part_number(path, self.config.scanner) for path in paths], [2, 1])
+        self.assertEqual(group_files(paths, self.config.scanner), [[paths[1], paths[0]]])
+        for delimiter in ('-', '_', '.', ' '):
+            path = self.root / f'SAVR-619{delimiter}b.strm'
+            self.assertEqual(part_number(path, self.config.scanner), 2)
+        copy, original = self.files('AVSA-223(1).strm', 'AVSA-223.strm')
+        original.write_text('https://media.example/file?a=1\r\n', encoding='utf-8')
+        copy.write_text('\ufeffhttps://media.example/file?a=1\n', encoding='utf-8')
+        self.assertEqual(group_files([copy, original], self.config.scanner), [[original]])
+        self.assertEqual(part_number(self.root / 'SAVR-619-B(1).strm', self.config.scanner), 2)
+        self.assertIsNone(part_number(self.root / 'SAVR-619B.strm', self.config.scanner))
+
+    def test_numbered_copy_conflict_is_not_suppressed(self):
+        copy, original = self.files('AVSA-223(1).strm', 'AVSA-223.strm')
+        original.write_text('https://media.example/a', encoding='utf-8')
+        copy.write_text('https://media.example/b', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, '链接内容不同'):
+            group_files([copy, original], self.config.scanner)
+        only = self.root / 'OTHER-456(2).strm'
+        only.write_text('https://media.example/c', encoding='utf-8')
+        self.assertEqual(group_files([only], self.config.scanner), [[only]])
+
+    def test_skipping_conflicts_keeps_the_rest_of_the_batch(self):
+        from javsp.multipart import group_files_skipping_conflicts
+        # One broken group (unparseable part number) plus two healthy movies.
+        broken = self.files('FC2-4953812.mp4', 'FC2-4953812-1.mp4')
+        good_a = self.files('SAVR-619-A.strm', 'SAVR-619-B.strm')
+        good_b = self.files('ABC-123.mp4')
+        groups, conflicts = group_files_skipping_conflicts(
+            broken + good_a + good_b, self.config.scanner)
+        names = {path.name for paths in groups for path in paths}
+        self.assertNotIn('FC2-4953812.mp4', names)
+        self.assertNotIn('FC2-4953812-1.mp4', names)
+        self.assertEqual(names, {'SAVR-619-A.strm', 'SAVR-619-B.strm', 'ABC-123.mp4'})
+        self.assertEqual(len(conflicts), 1)
+        self.assertIn('已跳过该组文件', conflicts[0])
+        self.assertIn('FC2-4953812.mp4', conflicts[0])
+        # A conflicting numbered copy no longer aborts the batch either.
+        copy, original = self.files('AVSA-223(1).strm', 'AVSA-223.strm')
+        original.write_text('https://media.example/a', encoding='utf-8')
+        copy.write_text('https://media.example/b', encoding='utf-8')
+        keeper = self.files('ABC-456.mp4')[0]
+        groups, conflicts = group_files_skipping_conflicts(
+            [copy, original] + [keeper], self.config.scanner)
+        self.assertEqual([path.name for paths in groups for path in paths], ['ABC-456.mp4'])
+        self.assertEqual(len(conflicts), 1)
+        self.assertIn('重复下载候选冲突', conflicts[0])
+        self.assertTrue(copy.exists() and original.exists())
+
+    def test_copy_safety_matrix_and_mixed_parts(self):
+        from javsp.multipart import inspect_download_copy
+        original, duplicate = self.files('hhd800.com@AVSA-223.strm', 'hhd800.com@AVSA-223(1).strm')
+        for content in ('', 'not a link', b'\xff', 'https://example.test/a?token=2'):
+            with self.subTest(content_type=type(content).__name__):
+                original.write_text('https://example.test/a?token=1', encoding='utf-8')
+                duplicate.write_bytes(content if isinstance(content, bytes) else content.encode())
+                self.assertFalse(inspect_download_copy(duplicate)['duplicate'])
+                with self.assertRaisesRegex(ValueError, '保留文件'):
+                    group_files([original, duplicate], self.config.scanner)
+                self.assertTrue(original.exists() and duplicate.exists())
+        with patch.object(Path, 'read_text', side_effect=OSError('unreadable')):
+            self.assertFalse(inspect_download_copy(duplicate)['duplicate'])
+        a, b, acopy, bcopy = self.files('SAVR-619-A.strm', 'SAVR-619-B.strm', 'SAVR-619-A(1).strm', 'SAVR-619-B(1).strm')
+        for path in (a, b, acopy, bcopy):
+            path.write_text('https://example.test/same', encoding='utf-8')
+        self.assertEqual(group_files([bcopy, b, acopy, a], self.config.scanner), [[a, b]])
+        numeric = self.files('SAVR-619-1.strm')[0]
+        with self.assertRaisesRegex(ValueError, '重复'):
+            group_files([a, numeric], self.config.scanner)
+        self.data['scanner']['input_files'] = list(map(str, [bcopy, b, acopy, a]))
+        self.config = Cfg.model_validate(self.data)
+        movie = scan_movies(str(self.root))[0]
+        self.assertEqual(list(map(str, movie.files)), list(map(str, [a, b])))
+        self.assertEqual(movie.part_numbers, [1, 2])
+
+    def test_letter_edges_configuration_and_single_retry(self):
+        for name in ('SAVR-619AB.strm', 'SAVR-619-AB.strm', 'no-id-A.strm'):
+            self.assertIsNone(part_number(self.root / name, self.config.scanner))
+        self.assertEqual(part_number('SAVR-619-B-1080p.strm', self.config.scanner), 2)
+        b = self.files('SAVR-619-B(1).strm')[0]
+        movie = scan_movies(str(b))[0]
+        self.assertEqual(movie.part_numbers, [2])
+        config = copy.deepcopy(self.data)
+        config['scanner']['media_types'] = [
+            {'id': 'custom', 'name': 'Custom', 'priority': 100,
+             'pattern': r'CUSTOM(?P<avid>\d+-[A-Z])', 'avid_format': '{avid}'},
+            {'id': 'normal', 'name': 'Normal', 'detector': 'fallback'},
+        ]
+        self.assertIsNone(part_number('CUSTOM123-A.strm', Cfg.model_validate(config).scanner))
+
+    def test_web_user_examples_manifest_and_skip_log(self):
+        a, b, original, duplicate = self.files('SAVR-619-A.strm', 'SAVR-619-B.strm', 'hhd800.com@AVSA-223.strm', 'hhd800.com@AVSA-223(1).strm')
+        for path in (original, duplicate):
+            path.write_text('https://example.test/stream', encoding='utf-8')
+        created, _ = self.create_web_tasks()
+        self.assertEqual(len(created), 2)
+        manifests = [task['input_files'] for task in created]
+        self.assertIn(list(map(str, [a, b])), manifests)
+        self.assertIn([str(original)], manifests)
+        self.assertTrue(any('跳过重复副本' in line for task in created for line in task['log_tail']))
+        self.assertTrue(duplicate.exists())
+
+    def test_copy_skip_log_is_attributed_to_the_owning_task_only(self):
+        a, acopy, x, xcopy = self.files(
+            'SAVR-619-A.strm', 'SAVR-619-A(1).strm', 'ABP-123.strm', 'ABP-123(1).strm')
+        for path in (a, acopy):
+            path.write_text('https://example.test/one', encoding='utf-8')
+        for path in (x, xcopy):
+            path.write_text('https://example.test/two', encoding='utf-8')
+        created, _ = self.create_web_tasks()
+        self.assertEqual(len(created), 2)
+        logs = {Path(task['input_files'][0]).name: task['log_tail'] for task in created}
+        self.assertEqual([line for line in logs['SAVR-619-A.strm'] if line.startswith('跳过重复副本')],
+                         ['跳过重复副本：SAVR-619-A(1).strm → SAVR-619-A.strm'])
+        self.assertEqual([line for line in logs['ABP-123.strm'] if line.startswith('跳过重复副本')],
+                         ['跳过重复副本：ABP-123(1).strm → ABP-123.strm'])
+        every_line = [line for lines in logs.values() for line in lines]
+        self.assertEqual(sum('跳过重复副本' in line for line in every_line), 2,
+                         '副本提示不得向所有任务重复追加')
+        self.assertFalse(any('example.test' in line for line in every_line), '任务日志不得包含链接内容')
+
+    def test_single_file_copy_skip_log_stays_on_the_new_task(self):
+        original, duplicate = self.files('MIDE-001.strm', 'MIDE-001(1).strm')
+        for path in (original, duplicate):
+            path.write_text('https://example.test/single', encoding='utf-8')
+        created, _ = self.create_web_tasks(duplicate)
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0]['input_files'], None)
+        self.assertEqual([line for line in created[0]['log_tail'] if line.startswith('跳过重复副本')],
+                         ['跳过重复副本：MIDE-001(1).strm → MIDE-001.strm'])
+        self.assertFalse(any('example.test' in line for line in created[0]['log_tail']))
+
     def test_duplicates_rejected_and_directories_separate(self):
         paths = self.files('FC2-4953812-1.mp4', 'FC2PPV-4953812-01.mkv')
         with self.assertRaisesRegex(ValueError, '重复'):
@@ -162,15 +296,30 @@ class MultipartTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             scan_movies(str(paths[0]))
 
-    def create_web_tasks(self):
+    def create_web_tasks(self, path=None, selected=None):
         with patch.object(tasks, '_preset_config_data', return_value=(copy.deepcopy(self.data), {'name': 'Test'})), \
              patch.object(tasks, '_preset_task_concurrency', return_value=2), \
              patch.object(tasks, 'DATA_DIR', self.root / 'state'), \
              patch.object(tasks, '_logs', {}), \
              patch.object(tasks, '_persist'), patch('javsp_web.task_store.upsert_many'), \
              patch.object(tasks, '_enqueue_task') as thread:
-            result = tasks.create_tasks(str(self.root), source='schedule', schedule_id='schedule-test')
+            result = tasks.create_tasks(
+                str(path or self.root), source='schedule', schedule_id='schedule-test',
+                input_files=None if selected is None else [str(item) for item in selected])
         return result, thread
+
+    def test_explicit_only_copy_selection_reports_the_skip_without_adding_the_original(self):
+        original, duplicate = self.files('hhd800.com@AVSA-223.strm', 'hhd800.com@AVSA-223(1).strm')
+        for path in (original, duplicate):
+            path.write_text('https://example.test/only-copy', encoding='utf-8')
+        with self.assertRaises(tasks.NoScrapeTasksError) as caught:
+            self.create_web_tasks(selected=[duplicate])
+        message = str(caught.exception)
+        self.assertIn('已跳过重复副本，无可处理文件', message)
+        self.assertIn('hhd800.com@AVSA-223(1).strm → hhd800.com@AVSA-223.strm', message)
+        self.assertNotIn('最小匹配文件大小', message, '只选副本时不得误报文件大小不符')
+        self.assertNotIn('example.test', message, '提示不得包含链接内容')
+        self.assertTrue(original.exists() and duplicate.exists(), '两个文件都保留原处')
 
     def test_web_creates_one_task_per_movie_with_persisted_manifest(self):
         paths = self.files('FC2-4953812-1.mp4', 'FC2-4953812-2.mp4', 'ABC-123.mp4')
@@ -187,12 +336,12 @@ class MultipartTests(unittest.TestCase):
         self.config = Cfg.model_validate(config)
         self.assertEqual(scan_movies(task['input_directory'])[0].part_numbers, [1, 2])
 
-    def test_web_ambiguity_does_not_start_any_tasks(self):
+    def test_web_ambiguity_skips_problem_files_and_scrapes_the_rest(self):
         self.files('ABC-123.mp4', 'FC2-4953812-1.mp4', 'FC2PPV-4953812-1.mkv')
-        with patch.object(tasks, 'create_task') as create:
-            with self.assertRaises(ValueError):
-                self.create_web_tasks()
-            create.assert_not_called()
+        created, thread = self.create_web_tasks()
+        self.assertEqual(len(created), 1, '分 P 问题只跳过问题文件，健康影片继续')
+        self.assertEqual(thread.call_count, 1)
+        self.assertEqual(Path(created[0]['input_directory']).name, 'ABC-123.mp4')
 
     def test_remaining_part_keeps_number_and_does_not_overwrite(self):
         paths = self.files('FC2-4953812-1.mp4')

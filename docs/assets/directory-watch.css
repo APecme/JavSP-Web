@@ -1,0 +1,121 @@
+/* 目录监控面板样式（自动刮削页）。只使用主题变量，明暗主题自动跟随。 */
+
+.dw-panel { gap: 0; }
+
+.dw-embed { display: grid; gap: 12px; }
+
+.dw-toolbar { display: flex; justify-content: flex-end; }
+
+.dw-heading-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.dw-list { display: grid; gap: 10px; }
+.dw-list.empty {
+  display: block;
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+}
+.dw-empty { margin: 0; font-size: 13px; }
+
+.dw-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 18px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--lc-accent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.dw-row[data-state="error"] { border-left-color: var(--danger-fill); }
+.dw-row[data-state="offline"] { border-left-color: var(--warning); }
+.dw-row[data-state="disabled"] { border-left-color: var(--border-strong); background: var(--surface-subtle); }
+
+.dw-row-main { display: grid; gap: 6px; min-width: 0; }
+.dw-row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dw-row-title strong { color: var(--text); font-size: 14px; word-break: break-word; }
+
+.dw-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+  background: var(--success-soft);
+  color: var(--success);
+}
+.dw-badge[data-state="error"] { background: var(--danger-soft); color: var(--danger); }
+.dw-badge[data-state="offline"] { background: var(--warning-soft); color: var(--warning); }
+.dw-badge[data-state="disabled"] { background: var(--surface-muted); color: var(--text-muted); }
+.dw-badge[data-state="initializing"] { background: var(--lc-accent-soft); color: var(--lc-accent-text); }
+
+.dw-flag {
+  padding: 2px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.dw-pending { font-size: 11px; color: var(--text-muted); }
+
+.dw-path {
+  margin: 0;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text-tertiary);
+  word-break: break-all;
+}
+
+.dw-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 2px 0 0;
+}
+.dw-facts div { display: grid; gap: 1px; }
+.dw-facts dt { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.dw-facts dd { margin: 0; font-size: 12px; color: var(--text-secondary); }
+
+.dw-message { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); min-height: 16px; }
+.dw-row[data-state="error"] .dw-message { color: var(--danger); }
+.dw-row[data-state="offline"] .dw-message { color: var(--warning); }
+
+.dw-row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: flex-start; }
+.dw-row-actions .button { padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+
+.dw-message[data-tone="error"] { color: var(--danger-fill); }
+.dw-runtime { margin: 12px 0 0; font-size: 11px; color: var(--text-muted); }
+.dw-runtime[data-running="0"] { color: var(--warning); }
+
+.dw-dialog { width: min(560px, calc(100% - 32px)); }
+.dw-dialog .dialog-content { gap: 12px; }
+.dw-path-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dw-path-tools .muted { flex: 1 1 200px; margin: 0; }
+.dw-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dw-grid label { font-size: 12px; }
+.dw-dialog textarea { resize: vertical; font-size: 12px; }
+
+@media (max-width: 900px) {
+  .dw-row { grid-template-columns: minmax(0, 1fr); }
+  .dw-row-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 480px) {
+  .dw-grid { grid-template-columns: minmax(0, 1fr); }
+  .dw-row-actions .button { flex: 1 1 auto; }
+  .dw-heading-actions { width: 100%; }
+  .dw-heading-actions .button { flex: 1 1 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dw-row, .dw-badge { transition: none !important; }
+}
+
+/* Legacy schedule hooks remain for history compatibility, not a second editor. */
+[data-auto-scrape-module="schedule"][hidden],
+.dw-dialog [hidden] { display: none !important; }
+.dw-trigger { display: flex; flex-wrap: wrap; gap: 10px 18px; border: 1px solid var(--border); border-radius: 8px; }
+.dw-trigger legend { font-size: 12px; color: var(--text-muted); }
+#dw-watch-fields, #dw-schedule-fields { display: grid; gap: 12px; }

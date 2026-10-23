@@ -450,6 +450,7 @@ def _normalize_auto_scrape_schedule(item: dict[str, Any]) -> dict[str, Any] | No
         "name": str(item.get("name") or "自动刮削规则").strip() or "自动刮削规则",
         "enabled": bool(item.get("enabled", True)),
         "cron": cron,
+        "timezone": str(item.get("timezone") or ""),
         "input_directory": input_directory,
         "preset_id": preset_id,
         "created_at": str(item.get("created_at") or now_iso()),

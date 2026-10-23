@@ -1,66 +1,69 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="从单次任务到批量整理，了解预设、分类、分 P 与爬虫之间的关系。">
-  <meta name="theme-color" content="#0b1020">
-  <title>刮削与整理 | JavSP WEB 教程</title>
-  <link rel="icon" href="assets/javsp-logo.png" type="image/png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="subpages.css?v=topics-20261010">
-</head>
-<body class="docs-page">
-  <header class="site-header"><a class="brand" href="index.html" aria-label="JavSP WEB 首页"><img src="assets/javsp-logo.png" alt=""><span>JavSP <b>WEB</b></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button><nav id="site-nav" class="site-nav" aria-label="主导航"><a href="index.html">首页</a><a class="is-current" href="docs.html">文档</a><a href="demo.html">示例站点</a><a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav></header>
-  <main class="docs-shell page-width">
-<aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-scraping.html" aria-current="page">刮削与整理</a><a class="doc-chapter-link" href="#manual">手动刮削与任务</a><a class="doc-chapter-link" href="#mounted">挂载盘、STRM 与分 P</a><a class="doc-chapter-link" href="#preset">刮削预设与分类</a><a class="doc-chapter-link" href="#crawlers">爬虫与网络</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
-<article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 02</p><h1>刮削与整理</h1><p class="doc-lede">从单次任务到批量整理，了解预设、分类、分 P 与爬虫之间的关系。</p></header>
-<section id="manual"><h2>手动刮削：提交、查看与处理结果</h2>
-        <ol><li>进入“手动刮削”，填写文件或目录路径；Docker 使用“浏览容器路径”，Windows 本机可使用文件选择器。</li><li>选定刮削预设，点击“启动 JavSP”。选择目录时，先等待扫描完成，找到的影片会陆续出现在任务队列中。</li><li>在任务队列查看状态、扫描数量和阶段进度。支持按状态、关键词、大小和时间筛选，并分页查看。</li><li>打开“详情”，先看最终结果，再展开数据源和图片日志。单个爬虫失败不代表整个任务失败；以最终是否取得必需资料并完成整理为准。</li></ol>
-        <figure class="doc-figure"><a href="assets/guide/manual.webp" target="_blank"><img src="assets/guide/manual.webp" width="1440" height="1050" loading="lazy" alt="手动刮削页面：输入路径、选择预设、查看队列和任务详情"></a><figcaption>填写影片路径、选择预设后启动刮削，下方可查看任务进度（演示数据）。</figcaption></figure>
-        <h3>什么时候重试，什么时候处理文件？</h3><ul><li><b>只有图片失败：</b>在任务详情中重试图片；封面还可从任务详情发起搜索、选择候选或上传，不必反复创建整部影片任务。</li><li><b>资料错误：</b>在详情中编辑影片资料并保存；需要同步媒体库时按提示刷新。先核对番号与来源，避免把错误资料写回。</li><li><b>整理目标冲突：</b>检查已有输出文件或剧照目录是否属于完整入库或未完成残留；不要把“删除任务记录”当作清理输出。</li><li><b>停止和删除：</b>运行中的任务先停止再删除。删除记录不会自动撤销整理；可用的“还原”操作依赖该任务保存的整理记录与实际文件状态。</li></ul>
-        <h3>封面墙与隐私模式</h3>
-        <p>在“概览 → 我的媒体库”按封面浏览已刮削的影片。同一影片的任务会合并显示，可搜索番号、片名或女优，按刮削时间或发行时间排序、分页浏览，也可批量删除记录。这里展示的是刮削记录中的影片，不会自动扫描整个磁盘。</p>
-        <p>打开“隐私模式”后，封面墙、详情海报和剧照会模糊显示，刷新页面后仍然生效。开关保存在当前浏览器，不影响磁盘上的图片和 Emby / Jellyfin 中的显示。</p>
-        <h3>影片评论</h3>
-        <p>打开影片详情即可查看同番号的公开评论。点击右上角头像进入“个人中心”，设置用户名和 6 位数字 PIN，即可创建匿名评论身份，无需邮箱或第三方账号。用户名不区分大小写，公开显示为“用户名#四位标识”；同名但 PIN 不同的用户会有不同的标识。</p>
-        <p>点击个人头像上的铅笔更换头像。弹窗支持按女优名字搜索，头像去除黑边后居中裁切。普通评论直接发布，疑似广告进入待审核，命中禁用词会提示修改。个人中心可查看自己的待审核、已发布和已隐藏评论。</p>
-        <p>在其他设备的个人中心选择“登录已有身份”，输入相同的用户名和 PIN，即可恢复头像与评论记录。请妥善记住 PIN，遗忘后无法找回。JavSP 的登录账号与评论身份分别管理；同一组用户名和 PIN 会被视为同一人，请勿分享。</p>
-        <p>评论支持点赞和取消点赞，每个评论身份只计一次。创建或登录评论身份、发表评论、点赞和举报时，会显示 Cloudflare 安全验证窗口，请按提示完成验证。验证过期、验证失败或无法连接时，不会提交操作；服务端还会限制操作频率。修改头像后，新评论使用新头像，旧评论保留发表时的头像。</p>
-        <p>评论由独立的 Cloudflare Workers + D1 服务处理和保存，Ubuntu 后台支持表格搜索、排序、多选、过滤设置和举报处理。删除的评论进入回收站，默认 30 天后自动清理，保留期内可以恢复。打开详情时，浏览器只向评论服务查询当前番号，不会上传影片文件、封面、文件路径或 JavSP WEB 登录信息。创建或登录评论身份时，用户名和 PIN 通过 HTTPS 交给评论服务验证；PIN 不保存也不公开。JavSP 只保存登录凭据与公开资料。发表评论时会发送评论内容和评论凭据，公开署名由服务端确定；服务使用 IP 的不可逆摘要限制频繁提交。</p>
-        <p>默认接口为 <code>https://comments.rtioo.com</code>。需要自行部署时，可用环境变量 <code>JAVSP_COMMENTS_URL</code> 指定其他评论服务；设为空字符串并重启可关闭评论区。Docker 修改环境变量后需重新创建容器。评论服务暂时无法访问时，不影响浏览影片和刮削。</p>
-        <p>“手动刮削”适合跟踪当前队列。任务日志摘要可复制，详细调试日志见排错章节。</p>
-      </section>
-<section id="mounted"><h2>挂载盘、STRM 与分 P 文件</h2>
-        <p>CloudDrive2、WebDAV 等挂载目录仍按普通路径提交；先确保服务端能列出目录，Docker 内能通过挂载路径读到文件。目录枚举慢时查看扫描任务，避免连续点击启动创建重复扫描。</p>
-        <ul><li><b>取消慢扫描：</b>点击“停止扫描”停止后续任务创建；挂载盘响应慢时，停止操作也可能需要等待。已经加入队列的影片任务需分别停止。</li><li><b>STRM：</b>预设默认最小匹配大小为 <code>232MiB</code>。STRM 是很小的文本文件，可在“扫描器”勾选“STRM 忽略最小文件大小”，其他视频仍遵守大小限制。</li><li><b>分 P：</b>同番号的 <code>ABC-123-1.mp4</code>、<code>ABC-123-2.mp4</code> 可作为分段识别。分段编号必须明确且不重复；一个目录里的广告视频不能因为共同目录名而被当作分 P。</li><li><b>批量选择：</b>本机文件选择器支持一次多选。多选后手动修改路径会取消原多选列表。Docker 当前浏览器选择目录或单文件，不上传本地影片。</li></ul>
-        <p>广告混入时优先检查“影片分类”规则，并启用“仅扫描匹配影片分类”。先试扫少量文件，确认广告被排除、正常影片仍能识别。</p>
-      </section>
-<section id="preset"><h2>刮削预设：识别规则、来源与整理方式</h2>
-        <p>管理员可在“刮削预设”新建、编辑和删除预设，选择可视化表单或完整 <code>config.yml</code>。修改并保存后，新任务会使用新设置；已经创建的任务仍使用原设置。</p>
-        <div class="doc-table-wrap"><table><thead><tr><th>分组</th><th>重点检查</th></tr></thead><tbody><tr><td>扫描器</td><td>扩展名、最小大小、STRM 开关、忽略目录、已有 NFO 的目录、多线程刮削数量。</td></tr><tr><td>影片分类</td><td>如何识别影片番号、先匹配哪个分类，以及匹配后使用哪些数据源。</td></tr><tr><td>网络</td><td>代理、站点镜像、请求超时与重试。用代理测试入口核对实际出口。</td></tr><tr><td>爬虫</td><td>各类影片使用的数据源、必须取得的资料，以及是否使用 AI 刮削。</td></tr><tr><td>文件夹整理 / 图片</td><td>输出目录模板、文件名、移动/硬链接、封面裁剪、剧照下载。</td></tr><tr><td>翻译器</td><td>选择翻译标题、简介及翻译引擎；系统 AI 开启后，可为当前预设选择 AI 翻译。</td></tr></tbody></table></div>
-        <h3>分类为什么会影响数据源？</h3><p>高优先级规则先匹配。正则需包含 <code>(?P&lt;avid&gt;...)</code>，<code>avid_format</code> 决定生成的番号。分类 ID 与“爬虫”中的来源列表对应；例如自定义“无码”规则先匹配了 FC2，实际使用的是“无码”来源，而不是 FC2 来源。遇到此类问题先调整优先级或该分类的数据源。</p>
-        <figure class="doc-figure"><a href="assets/guide/presets.webp" target="_blank"><img src="assets/guide/presets.webp" width="1440" height="1050" loading="lazy" alt="刮削预设表单与影片分类配置入口"></a><figcaption>选择左侧预设，修改右侧选项后点击“保存预设”（演示数据）。</figcaption></figure>
-        <p>“跳过已有 NFO 的目录”检查的是扫描输入目录，不保证输出目标没有冲突。“仅扫描匹配影片分类”适合过滤无关视频，但前提是规则能识别你要保留的影片。新规则先用少量文件验证。</p>
-        <p>需要 AI 翻译标题或简介时，先在“系统设置 → AI 接入”打开“启用 AI 刮削”总开关，再在当前预设的“翻译器”中选择字段并勾选“启用 AI 翻译”。无需在预设“爬虫”中开启 AI 刮削，原翻译引擎配置也会保留。详见 <a href="guide-ai.html#ai-translation">AI 翻译设置</a>。</p>
-        <h3>已有影片覆盖方式</h3>
-        <p>在“文件夹整理”中选择冲突处理策略。“从不”保留已有影片、封面和 NFO，跳过整理并保留源文件；“总是”替换已有版本；“按文件大小”保留较大的影片；“仅保留最新”比较文件修改时间，保留较新的影片。大小或时间相同时保留已有版本。多段影片统一检查，只要有一段需要保留就跳过整部影片，避免混合不同版本。同一文件名的不同视频扩展名也会参与比较；已有目录不会被整体删除。</p>
-        <p>保留已有影片时对应图片与资料不改写。替换已有影片后，任务不提供“还原文件”，避免清理原有资料。关闭“移动文件到整理目录”时，上述策略不参与原地资料更新。</p>
-        <p>输出模板和硬链接有文件系统要求，使用前核对输入与输出磁盘及权限。更多核心字段说明可查阅 <a href="https://github.com/Yuukiy/JavSP/wiki" target="_blank" rel="noreferrer">JavSP Wiki</a>。</p>
-      </section>
-<section id="crawlers"><h2>爬虫与网络：先单独测试，再运行整批</h2>
-        <ol><li>进入“爬虫配置”，选择具体爬虫，输入一个确定存在的番号并运行测试。</li><li>查看抓取字段和运行输出：是否取得标题、封面，是否出现 403、超时或解析异常。</li><li>在“刮削预设 → 爬虫”调整该分类使用的数据源与顺序；爬虫配置页管理代码，预设页决定任务使用哪些爬虫。</li><li>自定义爬虫保存后再单独测试；仅保存代码不代表能抓到资料。内置爬虫只读，可移除和恢复。</li></ol>
-        <p>代理地址由运行 JavSP WEB 的机器使用。Docker 中 <code>127.0.0.1</code> 指向容器，宿主机代理需填写容器能访问的地址。HTTPS 证书失败时检查站点域名、系统时间和代理证书，不要关闭证书校验。403 表示站点拒绝访问，还应检查网络出口和该站点的登录 Cookie。</p>
-        <p>代理使用自签名证书时，可将可信的 PEM 格式 <code>.crt</code> 文件只读挂载到容器的 <code>/usr/local/share/ca-certificates/</code> 后重启。若自行改用非 root 用户运行容器，需要在构建镜像时安装证书。同步 Cookie 成功只说明读到了登录信息，站点仍可能要求重新登录或验证。</p>
-        <p>需要 AI 帮你制作爬虫时，在对话中说明目标站点和要提取的资料，检查生成的代码后再确认保存。保存后先测试一个番号，确认能取得资料，再用于批量刮削。</p>
-      </section>
-<nav class="doc-pager" aria-label="相邻主题"><a href="guide-install.html"><small>上一主题</small>安装与部署 ←</a><a href="guide-ai.html"><small>下一主题</small>AI 助手 →</a></nav></article>
-</main>
-  <footer class="site-footer"><div class="page-width footer-inner"><span>© 2026 APecme · JavSP WEB</span><span>GPL-3.0 / Anti 996 License</span><a href="index.html">返回首页 →</a></div></footer>
-  <script src="script.js?v=topics-20261010"></script>
-</body>
-</html>
-
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="从单次任务到批量整理，了解预设、分类、分 P 与爬虫之间的关系。">
+  <meta name="theme-color" content="#0b1020">
+  <title>刮削与整理 | JavSP WEB 教程</title>
+  <link rel="icon" href="assets/javsp-logo.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="subpages.css?v=topics-20261010">
+</head>
+<body class="docs-page">
+  <header class="site-header"><a class="brand" href="index.html" aria-label="JavSP WEB 首页"><img src="assets/javsp-logo.png" alt=""><span>JavSP <b>WEB</b></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button><nav id="site-nav" class="site-nav" aria-label="主导航"><a href="index.html">首页</a><a class="is-current" href="docs.html">文档</a><a href="demo.html">示例站点</a><a class="nav-github" href="https://github.com/APecme/JavSP-Web" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav></header>
+  <main class="docs-shell page-width">
+<aside class="doc-nav" aria-label="教程导航"><a class="doc-home-link" href="docs.html">← 教程目录</a><div class="doc-nav-group"><a class="doc-topic-link" href="guide-install.html">安装与部署</a></div><div class="doc-nav-group is-active-topic"><a class="doc-topic-link" href="guide-scraping.html" aria-current="page">刮削与整理</a><a class="doc-chapter-link" href="#manual">手动刮削与任务</a><a class="doc-chapter-link" href="#mounted">挂载盘、STRM 与分 P</a><a class="doc-chapter-link" href="#preset">刮削预设与分类</a><a class="doc-chapter-link" href="#crawlers">爬虫与网络</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-ai.html">AI 助手</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-automation.html">自动化与集成</a></div><div class="doc-nav-group"><a class="doc-topic-link" href="guide-maintenance.html">维护与排错</a></div><a class="doc-demo-link" href="demo.html">打开交互示例 →</a></aside>
+<article class="doc-content"><header class="doc-topic-heading"><p class="eyebrow">使用教程 / 02</p><h1>刮削与整理</h1><p class="doc-lede">从单次任务到批量整理，了解预设、分类、分 P 与爬虫之间的关系。</p></header>
+<section id="manual"><h2>手动刮削：提交、查看与处理结果</h2>
+        <ol><li>进入“手动刮削”，填写文件或目录路径；Docker 使用“浏览容器路径”，Windows 本机可使用文件选择器。</li><li>选定刮削预设，点击“启动 JavSP”。选择目录时，先等待扫描完成，找到的影片会陆续出现在任务队列中。</li><li>在任务队列查看状态、扫描数量和阶段进度。支持按状态、关键词、大小和时间筛选，并分页查看。</li><li>打开“详情”，先看最终结果，再展开数据源和图片日志。单个爬虫失败不代表整个任务失败；以最终是否取得必需资料并完成整理为准。</li></ol>
+        <figure class="doc-figure"><a href="assets/guide/manual.webp" target="_blank"><img src="assets/guide/manual.webp" width="1440" height="1050" loading="lazy" alt="手动刮削页面：输入路径、选择预设、查看队列和任务详情"></a><figcaption>填写影片路径、选择预设后启动刮削，下方可查看任务进度（演示数据）。</figcaption></figure>
+        <h3>什么时候重试，什么时候处理文件？</h3><ul><li><b>只有图片失败：</b>在任务详情中重试图片；封面还可从任务详情发起搜索、选择候选或上传，不必反复创建整部影片任务。</li><li><b>资料错误：</b>在详情中编辑影片资料并保存；需要同步媒体库时按提示刷新。先核对番号与来源，避免把错误资料写回。</li><li><b>整理目标冲突：</b>检查已有输出文件或剧照目录是否属于完整入库或未完成残留；不要把“删除任务记录”当作清理输出。</li><li><b>停止和删除：</b>运行中的任务先停止再删除。删除记录不会自动撤销整理；可用的“还原”操作依赖该任务保存的整理记录与实际文件状态。</li></ul>
+        <h3>封面墙与隐私模式</h3>
+        <p>在“片库”按封面浏览影片，可按女优、片商、媒体库和年份分类，搜索、排序、分页浏览或多选管理。绑定 Emby / Jellyfin 后，也可读取媒体库影片，与刮削记录一起展示；不会自动扫描整个磁盘。同一影片的重复记录会合并显示，删除任务记录不会删除影片文件。</p>
+        <p>女优分类支持“仅显示已有女优”和“全部 Gfriends 女优”切换。打开影片详情可查看和编辑资料、管理封面与剧照；连接媒体库后可打开对应的播放页面。</p>
+        <p>打开“隐私模式”后，封面墙、详情海报和剧照会模糊显示，刷新页面后仍然生效。开关保存在当前浏览器，不影响磁盘上的图片和 Emby / Jellyfin 中的显示。</p>
+        <h3>影片评论</h3>
+        <p>打开影片详情即可查看同番号的公开评论。点击右上角头像进入“个人中心”，设置用户名和 6 位数字 PIN，即可创建匿名评论身份，无需邮箱或第三方账号。用户名不区分大小写，公开显示为“用户名#四位标识”；同名但 PIN 不同的用户会有不同的标识。</p>
+        <p>点击个人头像上的铅笔更换头像。弹窗支持按女优名字搜索，头像去除黑边后居中裁切。普通评论直接发布，疑似广告进入待审核，命中禁用词会提示修改。个人中心可查看自己的待审核、已发布和已隐藏评论。</p>
+        <p>在其他设备的个人中心选择“登录已有身份”，输入相同的用户名和 PIN，即可恢复头像与评论记录。请妥善记住 PIN，遗忘后无法找回。JavSP 的登录账号与评论身份分别管理；同一组用户名和 PIN 会被视为同一人，请勿分享。</p>
+        <p>评论支持点赞、取消点赞、回复和举报，每个评论身份对同一条评论只计一次赞。评论与回复正文最多 300 字符，举报原因最多 300 字符。评论区每页显示 20 条，翻页查看；详情页中评论区可独立滚动。</p>
+        <p>正文支持 Markdown，例如 <code>**加粗**</code>、列表和链接；不执行 HTML，也不加载外部图片。输入 <code>30:15</code> 或 <code>1:02:03</code> 会生成可点击的时间标签。先在 Emby / Jellyfin 客户端打开该影片，确保存在已登录且可控制的播放会话，再点击标签跳转。没有可用会话时会提示，不会直接开始播放影片。“评论内容”旁的问号可查看输入提示。</p>
+        <p>服务会限制操作频率，按风险触发 Cloudflare 安全挑战；持续滥用可能触发临时封禁。需要验证时按窗口提示完成，验证未通过不会提交操作。修改头像后，新评论使用新头像，旧评论保留发表时的头像。</p>
+        <p>评论由独立的 Cloudflare Workers + D1 服务处理和保存，管理后台支持搜索、排序、多选、过滤、举报处理，以及按用户 ID 或 IP 封禁。管理员可在用户名下查看评论来源 IP；IP 加密保存，仅授权管理员可查看，普通用户不会看到。删除的评论进入回收站，默认 30 天后自动清理，保留期内可以恢复。浏览器通过 JavSP WEB 的同源接口读取和提交评论，由服务器转发到独立评论服务；只转发番号、评论内容和评论身份凭据，不转发本站登录 Cookie，也不上传影片文件、封面或路径。人机验证页面仍由浏览器访问验证服务。创建或登录评论身份时，用户名和 PIN 通过 HTTPS 交给服务验证，PIN 不公开，也不以明文保存。</p>
+        <p>默认接口为 <code>https://comments.rtioo.com</code>。需要自行部署时，可用环境变量 <code>JAVSP_COMMENTS_URL</code> 指定其他评论服务；设为空字符串并重启可关闭评论区。Docker 修改环境变量后需重新创建容器。评论服务暂时无法访问时，不影响浏览影片和刮削。</p>
+        <p>“手动刮削”适合跟踪当前队列。任务日志摘要可复制，详细调试日志见排错章节。</p>
+      </section>
+<section id="mounted"><h2>挂载盘、STRM 与分 P 文件</h2>
+        <p>CloudDrive2、WebDAV 等挂载目录仍按普通路径提交；先确保服务端能列出目录，Docker 内能通过挂载路径读到文件。目录枚举慢时查看扫描任务，避免连续点击启动创建重复扫描。</p>
+        <ul><li><b>取消慢扫描：</b>点击“停止扫描”停止后续任务创建；挂载盘响应慢时，停止操作也可能需要等待。已经加入队列的影片任务需分别停止。</li><li><b>STRM：</b>预设默认最小匹配大小为 <code>232MiB</code>。STRM 是很小的文本文件，可在“扫描器”勾选“STRM 忽略最小文件大小”，其他视频仍遵守大小限制。</li><li><b>分 P：</b>同番号的 <code>ABC-123-1.mp4</code>、<code>ABC-123-2.mp4</code> 可作为分段识别。分段编号必须明确且不重复；一个目录里的广告视频不能因为共同目录名而被当作分 P。</li><li><b>批量选择：</b>本机文件选择器支持一次多选。多选后手动修改路径会取消原多选列表。Docker 当前浏览器选择目录或单文件，不上传本地影片。</li></ul>
+        <p>广告混入时优先检查“影片分类”规则，并启用“仅扫描匹配影片分类”。先试扫少量文件，确认广告被排除、正常影片仍能识别。</p>
+      </section>
+<section id="preset"><h2>刮削预设：识别规则、来源与整理方式</h2>
+        <p>管理员可在“刮削预设”新建、编辑和删除预设，选择可视化表单或完整 <code>config.yml</code>。修改并保存后，新任务会使用新设置；已经创建的任务仍使用原设置。</p>
+        <div class="doc-table-wrap"><table><thead><tr><th>分组</th><th>重点检查</th></tr></thead><tbody><tr><td>扫描器</td><td>扩展名、最小大小、STRM 开关、忽略目录、已有 NFO 的目录、多线程刮削数量。</td></tr><tr><td>影片分类</td><td>如何识别影片番号、先匹配哪个分类，以及匹配后使用哪些数据源。</td></tr><tr><td>网络</td><td>代理、站点镜像、请求超时与重试。用代理测试入口核对实际出口。</td></tr><tr><td>爬虫</td><td>各类影片使用的数据源、必须取得的资料，以及是否使用 AI 刮削。</td></tr><tr><td>文件夹整理 / 图片</td><td>输出目录模板、文件名、移动/硬链接、封面裁剪、剧照下载。</td></tr><tr><td>翻译器</td><td>选择翻译标题、简介及翻译引擎；系统 AI 开启后，可为当前预设选择 AI 翻译。</td></tr></tbody></table></div>
+        <h3>分类为什么会影响数据源？</h3><p>高优先级规则先匹配。正则需包含 <code>(?P&lt;avid&gt;...)</code>，<code>avid_format</code> 决定生成的番号。分类 ID 与“爬虫”中的来源列表对应；例如自定义“无码”规则先匹配了 FC2，实际使用的是“无码”来源，而不是 FC2 来源。遇到此类问题先调整优先级或该分类的数据源。</p>
+        <figure class="doc-figure"><a href="assets/guide/presets.webp" target="_blank"><img src="assets/guide/presets.webp" width="1440" height="1050" loading="lazy" alt="刮削预设表单与影片分类配置入口"></a><figcaption>选择左侧预设，修改右侧选项后点击“保存预设”（演示数据）。</figcaption></figure>
+        <p>“跳过已有 NFO 的目录”检查的是扫描输入目录，不保证输出目标没有冲突。“仅扫描匹配影片分类”适合过滤无关视频，但前提是规则能识别你要保留的影片。新规则先用少量文件验证。</p>
+        <p>需要 AI 翻译标题或简介时，先在“系统设置 → AI 接入”打开“启用 AI 刮削”总开关，再在当前预设的“翻译器”中选择字段并勾选“启用 AI 翻译”。无需在预设“爬虫”中开启 AI 刮削，原翻译引擎配置也会保留。详见 <a href="guide-ai.html#ai-translation">AI 翻译设置</a>。</p>
+        <h3>已有影片覆盖方式</h3>
+        <p>在“文件夹整理”中选择冲突处理策略。“从不”保留已有影片、封面和 NFO，跳过整理并保留源文件；“总是”替换已有版本；“按文件大小”保留较大的影片；“仅保留最新”比较文件修改时间，保留较新的影片。大小或时间相同时保留已有版本。多段影片统一检查，只要有一段需要保留就跳过整部影片，避免混合不同版本。同一文件名的不同视频扩展名也会参与比较；已有目录不会被整体删除。</p>
+        <p>保留已有影片时对应图片与资料不改写。替换已有影片后，任务不提供“还原文件”，避免清理原有资料。关闭“移动文件到整理目录”时，上述策略不参与原地资料更新。</p>
+        <p>输出模板和硬链接有文件系统要求，使用前核对输入与输出磁盘及权限。更多核心字段说明可查阅 <a href="https://github.com/Yuukiy/JavSP/wiki" target="_blank" rel="noreferrer">JavSP Wiki</a>。</p>
+      </section>
+<section id="crawlers"><h2>爬虫与网络：先单独测试，再运行整批</h2>
+        <ol><li>进入“爬虫配置”，选择具体爬虫，输入一个确定存在的番号并运行测试。</li><li>查看抓取字段和运行输出：是否取得标题、封面，是否出现 403、超时或解析异常。</li><li>在“刮削预设 → 爬虫”调整该分类使用的数据源与顺序；爬虫配置页管理代码，预设页决定任务使用哪些爬虫。</li><li>自定义爬虫保存后再单独测试；仅保存代码不代表能抓到资料。内置爬虫只读，可移除和恢复。</li></ol>
+        <p>代理地址由运行 JavSP WEB 的机器使用。Docker 中 <code>127.0.0.1</code> 指向容器，宿主机代理需填写容器能访问的地址。HTTPS 证书失败时检查站点域名、系统时间和代理证书，不要关闭证书校验。403 表示站点拒绝访问，还应检查网络出口和该站点的登录 Cookie。</p>
+        <p>代理使用自签名证书时，可将可信的 PEM 格式 <code>.crt</code> 文件只读挂载到容器的 <code>/usr/local/share/ca-certificates/</code> 后重启。若自行改用非 root 用户运行容器，需要在构建镜像时安装证书。同步 Cookie 成功只说明读到了登录信息，站点仍可能要求重新登录或验证。</p>
+        <p>需要 AI 帮你制作爬虫时，在对话中说明目标站点和要提取的资料，检查生成的代码后再确认保存。保存后先测试一个番号，确认能取得资料，再用于批量刮削。</p>
+      </section>
+<nav class="doc-pager" aria-label="相邻主题"><a href="guide-install.html"><small>上一主题</small>安装与部署 ←</a><a href="guide-ai.html"><small>下一主题</small>AI 助手 →</a></nav></article>
+</main>
+  <footer class="site-footer"><div class="page-width footer-inner"><span>© 2026 APecme · JavSP WEB</span><span>GPL-3.0 / Anti 996 License</span><a href="index.html">返回首页 →</a></div></footer>
+  <script src="script.js?v=topics-20261010"></script>
+</body>
+</html>
+

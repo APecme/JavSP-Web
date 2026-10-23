@@ -14,10 +14,9 @@ __all__ = ['scan_movies', 'get_fmt_size', 'get_remaining_path_len', 'replace_ill
 
 
 from javsp.avid import *
-from javsp.lib import re_escape
 from javsp.config import Cfg
 from javsp.datatype import Movie
-from javsp.multipart import part_number
+from javsp.multipart import group_files, part_number
 
 logger = logging.getLogger(__name__)
 failed_items = []
@@ -25,15 +24,10 @@ failed_items = []
 
 def scan_movies(root: str) -> List[Movie]:
     """获取文件夹内的所有影片的列表（自动探测同一文件夹内的分片）"""
-    # Explicit numeric suffixes preserve their part numbers, even with gaps.
-    # Other legacy naming styles use the common-prefix fallback below.
-
-    # 扫描所有影片文件并获取它们的番号
-    dic = {}    # avid: [abspath1, abspath2...]
+    dic = {}
     small_videos = {}
     ignore_folder_name_pattern = re.compile('|'.join(Cfg().scanner.ignored_folder_name_pattern))
     if Cfg().scanner.input_files is not None:
-        # A Web task is an explicit file set, never a scan of sibling movies.
         selected = {}
         for value in Cfg().scanner.input_files:
             path = os.path.abspath(value)
@@ -45,44 +39,41 @@ def scan_movies(root: str) -> List[Movie]:
         scan_entries = [(os.path.dirname(root), [], [os.path.basename(root)])]
     else:
         scan_entries = os.walk(root)
+
     for dirpath, dirnames, filenames in scan_entries:
         for name in dirnames.copy():
             if ignore_folder_name_pattern.match(name):
                 dirnames.remove(name)
-            # 移除有nfo的文件夹
-            if Cfg().scanner.skip_nfo_dir:
-                if any(file.lower().endswith(".nfo") for file in os.listdir(os.path.join(dirpath, name)) if isinstance(file, str)):
-                    print(f"skip file {name}")
-                    dirnames.remove(name)
+            if Cfg().scanner.skip_nfo_dir and any(
+                    file.lower().endswith('.nfo') for file in os.listdir(os.path.join(dirpath, name))
+                    if isinstance(file, str)):
+                print(f'skip file {name}')
+                dirnames.remove(name)
 
-        for file in filenames:
-            ext = os.path.splitext(file)[1].lower()
-            if ext in Cfg().scanner.filename_extensions:
-                fullpath = os.path.join(dirpath, file)
-                # 忽略小于指定大小的文件
-                filesize = os.path.getsize(fullpath)
-                if (filesize < Cfg().scanner.minimum_size
-                        and not (ext == '.strm' and Cfg().scanner.strm_ignore_minimum_size)):
-                    small_videos.setdefault(file, []).append(fullpath)
-                    continue
-                configured = configured_media_type(fullpath)
-                dvdid = configured[2] if configured and configured[1] == 'dvdid' else get_id(fullpath)
-                cid = configured[2] if configured and configured[1] == 'cid' else ('' if configured else get_cid(fullpath))
-                # 如果文件名能匹配到cid，那么将cid视为有效id，因为此时dvdid多半是错的
-                avid = cid if cid else dvdid
-                if avid:
-                    if avid in dic:
-                        dic[avid].append(fullpath)
-                    else:
-                        dic[avid] = [fullpath]
-                else:
-                    fail = Movie('无法识别番号')
-                    fail.files = [fullpath]
-                    failed_items.append(fail)
-                    logger.error(f"无法提取影片番号: '{fullpath}'")
-    # 多分片影片容易有文件大小低于阈值的子片，进行特殊处理
+        for name in filenames:
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in Cfg().scanner.filename_extensions:
+                continue
+            fullpath = os.path.join(dirpath, name)
+            filesize = os.path.getsize(fullpath)
+            if (filesize < Cfg().scanner.minimum_size
+                    and not (ext == '.strm' and Cfg().scanner.strm_ignore_minimum_size)):
+                small_videos.setdefault(name, []).append(fullpath)
+                continue
+            configured = configured_media_type(fullpath)
+            dvdid = configured[2] if configured and configured[1] == 'dvdid' else get_id(fullpath)
+            cid = configured[2] if configured and configured[1] == 'cid' else ('' if configured else get_cid(fullpath))
+            avid = cid if cid else dvdid
+            if avid:
+                dic.setdefault(avid, []).append(fullpath)
+            else:
+                fail = Movie('无法识别番号')
+                fail.files = [fullpath]
+                failed_items.append(fail)
+                logger.error("无法提取影片番号: '%s'", fullpath)
+
     has_avid = {}
-    for name in list(small_videos.keys()):
+    for name in list(small_videos):
         configured = configured_media_type(name)
         dvdid = configured[2] if configured and configured[1] == 'dvdid' else get_id(name)
         cid = configured[2] if configured and configured[1] == 'cid' else ('' if configured else get_cid(name))
@@ -91,89 +82,45 @@ def scan_movies(root: str) -> List[Movie]:
             dic[avid].extend(small_videos.pop(name))
         elif avid:
             has_avid[name] = avid
-    # 对于前面忽略的视频生成一个简单的提示
-    small_videos = {k:sorted(v) for k,v in sorted(small_videos.items())}
+    small_videos = {key: sorted(value) for key, value in sorted(small_videos.items())}
     skipped_files = list(itertools.chain(*small_videos.values()))
-    skipped_cnt = len(skipped_files)
-    if skipped_cnt > 0:
-        if len(has_avid) > 0:
-            logger.info(f"跳过了 {', '.join(has_avid)} 等{skipped_cnt}个小于指定大小的视频文件")
+    if skipped_files:
+        if has_avid:
+            logger.info('跳过了 %s 等%s个小于指定大小的视频文件', ', '.join(has_avid), len(skipped_files))
         else:
-            logger.info(f"跳过了{skipped_cnt}个小于指定大小的视频文件")
-        logger.debug('跳过的视频文件如下:\n' + '\n'.join(skipped_files))
-    # 检查是否有多部影片对应同一个番号
-    non_slice_dup = {}  # avid: [abspath1, abspath2...]
-    for avid, files in dic.copy().items():
-        # 一一对应的直接略过
-        if len(files) == 1:
-            continue
-        dirs = set([os.path.split(i)[0] for i in files])
-        # 不同位置的多部影片有相同番号时，略过并报错
-        if len(dirs) > 1:
-            non_slice_dup[avid] = files
-            del dic[avid]
-            continue
-        numbers = [part_number(path) for path in files]
-        if all(number is not None for number in numbers) and len(set(numbers)) == len(numbers):
-            dic[avid] = [path for _, path in sorted(zip(numbers, files))]
-            continue
-        # 提取分片信息（如果正则替换成功，只会剩下单个小写字符）。相关变量都要使用同样的列表生成顺序
-        basenames = [os.path.basename(i) for i in files]
-        prefix = os.path.commonprefix(basenames)
-        try:
-            pattern_expr = re_escape(prefix) + r'\s*([a-z\d])\s*'
-            pattern = re.compile(pattern_expr, flags=re.I)
-        except re.error:
-            logger.debug(f"正则识别影片分片信息时出错: '{pattern_expr}'")
-            del dic[avid]
-            continue
-        remaining = [pattern.sub(r'\1', i).lower() for i in basenames]
-        postfixes = [i[1:] for i in remaining]
-        slices = [i[0] for i in remaining]
-        # 如果有不同的后缀，说明有文件名不符合正则表达式条件（没有发生替换或不带分片信息）
-        if (len(set(postfixes)) != 1
-            # remaining为初步提取的分片信息，不允许有重复值
-            or len(slices) != len(set(slices))):
-            logger.debug(f"无法识别分片信息: {prefix=}, {remaining=}")
-            non_slice_dup[avid] = files
-            del dic[avid]
-            continue
-        # 影片编号必须从 0/1/a 开始且编号连续
-        sorted_slices = sorted(slices)
-        first, last = sorted_slices[0], sorted_slices[-1]
-        if (first not in ('0', '1', 'a')) or (ord(last) != (ord(first)+len(sorted_slices)-1)):
-            logger.debug(f"无效的分片起始编号或分片编号不连续: {sorted_slices=}")
-            non_slice_dup[avid] = files
-            del dic[avid]
-            continue
-        # 生成最终的分片信息
-        mapped_files = [files[slices.index(i)] for i in sorted_slices]
-        dic[avid] = mapped_files
+            logger.info('跳过了%s个小于指定大小的视频文件', len(skipped_files))
+        logger.debug('跳过的视频文件如下:\n%s', '\n'.join(skipped_files))
 
-    # 汇总输出错误提示信息
-    msg = ''
-    for avid, files in non_slice_dup.items():
-        msg += f'{avid}: \n'
-        for f in files:
-            msg += ('  ' + os.path.relpath(f, root) + '\n')
-    if msg:
-        logger.error("下列番号对应多部影片文件且不符合分片规则，已略过整理，请手动处理后重新运行脚本: \n" + msg)
-    # 转换数据的组织格式
+    # Validate same-directory groups with the same rules used by Web task scans.
+    validated = []
+    for files in dic.values():
+        dirs = {os.path.dirname(path) for path in files}
+        if len(dirs) > 1:
+            logger.error('同番号文件分布于不同目录，跳过整理: %s', '、'.join(files))
+            continue
+        try:
+            validated.extend(group_files(files, Cfg().scanner))
+        except ValueError as exc:
+            logger.error('%s', exc)
+    dic = validated
+
     movies: List[Movie] = []
-    for avid, files in dic.items():
+    for files in sorted(dic, key=lambda paths: str(paths[0]).casefold()):
+        files = list(map(str, files))
+        configured = configured_media_type(files[0])
+        avid = configured[2] if configured else (get_cid(files[0]) or get_id(files[0]))
         src = guess_av_type(avid, files[0])
         if not is_cid_media_type(src):
             mov = Movie(avid)
         else:
             mov = Movie(cid=avid)
-            # 即使初步识别为cid，也存储dvdid以供误识别时退回到dvdid模式进行抓取
             mov.dvdid = get_id(files[0])
         mov.files = files
         numbers = [part_number(path) for path in files]
         if all(number is not None for number in numbers):
             mov.part_numbers = numbers
         mov.data_src = src
-        logger.debug(f'影片数据源类型: {avid}: {src}')
+        logger.debug('影片数据源类型: %s: %s', avid, src)
         movies.append(mov)
     return movies
 
