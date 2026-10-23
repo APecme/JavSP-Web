@@ -22,7 +22,7 @@
 > 识别番号、刮削资料、生成 NFO 与图片，再按你的规则整理文件。<br>
 > 在封面墙浏览收藏，用评论交流观影感受，用 AI 辅助刮削与翻译。
 >
-> **Windows EXE · Docker / NAS · 明亮／黑暗主题 · 浏览器访问**
+> **Windows EXE · Docker / NAS · WEB · 18+**
 
 </div>
 
