@@ -240,6 +240,7 @@ async function verifyRuntimeAvailability() {
   const context = vm.createContext({
     state, $: () => null, editPreset() {},
     api: async url => url === '/api/runtime' ? runtime : [],
+    renderPresetList() {}, renderConfigFields() {},
   });
   vm.runInContext(section(app, 'async function loadPresets', 'function presetPayload'), context);
   await context.loadPresets();

@@ -192,6 +192,14 @@
     $('#dw-schedule-fields').hidden = !scheduled;
     $('#dw-cron').required = scheduled;
     $('#dw-cron').disabled = !scheduled;
+    // Watch mode needs no interval/time config: keep the timing grid in the DOM
+    // (tests reference #dw-poll/#dw-stable/#dw-max) but hide it.
+    const timing = $('#dw-watch-timing');
+    if (timing) timing.hidden = !scheduled;
+    const timingNote = $('#dw-watch-timing-note');
+    if (timingNote) timingNote.hidden = !scheduled;
+    const watchNote = $('#dw-watch-note');
+    if (watchNote) watchNote.hidden = scheduled;
     $('#dw-watch-fields').querySelectorAll('input, textarea').forEach(input => { input.disabled = scheduled; });
   }
 
@@ -399,12 +407,14 @@
           <small class="muted">请填写已挂载到容器内的绝对路径；Docker 环境请直接填写容器路径。</small>
         </div>
         <label>刮削预设<select id="dw-preset"></select></label>
-        <div id="dw-watch-fields"><div class="dw-grid">
+        <div id="dw-watch-fields">
+        <p id="dw-watch-note" class="muted">自动监控新增文件，无需调度。</p>
+        <div class="dw-grid" id="dw-watch-timing">
           <label>扫描间隔（秒）<input id="dw-poll" type="number" step="1" min="5" max="3600" value="30"></label>
           <label>稳定等待（秒）<input id="dw-stable" type="number" step="1" min="0" max="86400" value="60"></label>
           <label>单次最多提交<input id="dw-max" type="number" step="1" min="1" max="100" value="20"></label>
         </div>
-        <small class="muted">扫描间隔为轮询周期；稳定等待内文件大小或修改时间仍在变化时不会提交，避免处理还在写入的文件。</small>
+        <small class="muted" id="dw-watch-timing-note">稳定等待内文件大小或修改时间仍在变化时不会提交，避免处理还在写入的文件。</small>
         <label class="check-label"><input id="dw-recursive" type="checkbox" checked>包含子目录</label>
         <label class="check-label"><input id="dw-include-existing" type="checkbox">首次扫描也处理目录中已有的文件</label>
         <small class="muted">不勾选时，保存规则那一刻已存在的文件只记为基线，仅提交之后新增或变化的文件。</small>

@@ -27,3 +27,6 @@ exe-icon-preview.png
 /tmp/
 /debug.log
 /comments-service/
+
+# Local SSH key for the deployment host
+.ssh/

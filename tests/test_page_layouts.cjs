@@ -60,12 +60,12 @@ test('feature pages expose deliberate regions instead of stacked generic panels'
 
   assert.match(document, /data-auto-scrape-module="watch"/);
   assert.match(document, /data-auto-scrape-module="schedule"/);
-  assert.match(document, /data-auto-scrape-module="download"/);
+  assert.doesNotMatch(document, /data-auto-scrape-module="download"/, 'download auto-scrape module was removed');
+  assert.doesNotMatch(document, /download-auto-scrape/, 'no download auto-scrape hooks remain');
   assert.match(document, /id="directory-watch-mount"/);
   assert.match(document, /id="auto-scrape-watch-status"/);
   const autoScrape = document.slice(at(document, 'class="view" data-panel="auto-scrape"'), at(document, 'class="view" data-panel="downloads"'));
   assert.ok(autoScrape.indexOf('id="auto-scrape-schedule-list"') > autoScrape.indexOf('data-auto-scrape-module="schedule"'));
-  assert.ok(autoScrape.indexOf('id="download-auto-scrape-run-list"') > autoScrape.indexOf('data-auto-scrape-module="download"'));
 
   const downloads = document.slice(at(document, 'class="view" data-panel="downloads"'), at(document, 'class="view" data-panel="presets"'));
   between(downloads, 'id="download-summary"', 'id="download-filter-bar"', 'id="download-list"');
@@ -73,7 +73,9 @@ test('feature pages expose deliberate regions instead of stacked generic panels'
   assert.match(downloads, /id="download-filter-panel"[^>]*class="[^"]*download-filter-panel|<details[^>]*id="download-filter-panel"/);
 
   const presets = document.slice(at(document, 'class="view" data-panel="presets"'), at(document, 'class="view" data-panel="crawler-config"'));
-  between(presets, 'class="panel preset-list-panel', 'class="panel preset-editor-panel', 'id="preset-form"');
+  assert.match(presets, /class="panel preset-list-panel/);
+  assert.match(presets, /id="preset-editor-dialog"/);
+  assert.ok(presets.indexOf('id="preset-form"') > presets.indexOf('id="preset-editor-dialog"'), 'the editor form lives inside the preset dialog');
 
   const aiPage = document.slice(at(document, 'class="view" data-panel="ai-scrape"'), at(document, 'class="view" data-panel="scrape"'));
   between(aiPage, 'class="ai-history"', 'id="ai-workspace"', 'id="ai-chat-form"');
@@ -84,9 +86,12 @@ test('settings are split into navigable groups while every form stays in the doc
   const document = html();
   const settings = document.slice(at(document, 'class="view" data-panel="settings"'), at(document, 'id="profile-dialog"'));
   assert.match(settings, /class="[^"]*settings-layout/);
-  assert.match(settings, /class="[^"]*settings-nav"[^>]*aria-label="设置分类"/);
+  // No embedded rail nav: group switching happens through tabs inside the panel.
+  assert.doesNotMatch(settings, /class="[^"]*settings-nav"/);
+  assert.doesNotMatch(settings, /<a[^>]*href="#settings-/);
+  assert.match(settings, /class="settings-tabs"[^>]*role="tablist"[^>]*aria-label="设置分组"/);
   for (const group of ['update', 'connections', 'ai', 'account']) {
-    assert.match(settings, new RegExp(`href="#settings-${group}"`));
+    assert.match(settings, new RegExp(`data-settings-tab="${group}"`));
     assert.match(settings, new RegExp(`id="settings-${group}"`));
   }
   assert.ok(settings.indexOf('id="settings-update"') < settings.indexOf('id="settings-connections"'));
@@ -146,7 +151,7 @@ test('crawler configuration renders source cards with an editor dialog', () => {
     escapeHtml: value => String(value ?? ''),
     state: { disabledBuiltInCrawlers: [] },
   });
-  vm.runInContext(`${slice(source, 'function crawlerCardMarkup', 'function crawlerCodeDetail')}${slice(source, 'function crawlerCodeDetail', 'async function loadCrawlerSource')}`, context);
+  vm.runInContext(`${slice(source, 'let crawlerStatsCache = null;', 'function crawlerSkeletonMarkup')}${slice(source, 'function crawlerSkeletonMarkup', 'function crawlerCodeDetail')}${slice(source, 'function crawlerCodeDetail', 'async function loadCrawlerSource')}`, context);
   const markup = context.crawlerCodeMarkup([
     { name: 'alpha', kind: 'builtin' },
     { name: 'beta', kind: 'custom' },
@@ -170,7 +175,7 @@ test('crawler configuration marks disabled built-in crawlers and exposes skeleto
     escapeHtml: value => String(value ?? ''),
     state: { disabledBuiltInCrawlers: ['gamma'] },
   });
-  vm.runInContext(slice(source, 'function crawlerCardMarkup', 'function crawlerCodeDetail'), context);
+  vm.runInContext(`${slice(source, 'let crawlerStatsCache = null;', 'function crawlerSkeletonMarkup')}${slice(source, 'function crawlerSkeletonMarkup', 'function crawlerCodeDetail')}`, context);
   const markup = context.crawlerCodeMarkup([{ name: 'alpha', kind: 'builtin' }]);
   assert.match(markup, /crawler-source-card-disabled/);
   assert.match(markup, /crawler-source-card-status/);
@@ -260,35 +265,42 @@ test('auto-scrape module headings report their rule and run counts', () => {
   const source = app();
   const target = element();
   const status = element();
-  const runTarget = element();
-  const runStatus = element();
   const state = {
     autoScrapeSchedules: [
       { id: 'one', enabled: true, name: '每日', cron: '0 2 * * *', input_directory: '/a', preset_id: 'default' },
       { id: 'two', enabled: false, name: '每周', cron: '0 3 * * 1', input_directory: '/b', preset_id: 'default' },
     ],
-    downloadAutoScrapeRuns: [{ id: 'run', download_name: 'ABC', task_ids: [] }],
   };
   const context = vm.createContext({ javspIcon: () => '',
     $: selector => ({
       '#auto-scrape-schedule-list': target,
       '#auto-scrape-schedule-status': status,
-      '#download-auto-scrape-run-list': runTarget,
-      '#download-auto-scrape-status': runStatus,
     })[selector] || null,
     document: { querySelectorAll: () => [] },
     state,
     escapeHtml: value => String(value ?? ''),
     presetName: value => value,
-    autoScrapeRunCountsMarkup: () => '',
     formatLocalDateTime: () => '2026-10-23 10:00',
   });
   vm.runInContext(slice(source, 'function renderAutoScrapeSchedules', 'async function loadAutoScrapeSchedules'), context);
-  vm.runInContext(slice(source, 'function renderDownloadAutoScrapeRuns', 'async function loadDownloadAutoScrapeRuns'), context);
   context.renderAutoScrapeSchedules();
-  context.renderDownloadAutoScrapeRuns();
   assert.equal(status.textContent, '2 条规则 · 1 条启用');
-  assert.equal(runStatus.textContent, '1 条自动记录');
+});
+
+test('download auto-scrape UI and logic are fully removed', () => {
+  const source = app();
+  assert.doesNotMatch(source, /downloadAutoScrapeRuns/);
+  assert.doesNotMatch(source, /activeDownloadAutoScrapeRun/);
+  assert.doesNotMatch(source, /renderAutoScrapeRules/);
+  assert.doesNotMatch(source, /normalizeAutoScrapeRules/);
+  assert.doesNotMatch(source, /newAutoScrapeRule/);
+  assert.doesNotMatch(source, /readAutoScrapeRules/);
+  assert.doesNotMatch(source, /ensureAutoScrapeControls/);
+  assert.doesNotMatch(source, /auto_scrape_rules/);
+  assert.doesNotMatch(source, /data-view-download-auto-scrape-run/);
+  const document = html();
+  assert.doesNotMatch(document, /download-auto-scrape/);
+  assert.doesNotMatch(document, /add-auto-scrape-rule/);
 });
 
 test('an empty preset library gets an actionable empty state', () => {
@@ -298,10 +310,10 @@ test('an empty preset library gets an actionable empty state', () => {
   const context = vm.createContext({ javspIcon: () => '',
     $: selector => selector === '#preset-list' ? list : (selector === '#task-preset' ? select : null),
     document: { querySelectorAll: () => [] },
-    state: { presets: [], editingPreset: null },
+    state: { presets: [], editingPreset: null, autoScrapeSchedules: [] },
     escapeHtml: value => String(value ?? ''),
   });
-  const start = source.lastIndexOf('function renderPresetList');
+  const start = source.lastIndexOf('function presetCardMarkup');
   vm.runInContext(source.slice(start, source.indexOf('function renderPresetMode', start)), context);
   context.renderPresetList();
   assert.match(list.innerHTML, /page-empty-state/);
@@ -376,7 +388,7 @@ test('existing settings, task and AI hooks remain in the document', () => {
   const document = html();
   for (const id of [
     'task-form', 'input-directory', 'path-tools', 'task-preset', 'task-message', 'task-table', 'refresh-tasks',
-    'add-auto-scrape-schedule', 'auto-scrape-schedule-list', 'download-auto-scrape-run-list',
+    'add-auto-scrape-schedule', 'auto-scrape-schedule-list',
     'download-policy-toggle', 'download-policy-content', 'download-management-form',
     'downloader-tabs', 'download-summary', 'download-filter-bar', 'download-list',
     'download-filter-name', 'download-filter-category', 'download-filter-tags', 'download-filter-reset', 'download-filter-summary',
@@ -387,5 +399,59 @@ test('existing settings, task and AI hooks remain in the document', () => {
     'ai-new-chat', 'ai-history-search', 'ai-history-list', 'ai-workspace', 'ai-conversation', 'ai-chat-form', 'ai-message', 'ai-send',
   ]) {
     assert.match(document, new RegExp(`id="${id}"`), `missing #${id}`);
+  }
+});
+
+test('preset library renders as a card grid and the editor lives in a dialog', () => {
+  const document = html();
+  const presets = document.slice(at(document, 'class="view" data-panel="presets"'), at(document, 'class="view" data-panel="settings"'));
+  assert.match(presets, /id="preset-list"/);
+  assert.match(presets, /id="preset-editor-dialog"[^>]*class="[^"]*preset-editor-dialog/);
+  assert.ok(presets.indexOf('id="preset-form"') > presets.indexOf('id="preset-editor-dialog"'), 'the editor form lives inside the preset dialog');
+  assert.ok(presets.indexOf('id="save-preset"') > presets.indexOf('id="preset-editor-dialog"'), 'save lives inside the preset dialog');
+  for (const id of ['preset-id', 'preset-name', 'preset-form-panel', 'preset-yaml-panel', 'preset-content', 'preset-message', 'preset-mode', 'delete-preset']) {
+    assert.match(presets, new RegExp(`id="${id}"`), `dialog keeps #${id}`);
+  }
+  assert.doesNotMatch(presets, /preset-editor-panel/, 'the inline editor panel is gone');
+
+  const source = app();
+  assert.match(source, /editPreset\(button\.dataset\.editPreset\); openPresetEditorDialog\(\);/, 'clicking a preset card opens the dialog editor');
+  assert.match(source, /\$\('#new-preset'\)\.addEventListener\('click', \(\) => \{ newPreset\(\); openPresetEditorDialog\(\); \}\)/, 'new preset opens the dialog');
+  const listStart = source.indexOf('function renderPresetList() {');
+  const listEnd = source.indexOf('function openPresetEditorDialog()', listStart);
+  assert.ok(listStart > 0 && listEnd > listStart, 'renderPresetList exists exactly once');
+  const listBody = source.slice(listStart, listEnd);
+  assert.match(listBody, /data-delete-preset/, 'preset cards carry a delete hook');
+  // Card structure mirrors crawler cards: article with name heading, mode, usage count, foot delete.
+  const cardStart = source.indexOf('// Deep-compare two preset configs');
+  const cardEnd = source.indexOf('function renderPresetList()', cardStart);
+  const cardBody = source.slice(cardStart, cardEnd);
+  assert.match(cardBody, /<article class="preset-source-card/, 'cards use the crawler-card article class');
+  assert.match(cardBody, /<h3>/, 'preset name is a card heading');
+  assert.match(cardBody, /preset-source-card-kind/, 'cards show the mode');
+  assert.match(cardBody, /preset-source-card-diff/, 'cards show the diff tags against the default preset');
+  assert.doesNotMatch(cardBody, /preset-source-card-usage/, 'auto-scrape rule usage line was removed from preset cards');
+  assert.match(cardBody, /preset-source-card-actions/, 'cards have a top-right action cluster');
+});
+
+test('privacy mode keeps the library play button icon visible', () => {
+  const cinema = read('javsp_web/web/assets/cinema.css');
+  const blurRule = cinema.match(/html\[data-privacy-mode="1"\][^\n]*:is\(([^)]*)\)[^\n]*img:not\(\.library-play img\)[^\n]*\{([^}]*)\}/);
+  assert.ok(blurRule, 'the privacy blur rule excludes .library-play img');
+  assert.match(blurRule[0], /blur\(/);
+  assert.match(cinema, /html\[data-privacy-mode="1"\] \.library-play img\s*\{[^}]*brightness\(0\) invert\(1\)/, 'the play icon stays solid white in privacy mode');
+  assert.match(cinema, /html\[data-privacy-mode="1"\] \.library-play img\s*\{[^}]*transform:\s*none/, 'the play icon is not scaled by the privacy blur');
+});
+
+test('auto-scrape view keeps a single heading level per module with no duplicate page title', () => {
+  const document = html();
+  const section = document.slice(at(document, 'class="view" data-panel="auto-scrape"'), at(document, 'class="view" data-panel="downloads"'));
+  const h2s = [...section.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].map(match => match[1].replace(/<[^>]+>/g, '').trim());
+  assert.deepEqual([...new Set(h2s)], h2s, 'no two h2 headings share the same text in the auto-scrape view');
+  assert.ok(!h2s.includes('自动刮削'), 'the top bar page title is not repeated inside the view');
+  assert.ok(!/<h1[\s>]/.test(section) && !/<h4[\s>]/.test(section), 'no h1/h4 level skips inside the auto-scrape view');
+  for (const module of section.matchAll(/data-auto-scrape-module="([^"]+)"/g)) {
+    const id = { watch: 'auto-scrape-watch-title', schedule: 'auto-scrape-schedule-title' }[module[1]];
+    assert.ok(id && section.includes(`id="${id}"`), `module ${module[1]} owns exactly one labelled h2`);
   }
 });

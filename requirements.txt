@@ -20,3 +20,4 @@ pendulum>=3.3,<4
 slimeface>=2024.9.27
 croniter>=6.2,<7
 tzdata>=2026.5
+zhconv>=1.4,<2

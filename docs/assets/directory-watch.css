@@ -1,4 +1,11 @@
-/* 目录监控面板样式（自动刮削页）。只使用主题变量，明暗主题自动跟随。 */
+/* 目录监控面板样式（自动刮削页）。跟随主题变量，明暗主题自动跟随。 */
+
+/* 自动刮削模块使用副色（--accent-2），与主色控件区分，且随配色面板联动。 */
+.auto-scrape-module {
+  --lc-accent: var(--accent-2);
+  --lc-accent-soft: var(--accent-2-soft);
+  --lc-accent-text: var(--accent-2-text);
+}
 
 .dw-panel { gap: 0; }
 
@@ -7,6 +14,8 @@
 .dw-toolbar { display: flex; justify-content: flex-end; }
 
 .dw-heading-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dw-heading-actions .button.primary { background: var(--lc-accent); color: var(--on-accent-2); }
+.dw-heading-actions .button.primary:hover { background: var(--accent-2-hover); }
 
 .dw-list { display: grid; gap: 10px; }
 .dw-list.empty {

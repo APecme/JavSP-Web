@@ -43,24 +43,67 @@ def image_response(path: Path, request, thumbnail=False):
     if _etag_matches(request.headers.get('if-none-match', ''), etag):
         return Response(status_code=304, headers=headers)
     if thumbnail:
-        folder = DATA_DIR / 'thumbnails'
-        # One cache entry per source path, replaced when the source changes.
-        key = hashlib.sha256(str(path.resolve()).encode()).hexdigest()
-        target = folder / (key + '.jpg')
-        marker = folder / (key + '.revision')
-        with _lock:
-            folder.mkdir(parents=True, exist_ok=True)
-            if not target.exists() or not marker.exists() or marker.read_text(encoding='ascii') != revision:
-                temp = folder / (key + '.' + uuid.uuid4().hex + '.tmp')
-                try:
-                    with Image.open(path) as original:
-                        image = ImageOps.exif_transpose(original)
-                        image.thumbnail((360, 540))
-                        image.convert('RGB').save(temp, 'JPEG', quality=82, optimize=True)
-                    os.replace(temp, target)
-                    marker.write_text(revision, encoding='ascii')
-                finally:
-                    temp.unlink(missing_ok=True)
-            # Reading the small thumbnail avoids a concurrent replacement during response streaming.
-            return Response(target.read_bytes(), media_type='image/jpeg', headers=headers)
+        return _thumbnail_response(path, revision, headers)
     return FileResponse(path, headers=headers)
+
+
+VIEW_MAX_EDGE = 1600
+
+
+def _thumbnail_response(path: Path, revision: str, headers: dict) -> Response:
+    folder = DATA_DIR / 'thumbnails'
+    # One cache entry per source path, replaced when the source changes.
+    key = hashlib.sha256(str(path.resolve()).encode()).hexdigest()
+    target = folder / (key + '.jpg')
+    marker = folder / (key + '.revision')
+    with _lock:
+        folder.mkdir(parents=True, exist_ok=True)
+        if not target.exists() or not marker.exists() or marker.read_text(encoding='ascii') != revision:
+            temp = folder / (key + '.' + uuid.uuid4().hex + '.tmp')
+            try:
+                with Image.open(path) as original:
+                    image = ImageOps.exif_transpose(original)
+                    image.thumbnail((360, 540))
+                    image.convert('RGB').save(temp, 'JPEG', quality=82, optimize=True)
+                os.replace(temp, target)
+                marker.write_text(revision, encoding='ascii')
+            finally:
+                temp.unlink(missing_ok=True)
+        # Reading the small thumbnail avoids a concurrent replacement during response streaming.
+        return Response(target.read_bytes(), media_type='image/jpeg', headers=headers)
+
+
+def view_response(path: Path, request) -> Response:
+    """A bounded-size JPEG variant (max edge 1600px) for gallery browsing.
+
+    Mirrors image_response's conditional caching: the revision includes the
+    source stat plus the variant size so an edited image rotates the ETag,
+    and ?v= URLs may reuse a short private cache. Encoded files are cached on
+    disk keyed by that same revision (mtime+size), so cache hits never re-encode.
+    """
+    stat = path.stat()
+    revision = hashlib.sha256(f'{path.resolve()}:{stat.st_mtime_ns}:{stat.st_ctime_ns}:{stat.st_size}:view:{VIEW_MAX_EDGE}'.encode()).hexdigest()
+    etag = '"' + revision + '"'
+    versioned = bool(request.query_params.get('v'))
+    cache_control = 'private, max-age=300' if versioned else 'private, no-cache'
+    headers = {'Cache-Control': cache_control, 'ETag': etag}
+    if _etag_matches(request.headers.get('if-none-match', ''), etag):
+        return Response(status_code=304, headers=headers)
+    folder = DATA_DIR / 'view-cache'
+    key = hashlib.sha256(str(path.resolve()).encode()).hexdigest()
+    target = folder / (key + '.jpg')
+    marker = folder / (key + '.revision')
+    with _lock:
+        folder.mkdir(parents=True, exist_ok=True)
+        if not target.exists() or not marker.exists() or marker.read_text(encoding='ascii') != revision:
+            temp = folder / (key + '.' + uuid.uuid4().hex + '.tmp')
+            try:
+                with Image.open(path) as original:
+                    image = ImageOps.exif_transpose(original)
+                    image.thumbnail((VIEW_MAX_EDGE, VIEW_MAX_EDGE))
+                    image.convert('RGB').save(temp, 'JPEG', quality=85, optimize=True)
+                os.replace(temp, target)
+                marker.write_text(revision, encoding='ascii')
+            finally:
+                temp.unlink(missing_ok=True)
+        return Response(target.read_bytes(), media_type='image/jpeg', headers=headers)

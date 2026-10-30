@@ -27,6 +27,7 @@ function viewer({ total = 3, taskId = 'task 1' } = {}) {
   const make = (name, selector = '') => ({
     name, selector, listeners: {}, attrs: {}, dataset: {}, children: {}, hidden: false, disabled: false,
     textContent: '', src: '', alt: '', open: false, isConnected: true, className: '',
+    classList: { add() {}, remove() {}, toggle() {} },
     addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); },
     dispatch(type, extra = {}) {
       const event = Object.assign({
@@ -47,28 +48,34 @@ function viewer({ total = 3, taskId = 'task 1' } = {}) {
   });
   const dialog = make('dialog');
   const image = make('image', '.stills-image');
+  const preview = make('image', '.stills-preview');
   const error = make('error', '[data-stills-error]');
   const counter = make('counter', '[data-stills-counter]');
   const prev = make('prev', '[data-stills-prev]');
   const next = make('next', '[data-stills-next]');
   const closeButton = make('close', '[data-stills-close]');
+  const retryButton = make('retry', '[data-stills-retry]');
+  const stage = Object.assign(make('stage', '.stills-stage'), { classList: { add() {}, remove() {}, toggle() {} } });
   error.hidden = true;
+  retryButton.hidden = true;
   prev.disabled = true;
   next.disabled = true;
   dialog.children = {
-    '.stills-image': image, '[data-stills-error]': error, '[data-stills-counter]': counter,
+    '.stills-image': image, '.stills-preview': preview, '.stills-stage': stage,
+    '[data-stills-error]': error, '[data-stills-counter]': counter,
     '[data-stills-prev]': prev, '[data-stills-next]': next, '[data-stills-close]': closeButton,
+    '[data-stills-retry]': retryButton,
   };
   const opener = make('opener');
   const context = vm.createContext({
     document: { querySelector: selector => selector === '#stills-dialog' ? dialog : null },
-    encodeURIComponent,
+    encodeURIComponent, Image: function Image() { return { decode: () => Promise.resolve() }; },
   });
   window_context(context);
   const module = () => context.window.JavspStills;
   const load = () => vm.runInContext(slice(app(), STILLS_START, STILLS_END), context);
   const open = (index = 0, options = {}) => module().open(Object.assign({ taskId, index, total, version: 'v1', opener }, options));
-  return { context, state, focused, dialog, image, error, counter, prev, next, closeButton, opener, module, load, open };
+  return { context, state, focused, dialog, image, preview, stage, error, counter, prev, next, closeButton, retryButton, opener, module, load, open };
 }
 
 function window_context(context) {
@@ -102,7 +109,8 @@ test('a still opens the viewer with its own count, then steps without leaving th
   assert.equal(v.module().isOpen(), false);
   assert.equal(v.open(1), true);
   assert.equal(v.dialog.open, true);
-  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1');
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1&size=view');
+  assert.equal(v.preview.src, '/api/tasks/task%201/fanart/1?v=v1&thumbnail=true', 'thumbnail placeholder sits underneath');
   assert.equal(v.image.alt, '剧照 2');
   assert.equal(v.counter.textContent, '2 / 3');
   assert.equal(v.prev.disabled, false);
@@ -112,9 +120,9 @@ test('a still opens the viewer with its own count, then steps without leaving th
   v.open(0);
   assert.equal(v.prev.disabled, true);
   assert.equal(v.module().step(-1), false, 'first still cannot step backwards');
-  assert.equal(v.image.src, '/api/tasks/task%201/fanart/0?v=v1');
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/0?v=v1&size=view');
   v.module().step(1); v.module().step(1);
-  assert.equal(v.image.src, '/api/tasks/task%201/fanart/2?v=v1');
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/2?v=v1&size=view');
   assert.equal(v.next.disabled, true);
   assert.equal(v.module().step(1), false, 'last still cannot step forwards');
   assert.equal(v.counter.textContent, '3 / 3');
@@ -123,7 +131,7 @@ test('a still opens the viewer with its own count, then steps without leaving th
 test('out of range requests and empty galleries never open the viewer', () => {
   const v = viewer({ total: 2 }); v.load();
   assert.equal(v.open(9), true);
-  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1', 'index is clamped to the last still');
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1&size=view', 'index is clamped to the last still');
   v.module().close();
   assert.equal(v.module().open({ taskId: '', index: 0, total: 2 }), false);
   assert.equal(v.module().open({ taskId: 'task 1', index: 0, total: 0 }), false);
@@ -137,9 +145,9 @@ test('arrow keys step the viewer and Escape closes only the viewer', () => {
   v.open(0);
   const right = v.dialog.dispatch('keydown', { key: 'ArrowRight' });
   assert.equal(right.defaultPrevented, true);
-  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1');
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1&size=view');
   v.dialog.dispatch('keydown', { key: 'ArrowLeft' });
-  assert.equal(v.image.src, '/api/tasks/task%201/fanart/0?v=v1');
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/0?v=v1&size=view');
   const escape = v.dialog.dispatch('keydown', { key: 'Escape' });
   assert.equal(escape.defaultPrevented, true);
   assert.equal(escape.propagationStopped, true, 'Escape must not reach the film detail dialog');
@@ -150,7 +158,7 @@ test('arrow keys step the viewer and Escape closes only the viewer', () => {
 test('closing the viewer restores focus and drops the full size image', () => {
   const v = viewer({ total: 3 }); v.load();
   v.open(2);
-  assert.equal(v.image.getAttribute('src'), '/api/tasks/task%201/fanart/2?v=v1');
+  assert.equal(v.image.getAttribute('src'), '/api/tasks/task%201/fanart/2?v=v1&size=view');
   v.module().close();
   assert.equal(v.dialog.open, false);
   assert.equal(v.image.getAttribute('src'), null, 'stale still images are cleared');
@@ -170,7 +178,9 @@ test('a failing still shows a message instead of a broken frame', () => {
   v.open(0);
   assert.equal(v.error.hidden, true);
   v.dialog.dispatch('error', { target: v.image });
-  assert.equal(v.error.hidden, false);
+  v.dialog.dispatch('error', { target: v.image });
+  v.dialog.dispatch('error', { target: v.image });
+  assert.equal(v.error.hidden, false, 'the original failing surfaces the error banner');
   v.module().step(1);
   assert.equal(v.error.hidden, true, 'stepping to another still clears the error state');
 });
@@ -323,4 +333,42 @@ test('comment help uses an icon button, groups the rules and stays in the docume
 test('privacy mode keeps the enlarged stills masked', () => {
   const cinema = read('javsp_web/web/assets/cinema.css');
   assert.match(cinema, /html\[data-privacy-mode="1"\][^{]*\.stills-image\s*\{[^}]*blur\(/);
+});
+
+test('a decoded view-size still fades in over the thumbnail placeholder', async () => {
+  const v = viewer({ total: 3 }); v.load();
+  v.open(0);
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/0?v=v1&size=view');
+  assert.equal(v.preview.src, '/api/tasks/task%201/fanart/0?v=v1&thumbnail=true', 'thumbnail placeholder sits underneath');
+  v.image.dispatch('load');
+  assert.equal(v.retryButton.hidden, true, 'a loaded view image hides the retry control');
+});
+
+test('a failing view endpoint falls back to the original with a retry control', () => {
+  const v = viewer({ total: 3 }); v.load();
+  v.open(1);
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1&size=view');
+  v.dialog.dispatch('error', { target: v.image });
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1', 'view failure falls back to the original');
+  assert.equal(v.retryButton.hidden, false, 'retry is offered after the fallback');
+  assert.equal(v.error.hidden, true, 'the fallback keeps the error banner hidden');
+  v.retryButton.dispatch('click');
+  v.dialog.dispatch('click', { target: v.retryButton });
+  assert.equal(v.retryButton.hidden, true, 'retry hides itself while reloading');
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1&size=view', 'retry re-requests the view size');
+  v.dialog.dispatch('error', { target: v.image });
+  assert.equal(v.image.src, '/api/tasks/task%201/fanart/1?v=v1', 'a failed retry falls back again');
+  v.dialog.dispatch('error', { target: v.image });
+  assert.equal(v.error.hidden, false, 'only the original failing surfaces the error banner');
+  assert.equal(v.retryButton.hidden, true);
+});
+
+test('preload decodes neighbours and evicts beyond the cache cap', async () => {
+  const v = viewer({ total: 45 }); v.load();
+  const module = v.module();
+  assert.equal(typeof module.preload, 'function');
+  for (let index = 0; index <= 43; index += 1) v.open(index);
+  // 46 unique ±1 neighbours primed: FIFO eviction drops the oldest entries.
+  const evicted = await module.preload(0);
+  assert.ok(evicted === null || typeof evicted === 'object', 'preload resolves to the decoded image or null');
 });

@@ -879,6 +879,54 @@ class UnifiedTriggerTests(unittest.TestCase):
         stored = directory_watch.read_rules()
         self.assertTrue(all(rule.get("trigger") in ("watch", "schedule") for rule in stored))
 
+    def test_watch_rule_creates_without_any_time_fields(self):
+        # watch（监控新增）只需要目录 + 预设；时间/间隔字段整体省略时给默认值，不报错。
+        rule = directory_watch.create_rule({
+            "name": "纯监控", "path": str(self.mount), "preset_id": "default", "trigger": "watch",
+        })
+        self.assertEqual(rule["trigger"], "watch")
+        self.assertEqual(rule["cron"], "")
+        self.assertEqual((rule["poll_seconds"], rule["stable_seconds"], rule["max_tasks_per_scan"]), (30, 60, 20),
+                         "缺省时间字段使用默认值")
+        # 前端空输入会提交 0：0 不是合法下限，视为未填写而不是报错。
+        zeroed = directory_watch.normalize_payload({
+            "path": str(self.mount), "trigger": "watch", "poll_seconds": 0, "max_tasks_per_scan": 0,
+        })
+        self.assertEqual((zeroed["poll_seconds"], zeroed["max_tasks_per_scan"]), (30, 20))
+        # 但明确填写且越界的值仍然报错，不会被静默纠正。
+        with self.assertRaises(directory_watch.RuleError):
+            directory_watch.normalize_payload({"path": str(self.mount), "trigger": "watch", "poll_seconds": 3})
+
+    def test_cron_mode_still_requires_a_valid_cron(self):
+        for payload in (
+            {"path": str(self.mount), "trigger": "schedule"},  # 缺 cron
+            {"path": str(self.mount), "trigger": "schedule", "cron": "bad"},
+            {"path": str(self.mount), "trigger": "schedule", "cron": ""},  # watch 的默认值救不了 schedule
+        ):
+            with self.assertRaises(directory_watch.RuleError):
+                directory_watch.create_rule(payload)
+        rule = directory_watch.create_rule({"path": str(self.mount), "trigger": "schedule", "cron": "0 2 * * *"})
+        self.assertEqual(rule["cron"], "0 2 * * *")
+
+    def test_legacy_watch_rule_with_time_fields_still_loads(self):
+        # 旧数据：watch 规则带调度时间字段，读取时不报错、字段照常保留。
+        legacy = {
+            "id": "legacy-watch", "name": "旧规则", "trigger": "watch", "path": str(self.mount),
+            "preset_id": "default", "poll_seconds": 15, "stable_seconds": 120,
+            "max_tasks_per_scan": 5, "cron": "0 3 * * *", "enabled": True,
+            "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00",
+        }
+        directory_watch.write_rules([legacy])
+        rules = directory_watch.read_rules()
+        self.assertEqual(len(rules), 1)
+        loaded = rules[0]
+        self.assertEqual((loaded["trigger"], loaded["poll_seconds"], loaded["stable_seconds"]), ("watch", 15, 120),
+                         "旧 watch 规则的时间字段原样保留，不强制迁移")
+        self.assertEqual(loaded["cron"], "", "watch 规则的 cron 不参与调度，读取时被清空属正常归一化")
+        # 旧的带 cron 的 watch 规则更新后仍可用，且更新时保持 watch 语义。
+        updated = directory_watch.update_rule("legacy-watch", {"name": "改名", "cron": "0 4 * * *"})
+        self.assertEqual((updated["trigger"], updated["cron"], updated["poll_seconds"]), ("watch", "", 15))
+
     def test_schedule_rule_never_enters_the_polling_scanner(self):
         rule = directory_watch.create_rule({
             "name": "定时", "path": str(self.mount), "trigger": "schedule", "cron": "0 2 * * *",

@@ -1,4 +1,4 @@
-const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeRules: [], autoScrapeSchedules: [], downloadAutoScrapeRuns: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', crawlerEditorToken: 0, runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeDownloadAutoScrapeRun: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), actressScope: localStorage.getItem('javsp-web.actress-scope') || 'existing', activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
+const state = { user: null, tasks: [], taskTotal: 0, taskPage: 0, taskPageSize: 50, tasksLoading: false, presets: [], downloaders: [], mediaServers: [], pathMappings: [], autoScrapeSchedules: [], crawlerSources: [], disabledBuiltInCrawlers: [], activeCrawlerCodeName: '', crawlerEditorToken: 0, runtime: null, activeAutoScrapeRun: null, activeAutoScrapeHistory: null, activeTaskDetail: null, taskDetailLogSelecting: false, taskMetadataEditing: false, pendingMetadataRefresh: null, overviewQuery: '', overviewSort: { key: 'created_at', direction: 'desc' }, overviewSelectionMode: false, overviewSelectionFeedback: new Set(), actressScope: localStorage.getItem('javsp-web.actress-scope') || 'existing', activeDownloaderId: null, activeDownloads: [], activeDownloader: null, downloadSort: { key: 'added_on', direction: 'desc' }, editingPreset: null, editingUser: null, pendingDeleteTask: null, pendingConfirm: null, selectedOverviewTasks: new Set(), pathBrowser: { kind: 'directory', target: 'manual', currentPath: '/' }, formValues: {}, presetMode: null, logScroll: {}, logOpen: {}, taskOpen: {}, taskStatus: {}, googleCoverDialogTaskId: null, googleCoverDialogDismissed: false, privacyMode: document.documentElement.dataset.privacyMode === '1' };
 const OVERVIEW_PAGE_SIZES = [12, 24, 48, 96];
 const savedOverviewPageSize = Number(localStorage.getItem('javsp-web.overview-page-size'));
 state.overviewPage = 1;
@@ -536,11 +536,18 @@ async function loadCrawlerConfig() {
   crawlerConfigPrefetch = null;
   if (!prefetched) host.innerHTML = crawlerSkeletonMarkup();
   try {
-    const result = (await prefetched) || await api('/api/crawler-config');
+    let result;
+    let stats;
+    if (prefetched) {
+      [result, stats] = await prefetched;
+    }
+    result = result || await api('/api/crawler-config');
     state.crawlerSources = result.crawlers || [];
     state.disabledBuiltInCrawlers = result.disabled_built_ins || [];
     host.innerHTML = crawlerCodeMarkup(state.crawlerSources);
     bindCrawlerEditorDialog();
+    if (stats) applyCrawlerStats(stats);
+    else hydrateCrawlerStats();
   } catch (error) {
     host.innerHTML = `<div class="crawler-load-error" data-crawler-load-error><p class="form-error">${escapeHtml(error.message)}</p><button class="button secondary" type="button" data-retry-crawler-config>重试</button></div>`;
   }
@@ -551,12 +558,102 @@ async function loadCrawlerConfig() {
 let crawlerConfigPrefetch = null;
 function prefetchCrawlerConfig() {
   if (crawlerConfigPrefetch) return;
-  crawlerConfigPrefetch = api('/api/crawler-config').catch(() => null);
+  crawlerConfigPrefetch = Promise.all([
+    api('/api/crawler-config').catch(() => null),
+    api('/api/crawler-config/stats').catch(() => null),
+  ]);
+}
+
+// Success statistics come from a separate, optional endpoint. When it is missing or fails,
+// every crawler degrades to a gray health dot and no usage line, without surfacing an error.
+let crawlerStatsCache = null;
+
+function crawlerStatsFor(name) {
+  if (!crawlerStatsCache) return null;
+  const byName = crawlerStatsCache.crawlers || crawlerStatsCache.stats || crawlerStatsCache;
+  if (Array.isArray(byName)) return byName.find((entry) => entry && entry.name === name) || null;
+  return byName[name] || null;
+}
+
+// Format a backend timestamp (ISO or plain datetime) as YYYY-MM-DD HH:MM, without
+// the T separator and without ellipsis truncation. Unknown shapes pass through escaped.
+function formatStatTime(value) {
+  const text = String(value ?? '').trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (!match) return escapeHtml(text);
+  return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}`;
+}
+
+function crawlerHealthDot(stats) {
+  const rate = stats ? Number(stats.success_rate) : NaN;
+  if (!stats || !Number.isFinite(rate)) return '<span class="crawler-health-dot crawler-health-unknown" title="暂无成功率数据" aria-label="暂无成功率数据"></span>';
+  const success = Number(stats.success_count ?? stats.success ?? 0);
+  const failure = Number(stats.failure_count ?? stats.failure ?? 0);
+  // Degraded: has succeeded before but the most recent outcome is a failure.
+  let tone;
+  const lastFailure = stats.last_failure_at ? Date.parse(String(stats.last_failure_at).replace(' ', 'T')) : NaN;
+  const lastSuccess = stats.last_success_at ? Date.parse(String(stats.last_success_at).replace(' ', 'T')) : NaN;
+  const recentFailure = Number.isFinite(lastFailure) && (!Number.isFinite(lastSuccess) || lastFailure > lastSuccess);
+  if (success > 0 && recentFailure) tone = 'degraded';
+  else if (rate >= 0.9) tone = 'ok';
+  else if (rate >= 0.7) tone = 'warn';
+  else tone = 'danger';
+  const label = `近 30 天成功率 ${Math.round(rate * 100)}%，成功 ${success} / 失败 ${failure}`;
+  return `<span class="crawler-health-dot crawler-health-${tone}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></span>`;
+}
+
+function crawlerUsageText(stats) {
+  if (!stats) return '';
+  const success = Number(stats.success_count ?? stats.success ?? NaN);
+  const failure = Number(stats.failure_count ?? stats.failure ?? NaN);
+  const parts = [];
+  if (Number.isFinite(success) || Number.isFinite(failure)) parts.push(`成功 ${Number.isFinite(success) ? success : 0} · 失败 ${Number.isFinite(failure) ? failure : 0}`);
+  if (stats.last_failure_at) parts.push(`最近失败 ${formatStatTime(stats.last_failure_at)}`);
+  return parts.join(' · ');
+}
+
+function applyCrawlerStats(stats) {
+  crawlerStatsCache = stats || {};
+  const grid = $('#crawler-source-grid');
+  if (!grid || !grid.querySelectorAll) return;
+  grid.querySelectorAll('.crawler-source-card[data-crawler-code-name]').forEach((card) => {
+    const name = card.getAttribute('data-crawler-code-name');
+    const source = (state.crawlerSources || []).find((entry) => entry && entry.name === name) || { name };
+    const entry = crawlerStatsFor(name) || {};
+    const item = { ...source, sites: source.sites || entry.sites || [], rules: source.rules || entry.rules || [] };
+    const existing = card.querySelector('.crawler-source-card-stats');
+    if (existing) existing.outerHTML = crawlerStatsMarkup(item);
+    else card.insertAdjacentHTML('beforeend', crawlerStatsMarkup(item));
+  });
+}
+
+function hydrateCrawlerStats() {
+  if (typeof api !== 'function' || crawlerStatsCache !== null || state.crawlerStatsFetched) return Promise.resolve();
+  state.crawlerStatsFetched = true;
+  return api('/api/crawler-config/stats').catch(() => ({})).then(applyCrawlerStats).catch(() => {});
+}
+
+function crawlerStatsMarkup(item) {
+  const stats = crawlerStatsFor(item.name);
+  const dot = crawlerHealthDot(stats);
+  return `<div class="crawler-source-card-stats">${dot}<span class="crawler-source-card-usage">${crawlerUsageText(stats)}</span></div>${crawlerSiteTagsMarkup(item)}`;
+}
+
+function crawlerSiteTagsMarkup(item) {
+  const siteNames = [...new Set((Array.isArray(item.sites) ? item.sites : [])
+    .map((site) => String(site?.domain || site?.host || site || '').trim()).filter(Boolean))].slice(0, 5);
+  const ruleNames = [...new Set((Array.isArray(item.rules) ? item.rules : [])
+    .map((rule) => String(rule?.name || rule || '').trim()).filter(Boolean))].slice(0, 5);
+  const tags = [...siteNames, ...ruleNames]
+    .map((name) => `<span class="crawler-site-tag" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`)
+    .join('');
+  if (!tags) return '';
+  return `<div class="crawler-source-card-tags" aria-label="站点与规则标签">${tags}</div>`;
 }
 
 function crawlerCardMarkup(item) {
   const disabled = (state.disabledBuiltInCrawlers || []).includes(item.name);
-  return `<article class="crawler-source-card${disabled ? ' crawler-source-card-disabled' : ''}" data-crawler-code-name="${escapeHtml(item.name)}"><div class="crawler-source-card-main"><strong>${escapeHtml(item.name)}</strong><span class="crawler-source-card-kind">${item.kind === 'custom' ? '自定义' : '内置'}</span></div><div class="crawler-source-card-foot">${disabled ? '<span class="crawler-source-card-status">已停用</span>' : `<button class="icon-button crawler-source-card-open" type="button" data-open-crawler-editor="${escapeHtml(item.name)}" title="编辑与测试 ${escapeHtml(item.name)}" aria-label="编辑与测试 ${escapeHtml(item.name)}">${javspIcon('pencil')}编辑 / 测试</button>`}${crawlerSourceDeleteButton(item)}</div></article>`;
+  return `<article class="crawler-source-card${disabled ? ' crawler-source-card-disabled' : ''}" data-crawler-code-name="${escapeHtml(item.name)}"><div class="crawler-source-card-actions">${disabled ? '<span class="crawler-source-card-status">已停用</span>' : `<button class="icon-button crawler-source-card-open" type="button" data-open-crawler-editor="${escapeHtml(item.name)}" title="编辑与测试 ${escapeHtml(item.name)}" aria-label="编辑与测试 ${escapeHtml(item.name)}">${javspIcon('pencil')}</button>`}${crawlerSourceDeleteButton(item)}</div><div class="crawler-source-card-main"><strong>${escapeHtml(item.name)}</strong></div>${crawlerStatsMarkup(item)}</article>`;
 }
 
 function crawlerSourceDeleteButton(item) {
@@ -613,7 +710,7 @@ async function api(path, options = {}) {
       if (response.status === 401) { location.href = '/login'; throw new Error('登录已过期'); }
       if (response.status === 304 && cached) return cached.data;
       const data = await response.json();
-      if (!response.ok) throw new Error(formatApiError(data.detail, response.status));
+      if (!response.ok) throw new Error(formatApiError(data.detail, response.status) + ` (HTTP ${response.status})`);
       if (method === 'GET' && path.startsWith('/api/tasks?')) {
         taskResponses.set(path, { etag: response.headers.get('ETag'), data });
         if (taskResponses.size > 20) taskResponses.delete(taskResponses.keys().next().value);
@@ -1395,12 +1492,6 @@ async function copyTaskLog(button) {
   window.setTimeout(() => { button.textContent = original; }, 1200);
 }
 
-function renderPresetList() {
-  $('#preset-list').innerHTML = state.presets.map((preset) => `<button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '可视化表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>`).join('');
-  document.querySelectorAll('[data-preset]').forEach((button) => button.addEventListener('click', () => editPreset(button.dataset.preset)));
-  $('#task-preset').innerHTML = state.presets.map((preset) => `<option value="${preset.id}">${escapeHtml(preset.name)}</option>`).join('');
-}
-
 async function deletePresetFromList(id) {
   try {
     await api(`/api/presets/${id}`, { method: 'DELETE' });
@@ -1409,12 +1500,67 @@ async function deletePresetFromList(id) {
   } catch (error) { $('#preset-message').textContent = error.message; }
 }
 
+// Deep-compare two preset configs (form_values shape). Returns the dotted paths of
+// fields that differ, skipping empty values and metadata fields unrelated to config.
+function presetDiffPaths(config, base) {
+  const SKIP_KEYS = new Set(['name', 'id', 'mode', 'task_concurrency']);
+  const diffs = [];
+  const isEmpty = (value) => value === undefined || value === null || value === '';
+  const walk = (a, b, path) => {
+    if (SKIP_KEYS.has(path.split('.').pop())) return;
+    const aObj = a && typeof a === 'object' && !Array.isArray(a);
+    const bObj = b && typeof b === 'object' && !Array.isArray(b);
+    if (aObj && bObj) {
+      const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+      keys.forEach((key) => walk(a[key], b[key], path ? `${path}.${key}` : key));
+      return;
+    }
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (JSON.stringify(a) !== JSON.stringify(b)) diffs.push(path);
+      return;
+    }
+    if (isEmpty(a) && isEmpty(b)) return;
+    if (a !== b) diffs.push(path);
+  };
+  walk(config || {}, base || {}, '');
+  return diffs;
+}
+
+function presetDiffLabel(path) {
+  if (FIELD_LABELS[path]) return FIELD_LABELS[path];
+  const last = path.split('.').pop();
+  if (FIELD_LABELS[last]) return FIELD_LABELS[last];
+  return last;
+}
+
+function presetDiffTagsMarkup(preset) {
+  if (preset.id === 'default') return '';
+  const base = state.presets.find((item) => item.id === 'default');
+  if (!base) return '';
+  const diffs = presetDiffPaths(preset.form_values, base.form_values);
+  if (!diffs.length) return '<div class="preset-source-card-diff"><span class="preset-diff-tag preset-diff-same">与默认一致</span></div>';
+  const MAX_TAGS = 6;
+  const shown = diffs.slice(0, MAX_TAGS).map((path) => `<span class="preset-diff-tag">${escapeHtml(presetDiffLabel(path))}</span>`);
+  const extra = diffs.length - shown.length;
+  return `<div class="preset-source-card-diff" aria-label="与默认配置差异">${shown.join('')}${extra > 0 ? `<span class="preset-diff-tag">+${extra}</span>` : ''}</div>`;
+}
+
+function presetCardMarkup(preset) {
+  const mode = preset.id === 'default' || preset.mode === 'form' ? '可视化表单' : 'config.yml';
+  return `<article class="preset-source-card${state.editingPreset === preset.id ? ' preset-source-card-active' : ''}" data-preset="${escapeHtml(preset.id)}"><div class="preset-source-card-actions">${preset.id === 'default' ? '' : `<button class="icon-button preset-delete" type="button" data-delete-preset="${escapeHtml(preset.id)}" title="删除预设 ${escapeHtml(preset.name)}" aria-label="删除预设 ${escapeHtml(preset.name)}">${javspIcon('trash')}</button>`}<button class="icon-button preset-edit" type="button" data-edit-preset="${escapeHtml(preset.id)}" title="编辑预设 ${escapeHtml(preset.name)}" aria-label="编辑预设 ${escapeHtml(preset.name)}">${javspIcon('pencil')}</button></div><button class="preset-source-card-main" type="button" data-edit-preset="${escapeHtml(preset.id)}" aria-label="编辑预设 ${escapeHtml(preset.name)}" title="编辑预设 ${escapeHtml(preset.name)}"><h3>${escapeHtml(preset.name)}</h3><span class="preset-source-card-kind">${preset.id === 'default' ? `${mode} · 内置` : mode}</span></button><div class="preset-source-card-meta">${presetDiffTagsMarkup(preset)}</div></article>`;
+}
+
 function renderPresetList() {
-  const presetRows = state.presets.map((preset) => `<div class="preset-list-row"><button class="preset-item ${state.editingPreset === preset.id ? 'active' : ''}" data-preset="${preset.id}"><strong>${escapeHtml(preset.name)}</strong><span>${preset.id === 'default' || preset.mode === 'form' ? '可视化表单' : 'config.yml'}${preset.id === 'default' ? ' · 内置' : ''}</span></button>${preset.id === 'default' ? '' : `<button class="icon-button preset-delete" type="button" data-delete-preset="${preset.id}">${javspIcon('trash')}删除</button>`}</div>`);
-  $('#preset-list').innerHTML = presetRows.length ? presetRows.join('') : '<div class="page-empty-state preset-empty"><strong>还没有预设</strong><p>使用“新建预设”创建第一套刮削配置。</p></div>';
-  document.querySelectorAll('[data-preset]').forEach((button) => button.addEventListener('click', () => editPreset(button.dataset.preset)));
+  const presetCards = state.presets.map(presetCardMarkup);
+  $('#preset-list').innerHTML = presetCards.length ? presetCards.join('') : '<div class="page-empty-state preset-empty"><strong>还没有预设</strong><p>使用“新建预设”创建第一套刮削配置。</p></div>';
+  document.querySelectorAll('[data-edit-preset]').forEach((button) => button.addEventListener('click', () => { editPreset(button.dataset.editPreset); openPresetEditorDialog(); }));
   document.querySelectorAll('[data-delete-preset]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); deletePresetFromList(button.dataset.deletePreset); }));
   $('#task-preset').innerHTML = state.presets.map((preset) => `<option value="${preset.id}">${escapeHtml(preset.name)}</option>`).join('');
+}
+
+function openPresetEditorDialog() {
+  const dialog = $('#preset-editor-dialog');
+  if (dialog && !dialog.open) dialog.showModal();
 }
 
 function renderPresetMode() {
@@ -1458,6 +1604,7 @@ function editPreset(id) {
   $('#preset-id').value = id;
   $('#preset-name').value = preset.name;
   state.taskConcurrency = preset.task_concurrency || 1;
+  // 内置默认预设始终用可视化表单打开，避免一进来就是一大段 YAML 原文。
   const initialMode = id === 'default' ? 'form' : preset.mode;
   $('#preset-mode').value = initialMode;
   $('#preset-content').value = preset.content || '';
@@ -1494,8 +1641,7 @@ async function loadPresets() {
     const runtime = await api('/api/runtime');
     state.aiEnabled = runtime.ai_enabled === true;
     state.presets = await api('/api/presets');
-    if ($('#auto-scrape-rule-list')) renderAutoScrapeRules(state.autoScrapeRules);
-    if (!state.editingPreset || !state.presets.some((item) => item.id === state.editingPreset)) editPreset(state.presets[0]?.id);
+    if (!state.editingPreset || !state.presets.some((item) => item.id === state.editingPreset)) { state.editingPreset = state.presets[0]?.id ?? null; renderPresetList(); }
     else { renderPresetList(); renderConfigFields(); }
   } catch (error) { $('#preset-message').textContent = error.message; }
 }
@@ -1604,6 +1750,7 @@ $('#input-directory').addEventListener('input', clearManualFileSelection);
 
 $('#refresh-tasks').addEventListener('click', loadTasks);
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-task-page]'); if (button && !button.disabled) { state.taskPage = Math.max(0, Number(button.dataset.taskPage) || 0); loadTasks(); } });
+document.addEventListener('click', (event) => { const tab = event.target.closest('[data-panel="settings"] .settings-tab'); if (tab) applySettingsGroup(tab.dataset.settingsTab); });
 document.addEventListener('click', (event) => { const button = event.target.closest('.copy-log'); if (button) copyTaskLog(button); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-delete-task]'); if (button && !button.disabled) { event.stopPropagation(); deleteTaskInDialog(button.dataset.deleteTask); } });
 $('#library-search-form')?.addEventListener('submit', (event) => {
@@ -1883,8 +2030,12 @@ $('#path-browser-choose')?.addEventListener('click', (event) => {
 });
 $('#preset-mode').addEventListener('change', setPresetMode);
 document.querySelectorAll('[data-preset-tab]').forEach((button) => button.addEventListener('click', () => setPresetTab(button.dataset.presetTab)));
-$('#new-preset').addEventListener('click', newPreset);
-$('#save-preset').addEventListener('click', savePreset);
+$('#new-preset').addEventListener('click', () => { newPreset(); openPresetEditorDialog(); });
+$('#save-preset').addEventListener('click', async () => { await savePreset(); });
+$('#preset-editor-dialog')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) event.currentTarget.close();
+});
+$('#preset-editor-dialog')?.addEventListener('close', renderPresetList);
 $('#add-user').addEventListener('click', () => { state.editingUser = null; $('#user-dialog-title').textContent = '添加用户'; $('#user-form').reset(); $('#user-message').textContent = ''; $('#user-dialog').showModal(); });
 $('#user-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -2148,7 +2299,11 @@ async function openTaskDetail(taskId, background = false) {
   $('#task-detail-title').textContent = heading.title;
   $('#task-detail-subtitle').textContent = heading.subtitle;
   const identifier = String(metadata.dvdid || '').trim();
-  patchChildren($('#task-detail-content'), `${metadataEditor}<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div><div class="detail-fanart-grid">${fanarts}</div></section><details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
+  // With no stills at all, the section is just an empty card: keep a compact one-line state.
+  const stillsSection = expectedFanart
+    ? `<section id="film-stills" class="detail-fanarts"><div class="film-section-heading"><h3>影片剧照 <span>${task.fanart_count || 0}</span></h3></div><div class="detail-fanart-grid">${fanarts}</div></section>`
+    : '<p class="muted detail-stills-empty">暂无剧照</p>';
+  patchChildren($('#task-detail-content'), `${metadataEditor}${stillsSection}<details class="film-files"><summary>文件与刮削记录</summary><dl class="film-file-data">${fileInfo}</dl><section class="detail-images"><div><h3>封面与剧照</h3>${imageCounts}</div><div class="detail-image-actions">${googleCover}${retry}${restore}</div></section>${taskLog}</details>`);
   hydrateFanartGrid($('#task-detail-content').querySelector('.detail-fanart-grid'), dialog);
   window.JavspComments?.open(identifier, state.runtime?.comments_url || '', task.id, state.runtime?.comments_verify_url || '');
 }
@@ -2331,7 +2486,7 @@ function renderOverview() {
   const totalPages = Math.max(1, Math.ceil(state.taskTotal / state.overviewPageSize));
   const pageIds = new Set(cards.filter(entry => entry.task.task_type !== 'media').flatMap((entry) => entry.taskIds));
   const allSelected = pageIds.size > 0 && [...pageIds].every((id) => state.selectedOverviewTasks.has(id));
-  const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
+  const selectionTools = `<div class="overview-selection-tools"><button class="button secondary overview-selection-mode" type="button" data-overview-selection-mode aria-pressed="${state.overviewSelectionMode}" title="${state.overviewSelectionMode ? '退出选择' : '选择影片'}" aria-label="${state.overviewSelectionMode ? '退出选择' : '选择影片'}">${state.overviewSelectionMode ? '退出选择' : '选择'}</button><button class="button secondary overview-selection-all" type="button" data-overview-select-all aria-pressed="${allSelected}" title="${allSelected ? '取消全选' : '全选'}">${overviewSelectionIcon(allSelected)}<span>${allSelected ? '取消全选' : '全选'}</span></button><button id="overview-delete-selected" class="icon-button overview-selection-delete" type="button" title="删除所选记录" aria-label="删除所选记录"${state.selectedOverviewTasks.size ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13m-7 4v5m4-5v5"/></svg></button></div>`;
   const toolbar = `<div class="overview-cover-toolbar">${selectionTools}<label>排序<select id="overview-sort-key"><option value="created_at"${state.overviewSort.key === 'created_at' ? ' selected' : ''}>刮削时间</option><option value="publish_date"${state.overviewSort.key === 'publish_date' ? ' selected' : ''}>发行时间</option></select></label><label>顺序<select id="overview-sort-direction"><option value="desc"${state.overviewSort.direction === 'desc' ? ' selected' : ''}>由近到远</option><option value="asc"${state.overviewSort.direction === 'asc' ? ' selected' : ''}>由远到近</option></select></label></div>`;
   const [, typeLabel, english] = group.key === '__all__' ? ['', '全部', 'ALL MOVIES'] : overviewGroupType(group.by);
   const header = group.key === '__all__' ? '' : `<div class="lc-section-head"><button class="lc-back" type="button" data-overview-back>${javspIcon('arrow-left')}返回${escapeHtml(overviewGroupType(group.by)[1])}分类</button><span>${escapeHtml(group.name)} · ${state.taskTotal} 部影片</span></div>`;
@@ -2458,7 +2613,7 @@ function overviewCoverCard(task, taskCount = 1, taskIds = [task.id]) {
 }
 
 function playButton(taskId) {
-  return `<button type="button" class="library-play" data-play-task="${escapeHtml(taskId)}" title="在媒体库播放" aria-label="在媒体库播放"><img src="/assets/play.svg" alt="" aria-hidden="true"></button>`;
+  return `<button type="button" class="library-play" data-play-task="${escapeHtml(taskId)}" title="在媒体库播放" aria-label="在媒体库播放"><svg class="library-play-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z"/></svg></button>`;
 }
 
 async function playTask(button) {
@@ -2646,55 +2801,7 @@ function downloaderPayload() {
   };
 }
 
-function ensureAutoScrapeControls() {
-  const form = $('#download-management-form');
-  if (!form || $('#auto-scrape-rule-list')) return;
-  form.querySelector('.form-actions')?.insertAdjacentHTML('beforebegin', '<section class="download-auto-scrape"><div class="download-auto-scrape-heading"><div><strong>下载完成后自动刮削</strong><p>按列表顺序匹配，命中首条启用规则后执行对应预设。</p></div><button class="button secondary" id="add-auto-scrape-rule" type="button">添加规则</button></div><div id="auto-scrape-rule-list" class="auto-scrape-rule-list"></div></section>');
-}
-
-function newAutoScrapeRule() {
-  return { id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, enabled: true, tags: '', category: '', preset_id: 'default' };
-}
-
-function normalizeAutoScrapeRules(settings) {
-  if (Array.isArray(settings.auto_scrape_rules) && settings.auto_scrape_rules.length) {
-    return settings.auto_scrape_rules.map((rule) => ({
-      id: rule.id || newAutoScrapeRule().id,
-      enabled: rule.enabled !== false,
-      tags: rule.tags || '',
-      category: rule.category || '',
-      preset_id: rule.preset_id || 'default',
-    }));
-  }
-  if (settings.auto_scrape_enabled) {
-    return [{ id: 'legacy-default', enabled: true, tags: settings.auto_scrape_tags || '', category: settings.auto_scrape_category || '', preset_id: settings.auto_scrape_preset_id || 'default' }];
-  }
-  return [];
-}
-
-function autoScrapePresetOptions(selectedId) {
-  return state.presets.map((preset) => `<option value="${escapeHtml(preset.id)}"${preset.id === selectedId ? ' selected' : ''}>${escapeHtml(preset.name)}</option>`).join('');
-}
-
-function renderAutoScrapeRules(rules = []) {
-  const target = $('#auto-scrape-rule-list');
-  if (!target) return;
-  target.innerHTML = rules.length ? rules.map((rule, index) => `<article class="auto-scrape-rule" data-auto-scrape-rule="${escapeHtml(rule.id)}"><div class="auto-scrape-rule-title"><strong>规则 ${index + 1}</strong><label class="check-label"><input data-auto-rule-enabled type="checkbox"${rule.enabled ? ' checked' : ''}>启用</label></div><div class="download-auto-scrape-fields"><label>命中标签<input data-auto-rule-tags value="${escapeHtml(rule.tags || '')}" placeholder="多个标签用逗号分隔；留空匹配全部"></label><label>命中分类<input data-auto-rule-category value="${escapeHtml(rule.category || '')}" placeholder="留空匹配全部分类"></label><label>刮削预设<select data-auto-rule-preset>${autoScrapePresetOptions(rule.preset_id || 'default')}</select></label></div><button class="icon-button auto-scrape-rule-remove" type="button" data-remove-auto-scrape-rule="${escapeHtml(rule.id)}" title="删除此自动刮削规则" aria-label="删除此自动刮削规则">${javspIcon('trash')}</button></article>`).join('') : '<p class="muted auto-scrape-empty">尚未添加自动刮削规则。下载完成后不会自动创建刮削任务。</p>';
-}
-
-function readAutoScrapeRules() {
-  return Array.from(document.querySelectorAll('[data-auto-scrape-rule]')).map((row) => ({
-    id: row.dataset.autoScrapeRule,
-    enabled: row.querySelector('[data-auto-rule-enabled]').checked,
-    tags: row.querySelector('[data-auto-rule-tags]').value.trim(),
-    category: row.querySelector('[data-auto-rule-category]').value.trim(),
-    preset_id: row.querySelector('[data-auto-rule-preset]').value || 'default',
-  }));
-}
-
 function downloadManagementPayload() {
-  ensureAutoScrapeControls();
-  const auto_scrape_rules = readAutoScrapeRules();
   return {
     takeover_enabled: $('#download-takeover-enabled').checked,
     takeover_tags: $('#download-takeover-tags').value.trim(),
@@ -2705,13 +2812,11 @@ function downloadManagementPayload() {
     seeding_time_limit: Number($('#download-seeding-time-limit').value),
     inactive_seeding_time_limit: Number($('#download-inactive-seeding-time-limit').value),
     auto_remove: $('#download-auto-remove').checked,
-    auto_scrape_rules,
   };
 }
 
 async function loadDownloadManagement() {
   try {
-    ensureAutoScrapeControls();
     const settings = await api('/api/downloads/settings');
     $('#download-takeover-enabled').checked = Boolean(settings.takeover_enabled);
     $('#download-takeover-tags').value = settings.takeover_tags || '';
@@ -2722,8 +2827,6 @@ async function loadDownloadManagement() {
     $('#download-seeding-time-limit').value = settings.seeding_time_limit ?? -1;
     $('#download-inactive-seeding-time-limit').value = settings.inactive_seeding_time_limit ?? -1;
     $('#download-auto-remove').checked = Boolean(settings.auto_remove);
-    state.autoScrapeRules = normalizeAutoScrapeRules(settings);
-    renderAutoScrapeRules(state.autoScrapeRules);
   } catch (error) { $('#download-management-message').textContent = error.message; }
 }
 
@@ -2776,32 +2879,8 @@ async function loadAutoScrapeSchedules() {
     state.autoScrapeSchedules = await api('/api/auto-scrape-schedules');
     renderAutoScrapeSchedules();
     renderAutoScrapeRunButtons();
-    await loadDownloadAutoScrapeRuns();
     if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeRun) await refreshAutoScrapeRun();
     if ($('#auto-scrape-run-dialog')?.open && state.activeAutoScrapeHistory) renderAutoScrapeHistory(state.activeAutoScrapeHistory);
-  } catch (error) {
-    target.classList.add('empty');
-    target.textContent = error.message;
-  }
-}
-
-function renderDownloadAutoScrapeRuns() {
-  const target = $('#download-auto-scrape-run-list');
-  if (!target) return;
-  const runs = state.downloadAutoScrapeRuns || [];
-  const runStatus = $('#download-auto-scrape-status');
-  if (runStatus) runStatus.textContent = runs.length ? `${runs.length} 条自动记录` : '暂无自动记录';
-  target.classList.toggle('empty', !runs.length);
-  target.innerHTML = runs.length ? runs.map((run) => `<article class="auto-scrape-history-row"><div><strong>${escapeHtml(run.download_name || run.path || '下载任务')}</strong><p class="muted">${escapeHtml(run.downloader_name || '下载器')} · ${escapeHtml(formatLocalDateTime(run.created_at) || '')}</p><p class="muted">${escapeHtml(run.path || run.download_path || '')}</p>${autoScrapeRunCountsMarkup(run)}</div><div class="auto-scrape-history-actions"><button class="icon-button" type="button" data-view-download-auto-scrape-run="${escapeHtml(run.id || '')}">查看任务日志 (${Array.isArray(run.task_ids) ? run.task_ids.length : 0})</button></div></article>`).join('') : '<div class="task-list empty">下载完成后创建的刮削任务会显示在这里。</div>';
-}
-
-async function loadDownloadAutoScrapeRuns() {
-  const target = $('#download-auto-scrape-run-list');
-  if (!target) return;
-  try {
-    state.downloadAutoScrapeRuns = await api('/api/download-auto-scrape-runs');
-    renderDownloadAutoScrapeRuns();
-    if ($('#auto-scrape-run-dialog')?.open && state.activeDownloadAutoScrapeRun) await refreshDownloadAutoScrapeRun();
   } catch (error) {
     target.classList.add('empty');
     target.textContent = error.message;
@@ -2860,36 +2939,11 @@ async function refreshAutoScrapeRun() {
 }
 
 async function openAutoScrapeRun(scheduleId, runId) {
-  state.activeDownloadAutoScrapeRun = null;
   state.activeAutoScrapeHistory = null;
   state.activeAutoScrapeRun = { scheduleId, runId };
   $('#auto-scrape-run-content').innerHTML = '';
   $('#auto-scrape-run-dialog').showModal();
   await refreshAutoScrapeRun();
-}
-
-async function refreshDownloadAutoScrapeRun() {
-  const runId = state.activeDownloadAutoScrapeRun;
-  const dialog = $('#auto-scrape-run-dialog');
-  const run = state.downloadAutoScrapeRuns.find((item) => item.id === runId);
-  if (!run || !dialog?.open) return;
-  const taskIds = Array.isArray(run.task_ids) ? run.task_ids.map(String) : [];
-  const fetched = await Promise.all(taskIds.map((taskId) => api(`/api/tasks/${encodeURIComponent(taskId)}`).catch(() => null)));
-  if (!dialog.open || state.activeDownloadAutoScrapeRun !== runId) return;
-  const tasks = taskIds.map((taskId) => fetched.find((task) => String(task?.id) === taskId)).filter(Boolean);
-  syncTaskExpansion(tasks);
-  $('#auto-scrape-run-title').textContent = `${run.download_name || '下载任务'} - 任务日志`;
-  $('#auto-scrape-run-subtitle').textContent = `${run.downloader_name || '下载器'} · ${formatLocalDateTime(run.created_at) || ''}`;
-  $('#auto-scrape-run-content').innerHTML = tasks.length ? tasks.map(scheduleRunTaskMarkup).join('') : '<p class="muted">关联任务已删除，无法查看日志。</p>';
-}
-
-async function openDownloadAutoScrapeRun(runId) {
-  state.activeAutoScrapeRun = null;
-  state.activeAutoScrapeHistory = null;
-  state.activeDownloadAutoScrapeRun = runId;
-  $('#auto-scrape-run-content').innerHTML = '';
-  $('#auto-scrape-run-dialog').showModal();
-  await refreshDownloadAutoScrapeRun();
 }
 
 function autoScrapeRunCounts(run) {
@@ -2923,7 +2977,6 @@ function renderAutoScrapeHistory(scheduleId) {
 }
 
 function openAutoScrapeHistory(scheduleId) {
-  state.activeDownloadAutoScrapeRun = null;
   const schedule = state.autoScrapeSchedules.find((item) => item.id === scheduleId);
   if (!schedule) return;
   state.activeAutoScrapeRun = null;
@@ -2932,7 +2985,7 @@ function openAutoScrapeHistory(scheduleId) {
   $('#auto-scrape-run-dialog').showModal();
 }
 
-$('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; state.activeAutoScrapeHistory = null; state.activeDownloadAutoScrapeRun = null; });
+$('#auto-scrape-run-dialog')?.addEventListener('close', () => { state.activeAutoScrapeRun = null; state.activeAutoScrapeHistory = null; });
 
 // Expose only history: the unified rule editor lives in directory-watch.js.
 window.JavspAutomationHistory = {
@@ -2970,13 +3023,35 @@ function autoScrapeSchedulePayload() {
   };
 }
 
+/* Settings group tabs: keep every settings hook in the document, but show one
+   group at a time under the settings route — no separate in-page navigation. */
+const SETTINGS_GROUPS = ['update', 'connections', 'ai', 'account'];
+
+function currentSettingsGroup() {
+  try { const saved = localStorage.getItem('javsp-web.settings-group'); if (SETTINGS_GROUPS.includes(saved)) return saved; } catch { /* storage may be blocked */ }
+  return SETTINGS_GROUPS[0];
+}
+
+function applySettingsGroup(group) {
+  if (!SETTINGS_GROUPS.includes(group)) group = SETTINGS_GROUPS[0];
+  try { localStorage.setItem('javsp-web.settings-group', group); } catch { /* keep it for this page only */ }
+  document.querySelectorAll('[data-panel="settings"] .settings-tab').forEach((tab) => {
+    const active = tab.dataset.settingsTab === group;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[data-panel="settings"] .settings-group').forEach((section) => {
+    section.classList.toggle('hidden', section.id !== `settings-${group}`);
+  });
+}
+
 function showView(view) {
   document.documentElement.removeAttribute('data-initial-view');
   document.querySelectorAll('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   document.querySelectorAll('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === view));
   const title = { overview: '片库', scrape: '手动刮削', 'ai-scrape': 'AI 刮削', 'auto-scrape': '自动刮削', downloads: '下载管理', hot: '热片', 'download-script': '下片', 'crawler-config': '爬虫配置', presets: '刮削预设', settings: '系统设置' }[view] || '片库';
   $('#section-title').textContent = title;
-  $('#section-eyebrow').textContent = view === 'settings' || view === 'presets' || view === 'crawler-config' ? '配置' : '工作区';
+  $('#section-eyebrow').textContent = { hot: '片区', 'download-script': '片区', overview: '片区' }[view] || (view === 'settings' || view === 'presets' || view === 'crawler-config' ? '配置' : '工作区');
   if (view === 'overview' || view === 'scrape') { state.tasks = []; state.tasksSignature = ''; if (view === 'scrape') ensureTaskFilters(); loadTasks(); }
   if (view === 'scrape') { loadPresets(); loadCrawlerNames(); loadPathTools(); }
   if (view === 'auto-scrape') { loadPresets(); loadCrawlerNames(); loadAutoScrapeSchedules(); }
@@ -2985,7 +3060,7 @@ function showView(view) {
   if (view === 'ai-scrape') window.JavspAI?.load();
   if (view === 'settings') window.JavspAI?.loadSettings();
   if (view === 'presets') { loadPresets(); loadCrawlerNames(); }
-  if (view === 'settings') { ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); loadCookieCloud(); loadUpdateSettings(); }
+  if (view === 'settings') { applySettingsGroup(currentSettingsGroup()); ensureMediaSettingsUi(); ensurePathMappingsUi(); loadUsers(); loadDownloaders(); loadMediaServers(); loadPathMappings(); loadCookieCloud(); loadUpdateSettings(); }
   localStorage.setItem('javsp-web.active-view', view);
 }
 
@@ -3023,10 +3098,96 @@ function ensureMediaSettingsUi() {
   if (mediaContent && !$('#probe-media-server')) mediaContent.insertAdjacentHTML('beforeend', '<button class="button secondary" id="probe-media-server" type="button">验证并读取媒体库</button><fieldset class="media-library-fieldset"><legend>管理的媒体库</legend><div id="media-server-libraries" class="media-library-options"><span class="muted">验证连接后选择要管理的媒体库</span></div></fieldset><label>自动扫描延迟（秒）<input id="media-server-auto-scan-delay" type="number" min="0" max="86400" step="1" value="0"></label>');
 }
 
+const peopleScrape = { state: {}, timer: null };
+// Test hook: expose a per-server entry without reaching into module scope from tests.
+const peopleScrapeEntry = (id) => peopleScrape.state[id] || null;
+if (typeof window !== 'undefined') window.__peopleScrapeEntry = peopleScrapeEntry;
+
+function peopleScrapeCard(server) {
+  const id = server.id || '';
+  const entry = peopleScrape.state[id] || { status: 'loading' };
+  const logOpen = entry.logOpen || false;
+  const logLines = Array.isArray(entry.log) ? entry.log.slice(-50) : [];
+  const running = Boolean(entry.running);
+  const stats = entry.stats || null;
+  const statsText = stats ? `演员信息：新增 ${stats.created || 0} · 更新 ${stats.updated || 0} · 跳过 ${stats.skipped || 0} · 失败 ${stats.failed || 0}` : '';
+  const lastRun = entry.last_run_at ? `上次刮削：${entry.last_run_at}` : '';
+  let body;
+  if (entry.status === 'loading') {
+    body = '<span class="muted people-scrape-hint">演员刮削状态加载中…</span>';
+  } else if (entry.status === 'unsupported') {
+    body = '<span class="muted people-scrape-hint">当前后端版本暂不支持演员刮削</span>';
+  } else if (entry.status === 'error') {
+    body = `<span class="form-error people-scrape-hint">演员刮削状态获取失败：${escapeHtml(entry.message || '')}</span>`;
+  } else {
+    body = `<div class="people-scrape-row"><label class="check-label"><input type="checkbox" data-people-scrape-toggle="${escapeHtml(id)}"${entry.enabled ? ' checked' : ''}>自动刮削演员信息</label><button class="icon-button" type="button" data-people-scrape-run="${escapeHtml(id)}"${running ? ' disabled' : ''}>${running ? '刮削中…' : '立即刮削演员'}</button></div><div class="people-scrape-row"><button class="icon-button people-scrape-log-toggle" type="button" data-people-scrape-log-toggle="${escapeHtml(id)}" aria-expanded="${String(logOpen)}">${logOpen ? '收起日志' : '展开日志'}</button><span class="muted">${escapeHtml(statsText || lastRun)}</span></div><div class="people-scrape-log${logOpen ? '' : ' hidden'}" data-people-scrape-log="${escapeHtml(id)}">${logLines.map((line) => `<div>${escapeHtml(line)}</div>`).join('')}</div>`;
+  }
+  return `<div class="people-scrape" data-people-scrape="${escapeHtml(id)}">${body}</div>`;
+}
+
+function renderPeopleScrapeCard(server) {
+  const host = document.querySelector(`[data-people-scrape="${server.id}"]`);
+  const html = peopleScrapeCard(server);
+  if (host && typeof host.replaceWith === 'function') {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    host.replaceWith(tmp.firstElementChild);
+  } else {
+    // Tests and edge DOMs without replaceWith: expose the latest markup for inspection.
+    const current = peopleScrape.state[server.id];
+    peopleScrape.state[server.id] = { ...(current || {}), status: (current && current.status) || 'ready', html };
+  }
+  const log = document.querySelector(`[data-people-scrape-log="${server.id}"]`);
+  if (log && !log.classList.contains('hidden')) log.scrollTop = log.scrollHeight;
+}
+
+function applyPeopleScrape(server, data) {
+  const prev = peopleScrape.state[server.id] || {};
+  const running = Boolean(data.running);
+  peopleScrape.state[server.id] = { ...prev, status: 'ready', enabled: Boolean(data.enabled), running, last_run_at: data.last_run_at || null, stats: data.stats || null, log: Array.isArray(data.log) ? data.log.slice(-50) : (prev.log || []) };
+  renderPeopleScrapeCard(server);
+  if (running) pollPeopleScrape(server, 2000);
+}
+
+function loadPeopleScrape(server) {
+  return api(`/api/media-servers/${encodeURIComponent(server.id)}/people-scrape`).then((data) => applyPeopleScrape(server, data)).catch((error) => {
+    const prev = peopleScrape.state[server.id] || {};
+    const unsupported = /404/.test(error.message || '');
+    peopleScrape.state[server.id] = { ...prev, status: unsupported ? 'unsupported' : 'error', message: unsupported ? '' : (error.message || ''), running: false };
+    renderPeopleScrapeCard(server);
+  });
+}
+
+function pollPeopleScrape(server, delay) {
+  clearTimeout(peopleScrape.timer);
+  peopleScrape.timer = setTimeout(() => loadPeopleScrape(server), delay);
+}
+
+function runPeopleScrape(server) {
+  const entry = peopleScrape.state[server.id] || {};
+  peopleScrape.state[server.id] = { ...entry, running: true };
+  renderPeopleScrapeCard(server);
+  return api(`/api/media-servers/${encodeURIComponent(server.id)}/people-scrape/run`, { method: 'POST' }).then(() => loadPeopleScrape(server)).catch((error) => {
+    const prev = peopleScrape.state[server.id] || {};
+    peopleScrape.state[server.id] = { ...prev, running: false, status: prev.status === 'ready' ? 'error' : prev.status, message: error.message || '' };
+    renderPeopleScrapeCard(server);
+  });
+}
+
+function togglePeopleScrape(server, input) {
+  return api(`/api/media-servers/${encodeURIComponent(server.id)}/people-scrape`, { method: 'PUT', body: JSON.stringify({ enabled: Boolean(input.checked) }) }).then((data) => applyPeopleScrape(server, data)).catch((error) => {
+    input.checked = !input.checked;
+    const prev = peopleScrape.state[server.id] || {};
+    peopleScrape.state[server.id] = { ...prev, message: error.message || '' };
+    renderPeopleScrapeCard(server);
+  });
+}
+
 function renderMediaServers() {
   const target = $('#media-server-list');
   if (!target) return;
-  target.innerHTML = state.mediaServers.length ? state.mediaServers.map((server) => `<article class="media-server-row"><div><strong>${escapeHtml(server.name)}</strong><span>${server.type === 'jellyfin' ? 'Jellyfin' : 'Emby'} · ${escapeHtml(server.url)}</span><span>${server.api_key_set ? 'API 密钥已配置' : '未配置 API 密钥'}${server.auto_scan ? ' · 完成后自动扫描' : ''}</span></div><div class="media-server-actions"><button class="icon-button" type="button" data-edit-media-server="${escapeHtml(server.id)}">${javspIcon('pencil')}编辑</button><button class="icon-button" type="button" data-sync-media-server="${escapeHtml(server.id)}">同步媒体库</button></div></article>`).join('') : '<div class="task-list empty">还没有媒体服务器</div>';
+  target.innerHTML = state.mediaServers.length ? state.mediaServers.map((server) => `<article class="media-server-row"><div><strong>${escapeHtml(server.name)}</strong><span>${server.type === 'jellyfin' ? 'Jellyfin' : 'Emby'} · ${escapeHtml(server.url)}</span><span>${server.api_key_set ? 'API 密钥已配置' : '未配置 API 密钥'}${server.auto_scan ? ' · 完成后自动扫描' : ''}</span></div><div class="media-server-actions"><button class="icon-button" type="button" data-edit-media-server="${escapeHtml(server.id)}">${javspIcon('pencil')}编辑</button><button class="icon-button" type="button" data-sync-media-server="${escapeHtml(server.id)}">同步媒体库</button></div>${peopleScrapeCard(server)}</article>`).join('') : '<div class="task-list empty">还没有媒体服务器</div>';
+  state.mediaServers.forEach((server) => loadPeopleScrape(server));
 }
 
 async function loadMediaServers() {
@@ -3259,14 +3420,6 @@ document.addEventListener('click', async (event) => {
       if (target) target.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
     });
   }
-  const viewDownloadAutoScrapeRunButton = event.target.closest('[data-view-download-auto-scrape-run]');
-  if (viewDownloadAutoScrapeRunButton) {
-    openDownloadAutoScrapeRun(viewDownloadAutoScrapeRunButton.dataset.viewDownloadAutoScrapeRun).catch((error) => {
-      const target = $('#auto-scrape-run-content');
-      if (target) target.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
-    });
-    return;
-  }
   const deleteAutoScrapeRunButton = event.target.closest('[data-delete-auto-scrape-run]');
   if (deleteAutoScrapeRunButton) {
     const scheduleId = deleteAutoScrapeRunButton.dataset.deleteAutoScrapeRun;
@@ -3303,23 +3456,6 @@ document.addEventListener('click', async (event) => {
       },
     });
   }
-  const addAutoScrapeRule = event.target.closest('#add-auto-scrape-rule');
-  if (addAutoScrapeRule) {
-    const message = $('#download-management-message');
-    addAutoScrapeRule.disabled = true;
-    api('/api/downloads/auto-scrape/path-check', { method: 'POST', body: JSON.stringify({ tags: '', category: '' }) }).then((result) => {
-      if (!result.ok) { message.textContent = `路径映射检查失败：${(result.issues || []).join('；')}`; return; }
-      state.autoScrapeRules = [...readAutoScrapeRules(), newAutoScrapeRule()];
-      renderAutoScrapeRules(state.autoScrapeRules);
-      message.textContent = result.message || '路径映射检查通过';
-    }).catch((error) => { message.textContent = `路径映射检查失败：${error.message}`; }).finally(() => { addAutoScrapeRule.disabled = false; });
-    return;
-  }
-  const removeAutoScrapeRule = event.target.closest('[data-remove-auto-scrape-rule]');
-  if (removeAutoScrapeRule) {
-    state.autoScrapeRules = readAutoScrapeRules().filter((rule) => rule.id !== removeAutoScrapeRule.dataset.removeAutoScrapeRule);
-    renderAutoScrapeRules(state.autoScrapeRules);
-  }
   const addPathMapping = event.target.closest('#add-path-mapping');
   if (addPathMapping) {
     state.pathMappings.push({ id: `new-${Date.now()}`, source_path: '', target_path: '' });
@@ -3345,6 +3481,25 @@ document.addEventListener('click', async (event) => {
   if (syncMedia) {
     syncMedia.disabled = true;
     api(`/api/media-servers/${encodeURIComponent(syncMedia.dataset.syncMediaServer)}/sync`, { method: 'POST' }).then((result) => { syncMedia.textContent = result.message || '已同步'; setTimeout(() => { syncMedia.textContent = '同步媒体库'; syncMedia.disabled = false; }, 1600); }).catch((error) => { syncMedia.textContent = error.message; setTimeout(() => { syncMedia.textContent = '同步媒体库'; syncMedia.disabled = false; }, 2200); });
+  }
+  const peopleToggle = event.target.closest('[data-people-scrape-toggle]');
+  if (peopleToggle) {
+    const server = state.mediaServers.find((item) => item.id === peopleToggle.dataset.peopleScrapeToggle);
+    if (server) togglePeopleScrape(server, peopleToggle);
+  }
+  const peopleRun = event.target.closest('[data-people-scrape-run]');
+  if (peopleRun) {
+    const server = state.mediaServers.find((item) => item.id === peopleRun.dataset.peopleScrapeRun);
+    if (server) runPeopleScrape(server);
+  }
+  const peopleLogToggle = event.target.closest('[data-people-scrape-log-toggle]');
+  if (peopleLogToggle) {
+    const server = state.mediaServers.find((item) => item.id === peopleLogToggle.dataset.peopleScrapeLogToggle);
+    if (server) {
+      const entry = peopleScrape.state[server.id] || {};
+      peopleScrape.state[server.id] = { ...entry, logOpen: !entry.logOpen };
+      renderPeopleScrapeCard(server);
+    }
   }
   const toggle = event.target.closest('[data-task-toggle]');
   if (toggle) {
@@ -3635,8 +3790,6 @@ $('#download-management-form').addEventListener('submit', async (event) => {
   try {
     const payload = downloadManagementPayload();
     const saved = await api('/api/downloads/settings', { method: 'PUT', body: JSON.stringify(payload) });
-    state.autoScrapeRules = normalizeAutoScrapeRules(saved);
-    renderAutoScrapeRules(state.autoScrapeRules);
     message.textContent = saved.limit_apply_errors?.length ? `策略已保存；部分任务的限速设置未能更新：${saved.limit_apply_errors.join('；')}` : `策略已保存，已为 ${saved.limit_applied_count || 0} 个任务更新上传和下载限速`;
     await loadDownloads();
   } catch (error) { message.textContent = error.message; }
@@ -3811,6 +3964,8 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     const caret = downloadPolicyToggle.querySelector('[data-icon]');
     if (caret) {
       caret.dataset.icon = expanded ? 'chevron-up' : 'chevron-down';
+      // Deduplicate before re-render: the slot may hold a stale svg next to
+      // the current one (parser artifact); innerHTML alone would keep both.
       caret.innerHTML = javspIcon(caret.dataset.icon);
     }
     downloadPolicyToggle.setAttribute('aria-expanded', String(expanded));
@@ -3827,7 +3982,7 @@ if (downloadPolicyToggle && downloadPolicyContent) {
     restoreUpdateOverlay();
     $('#current-user').textContent = state.user.username;
     try { await window.JavspCommunity.init(); } catch (_) { /* Profile failure must not block scraping. */ }
-    if (state.user.role !== 'admin') { $('#settings-nav').remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); $('#ai-scrape-nav').remove(); }
+    if (state.user.role !== 'admin') { $('#sidebar-nav [data-view="settings"]')?.remove(); $('#auto-scrape-nav').remove(); $('#crawler-config-nav').remove(); $('#ai-scrape-nav').remove(); }
     if (savedView && document.querySelector(`[data-panel="${savedView}"]`) && (state.user.role === 'admin' || !['settings', 'auto-scrape', 'crawler-config', 'ai-scrape'].includes(savedView))) showView(savedView);
     else showView('overview');
     const crawlerNav = $('#crawler-config-nav');
@@ -3904,7 +4059,7 @@ window.JavspComments = (() => {
     const section = target();
     section.querySelector('.comments-list').innerHTML = active.items.length
       ? active.items.map((item) => `<article class="comment-item"><div class="comment-item-head">${window.JavspCommunity.avatar(item.avatar_id, item.nickname)}<strong>${esc(item.nickname || '匿名用户')}</strong><time>${esc(date(item.created_at))}</time></div>${replyQuote(item)}<div class="comment-markdown">${window.JavspCommentMarkdown?.render(item.body) ?? esc(item.body)}</div><div class="comment-actions"><button class="comment-like" type="button" data-comment-like="${esc(item.id)}" aria-pressed="${Boolean(item.liked)}">${item.liked ? '已赞' : '点赞'} · ${Number(item.likes) || 0}</button><button class="comment-reply" type="button" data-comment-reply="${esc(item.id)}">回复</button><button class="comment-report" type="button" data-comment-report="${esc(item.id)}">举报</button></div></article>`).join('')
-      : '<p class="muted">还没有评论，欢迎留下第一条。</p>';
+      : '<p class="muted comments-empty-note">还没有评论，欢迎留下第一条。</p>';
     section.querySelector('.comments-status').textContent = `第 ${active.page + 1} 页 · 本页 ${active.items.length} 条`;
     section.querySelector('[data-comment-more]').disabled = !active.cursor && active.page >= active.pages.length - 1;
     section.querySelector('[data-comment-prev]').disabled = active.page === 0;
@@ -4097,6 +4252,9 @@ if (privacyMode) {
     state.privacyMode = privacyMode.checked;
     document.documentElement.dataset.privacyMode = state.privacyMode ? '1' : '0';
     try { localStorage.setItem('javsp-web.privacy-mode', state.privacyMode ? '1' : '0'); } catch (_) {}
+    // Force a reflow so compositor layers drop any stale blur/scale instead of ghosting
+    // until the next repaint (noticeable on mobile after turning privacy mode off).
+    if (!state.privacyMode) void document.documentElement.offsetHeight;
   });
 }
 
@@ -4105,28 +4263,67 @@ window.JavspStills = (() => {
   const dialog = () => document.querySelector('#stills-dialog');
   const inside = (selector) => dialog()?.querySelector(selector) || null;
   let view = null;
+  // Server-rendered previews already decoded by the strip double as instant placeholders.
+  const cache = new Map();
+  const thumbKey = (taskId, index, version) => `/api/tasks/${encodeURIComponent(taskId)}/fanart/${index}?v=${encodeURIComponent(version)}&thumbnail=true`;
+  const viewKey = (taskId, index, version) => `/api/tasks/${encodeURIComponent(taskId)}/fanart/${index}?v=${encodeURIComponent(version)}&size=view`;
+  const fullKey = (taskId, index, version) => `/api/tasks/${encodeURIComponent(taskId)}/fanart/${index}?v=${encodeURIComponent(version)}`;
 
   function render() {
     const image = inside('.stills-image');
+    const preview = inside('.stills-preview');
+    const stage = inside('.stills-stage');
     const error = inside('[data-stills-error]');
     const counter = inside('[data-stills-counter]');
     const prev = inside('[data-stills-prev]');
     const next = inside('[data-stills-next]');
     if (error) error.hidden = true;
+    if (stage) stage.classList.add('is-loading');
     if (!view) {
-      if (image) { image.removeAttribute('src'); image.alt = ''; }
+      if (image) { image.classList.remove('is-loaded'); image.removeAttribute('src'); image.alt = ''; }
+      if (preview) { preview.removeAttribute('src'); preview.alt = ''; }
       if (counter) counter.textContent = '';
       if (prev) prev.disabled = true;
       if (next) next.disabled = true;
       return;
     }
+    const key = viewKey(view.taskId, view.index, view.version);
+    // The tiny server preview paints instantly underneath; the view-size render fades in over it.
+    if (preview) {
+      preview.setAttribute('src', thumbKey(view.taskId, view.index, view.version));
+      preview.alt = '';
+    }
     if (image) {
-      image.setAttribute('src', `/api/tasks/${encodeURIComponent(view.taskId)}/fanart/${view.index}?v=${encodeURIComponent(view.version)}`);
+      image.classList.remove('is-loaded');
+      // The thumbnail placeholder sits underneath (.stills-preview), so the main image can
+      // request the view size right away; the browser keeps the decoded placeholder visible
+      // while it loads and render only fades in once it arrives.
+      image.setAttribute('src', key);
       image.alt = `剧照 ${view.index + 1}`;
     }
     if (counter) counter.textContent = `${view.index + 1} / ${view.total}`;
     if (prev) prev.disabled = view.index <= 0;
     if (next) next.disabled = view.index >= view.total - 1;
+    preloadAround(view.index);
+  }
+
+  // Prime ±1 around the current still so stepping hits the cache.
+  function preloadAround(index) {
+    for (const neighbour of [index - 1, index + 1]) {
+      if (neighbour < 0 || neighbour >= view.total) continue;
+      preload(neighbour);
+    }
+  }
+
+  function preload(index) {
+    const key = viewKey(view.taskId, index, view.version);
+    if (cache.has(key)) return cache.get(key);
+    const probe = new Image();
+    probe.src = key;
+    const entry = probe.decode?.().then(() => true).catch(() => false) ?? Promise.resolve(false);
+    cache.set(key, entry.then(ok => (ok ? probe : null)));
+    if (cache.size > 40) cache.delete(cache.keys().next().value);
+    return cache.get(key);
   }
 
   function open(options = {}) {
@@ -4178,15 +4375,64 @@ window.JavspStills = (() => {
     });
     // 'error' does not bubble: listen in the capture phase on the dialog itself.
     element.addEventListener('error', (event) => {
-      if (!view || event.target !== inside('.stills-image')) return;
+      if (!view) return;
+      // The preview underlay failed: keep the skeleton running; the main image still tries.
+      if (event.target === inside('.stills-preview')) return;
+      if (event.target !== inside('.stills-image')) return;
+      const image = inside('.stills-image');
+      const retry = inside('[data-stills-retry]');
+      const key = viewKey(view.taskId, view.index, view.version);
+      const src = image?.getAttribute('src') || '';
+      // The view-size render failed (endpoint missing or broken): fall back to the full
+      // original so the still stays visible, and surface a retry control for the view size.
+      // The original's own failure is handled by the banner branch below instead.
+      if (src === key) {
+        image.dataset.stillsFailed = '1';
+        image.setAttribute('src', fullKey(view.taskId, view.index, view.version));
+        if (retry) retry.hidden = false;
+        return;
+      }
+      if (src === fullKey(view.taskId, view.index, view.version) && image?.dataset.stillsFailed !== '1') {
+        // The original itself failed with no view fallback in flight: surface the banner.
+        const error = inside('[data-stills-error]');
+        if (error) error.hidden = false;
+        if (retry) retry.hidden = true;
+        return;
+      }
       const error = inside('[data-stills-error]');
       if (error) error.hidden = false;
+      if (retry) retry.hidden = true;
     }, true);
+    element.addEventListener('load', (event) => {
+      if (!view) return;
+      const stage = inside('.stills-stage');
+      if (event.target === inside('.stills-preview')) return;
+      if (event.target !== inside('.stills-image')) return;
+      const image = inside('.stills-image');
+      const retry = inside('[data-stills-retry]');
+      const key = viewKey(view.taskId, view.index, view.version);
+      if (image?.getAttribute('src') === key) {
+        delete image.dataset.stillsFailed;
+        cache.set(key, Promise.resolve(image));
+        image.classList.add('is-loaded');
+        stage?.classList.remove('is-loading');
+        if (retry) retry.hidden = true;
+      }
+    }, true);
+    element.addEventListener('click', (event) => {
+      if (!event.target.closest('[data-stills-retry]')) return;
+      const image = inside('.stills-image');
+      const retry = inside('[data-stills-retry]');
+      if (!image || !view) return;
+      delete image.dataset.stillsFailed;
+      retry.hidden = true;
+      image.setAttribute('src', viewKey(view.taskId, view.index, view.version));
+    });
     // Whatever closed the dialog (button, Escape, task switch) drops the decoded image.
     element.addEventListener('close', () => { view = null; render(); });
   }
 
-  return { open, close, step, isOpen };
+  return { open, close, step, isOpen, preload };
 })();
 // --- end stills viewer ---
 

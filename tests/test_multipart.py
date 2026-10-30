@@ -508,5 +508,28 @@ class MultipartTests(unittest.TestCase):
         self.assertTrue(any(stage == 'movie' and event.get('status') == 'completed' for stage, event in events))
 
 
+class VendorImportTests(unittest.TestCase):
+    """防止发布时把 vendor/JavSP 抄漏：tasks/刮削启动入口用到的 multipart
+    符号必须能从当前 vendor 导入（线上曾报 cannot import name
+    'group_files_skipping_conflicts'）。"""
+
+    def test_tasks_multipart_entrypoints_import_from_vendor(self):
+        import inspect
+
+        import javsp.multipart as multipart
+        required = ['group_files_skipping_conflicts', 'group_files',
+                    'media_identity', 'part_number', 'inspect_download_copy']
+        for name in required:
+            with self.subTest(symbol=name):
+                self.assertTrue(hasattr(multipart, name),
+                                f'vendor/JavSP/javsp/multipart.py 缺少 {name}')
+                self.assertTrue(inspect.isfunction(getattr(multipart, name)))
+        # 与 tasks.py 实际的 import 语句一致（含返回值形态的冒烟校验）。
+        from javsp.multipart import group_files_skipping_conflicts
+        groups, conflicts = group_files_skipping_conflicts([], None)
+        self.assertEqual(groups, [])
+        self.assertEqual(conflicts, [])
+
+
 if __name__ == '__main__':
     unittest.main()

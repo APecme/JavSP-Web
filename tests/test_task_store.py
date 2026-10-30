@@ -434,8 +434,34 @@ class TaskStoreTests(unittest.TestCase):
             self.assertEqual(runtime['app_version'], '1.1.37')
         asset = client.get('/assets/app.js?v=' + self.server.ASSET_VERSION)
         self.assertIn('immutable', asset.headers['cache-control'])
-        self.assertNotIn('immutable', client.get('/assets/app.js?v=wrong').headers['cache-control'])
+        self.assertIn('immutable', client.get('/assets/app.js?v=wrong').headers['cache-control'])
         self.assertIn(self.server.ASSET_VERSION, client.get('/login').text)
+
+    def test_asset_cache_headers_by_version_param(self):
+        client = self.client()
+        # 版本化 URL（非空 ?v=）：一年 immutable，无需回源验证。
+        versioned = client.get('/assets/app.js?v=' + self.server.ASSET_VERSION)
+        self.assertEqual(versioned.status_code, 200)
+        self.assertEqual(versioned.headers['cache-control'],
+                         'public, max-age=31536000, immutable')
+        self.assertTrue(versioned.headers.get('etag'))
+        self.assertIn('immutable',
+                      client.get('/assets/app.js?v=abc').headers['cache-control'])
+        # 不带 ?v=：仍然每次回源验证。
+        plain = client.get('/assets/app.js')
+        self.assertEqual(plain.headers['cache-control'], 'public, no-cache')
+        self.assertTrue(plain.headers.get('etag'))
+        # ETag 仍在，条件请求 304 正常（带 v 与不带 v 都可以）。
+        self.assertEqual(client.get('/assets/app.js?v=' + self.server.ASSET_VERSION,
+                                    headers={'If-None-Match': versioned.headers['etag']}).status_code, 304)
+        self.assertEqual(client.get('/assets/app.js',
+                                    headers={'If-None-Match': plain.headers['etag']}).status_code, 304)
+        # index.html 与 /api/** 不受影响。
+        index = client.get('/')
+        self.assertNotIn('immutable', index.headers.get('cache-control', ''))
+        api = client.get('/api/tasks?limit=10&view=manual')
+        self.assertNotIn('immutable', api.headers.get('cache-control', ''))
+        self.assertIn('no-cache', api.headers['cache-control'])
 
     def test_pending_dispatch_respects_batch_and_uses_fixed_workers(self):
         records = [self.item('a', status='queued', batch_id='batch1', task_concurrency=1),

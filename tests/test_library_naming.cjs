@@ -58,6 +58,8 @@ function showViewHarness() {
     loadAutoScrapeSchedules: noop, ensureMediaSettingsUi: noop, ensurePathMappingsUi: noop,
     loadUsers: noop, loadDownloaders: noop, loadMediaServers: noop, loadPathMappings: noop,
     loadCookieCloud: noop, loadUpdateSettings: noop,
+    applySettingsGroup: noop, SETTINGS_GROUPS: ['update', 'connections', 'ai', 'account'],
+    currentSettingsGroup: () => 'update',
   });
   vm.runInContext(sourceText, context);
   return { showView: context.showView, text, navs, panels, storage, documentElement, loads: () => loads };
@@ -76,7 +78,7 @@ test('showView labels overview as 片库 and keeps the overview persistence key'
   const view = showViewHarness();
   view.showView('overview');
   assert.equal(view.text('#section-title').textContent, '片库');
-  assert.equal(view.text('#section-eyebrow').textContent, '工作区');
+  assert.equal(view.text('#section-eyebrow').textContent, '片区');
   assert.equal(view.storage.items['javsp-web.active-view'], 'overview', 'saved view key and value stay compatible');
   assert.equal(view.navs.find(nav => nav.dataset.view === 'overview').classList.contains('active'), true);
   assert.equal(view.panels.find(panel => panel.dataset.panel === 'overview').classList.contains('active'), true);

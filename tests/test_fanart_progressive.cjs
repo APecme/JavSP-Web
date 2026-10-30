@@ -92,12 +92,18 @@ test('strip images request thumbnails while the stills viewer keeps the full-siz
     assert.ok(url.startsWith('/api/tasks/a%2Fb/fanart/'), `thumbnail keeps the fanart route: ${url}`);
   }
 
-  // The viewer builds its own URL from data attributes and must NOT add thumbnail=true.
+  // The viewer builds its own URLs from data attributes.
   const stills = slice(appSource(), 'window.JavspStills = (() => {', '// --- end stills viewer ---');
-  const urlLine = stills.split('\n').find(line => line.includes("/fanart/") && line.includes('setAttribute'));
+  const urlLine = stills.split('\n').find(line => line.includes('Key(') && line.includes('setAttribute'));
   assert.ok(urlLine, 'viewer assigns its fanart URL');
-  assert.doesNotMatch(urlLine, /thumbnail/, 'viewer must keep the full-size fanart URL');
-  assert.match(stills, /\/api\/tasks\/\$\{encodeURIComponent\(view\.taskId\)\}\/fanart\/\$\{view\.index\}\?v=/, 'viewer URL shape stays unchanged');
+  assert.match(stills, /&size=view`;/, 'viewer requests the view-size render');
+  assert.match(stills, /&thumbnail=true`;/, 'viewer keeps the server thumbnail as placeholder');
+  // The full-size original stays available as the error fallback.
+  assert.match(stills, /fullKey[\s\S]*?\/fanart\/\$\{index\}\?v=\$\{encodeURIComponent\(version\)\}`;/, 'original fanart URL kept as fallback');
+  // ±1 neighbour preloading warms the decode cache.
+  assert.match(stills, /preloadAround/, 'viewer preloads neighbours');
+  assert.match(stills, /new Image\(\)/, 'preloading goes through Image');
+  assert.match(stills, /\.decode\?\.\(\)/, 'preloads wait for decode()');
 });
 
 /* ---- DOM stubs with real src assignment and real event dispatch ---- */

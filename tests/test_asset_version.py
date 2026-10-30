@@ -156,9 +156,12 @@ class ServerAssetVersionTests(unittest.TestCase):
             self.assertIn(f'v={second}', refreshed.text)
             self.assertNotIn(f'v={first}', refreshed.text)
             self.assertIn('immutable', client.get('/assets/app.js?v=' + second).headers['cache-control'])
+            # 旧版本号 URL 也带 v，按版本化语义同样长缓存；refreshed 的
+            # index 已不再引用它，浏览器不会再请求旧 URL。
             stale = client.get('/assets/app.js?v=' + first)
-            self.assertEqual(stale.headers['cache-control'], 'public, no-cache')
-            self.assertNotIn('immutable', stale.headers['cache-control'])
+            self.assertEqual(stale.headers['cache-control'],
+                             'public, max-age=31536000, immutable')
+            self.assertEqual(stale.status_code, 200)
 
     def test_unversioned_and_unauthenticated_asset_requests_are_revalidated(self):
         client = self.client()

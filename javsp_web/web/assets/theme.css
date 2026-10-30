@@ -26,6 +26,16 @@
   --accent-surface: #d1e9ff;
   --accent-border-pale: #dbeafe;
   --accent-ink: #1849a9;
+  --accent-2: #9b4dca;
+  --accent-2-hover: #8841b5;
+  --accent-2-border: #c084fc;
+  --accent-2-soft: #f6effb;
+  --accent-2-border-soft: #d8b4fe;
+  --accent-2-surface: #eadcf5;
+  --accent-2-border-pale: #e9d5ff;
+  --accent-2-ink: #6d28a5;
+  --accent-2-text: #7e3aa8;
+  --on-accent-2: #ffffff;
   --info-fill: #2e90fa;
   --danger: #b42318;
   --danger-fill: #d92d20;
@@ -113,6 +123,12 @@
   --sidebar-muted: #98a2b3;
   --sidebar-label: #98a2b3;
   --sidebar-hover: #1d2939;
+  --nav-accent: #175cd3;
+  --nav-accent-soft: #1d3b6e;
+  --nav-accent-border: #2f5aa8;
+  --nav-accent-text: #84adff;
+  --nav-accent-ink: #b2ccff;
+  --on-nav-accent: #ffffff;
   --sidebar-control: #344054;
   --code-bg: #0b1220;
   --code-text: #d0d5dd;
@@ -181,6 +197,16 @@
   --accent-border-soft: #5386d6;
   --accent-surface: #233860;
   --accent-border-pale: #5386d6;
+  --accent-2: #a855f7;
+  --accent-2-hover: #9333ea;
+  --accent-2-border: #c084fc;
+  --accent-2-soft: #2a1b3d;
+  --accent-2-border-soft: #7e3aa8;
+  --accent-2-surface: #3b2354;
+  --accent-2-border-pale: #6b3d94;
+  --accent-2-ink: #d8b4fe;
+  --accent-2-text: #d8b4fe;
+  --on-accent-2: #ffffff;
   --accent-ink: #84adff;
   --info-fill: #2e90fa;
   --danger: #f97066;
@@ -269,6 +295,12 @@
   --sidebar-muted: #a1a1aa;
   --sidebar-label: #a1a1aa;
   --sidebar-hover: #27272a;
+  --nav-accent: #3b82f6;
+  --nav-accent-soft: #1e3a5f;
+  --nav-accent-border: #3b5b8c;
+  --nav-accent-text: #93c5fd;
+  --nav-accent-ink: #bfdbfe;
+  --on-nav-accent: #ffffff;
   --sidebar-control: #3f3f46;
   --code-bg: #0b0b0e;
   --code-text: #d4d4d8;
@@ -424,3 +456,16 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   border: 1px solid var(--control-border); border-radius: 6px;
   background: var(--surface); cursor: pointer;
 }
+.palette-group { margin-bottom: 14px; }
+.palette-group:last-of-type { margin-bottom: 0; }
+.palette-group-label {
+  margin: 0 0 8px;
+  font-size: 12px; font-weight: 700; color: var(--text-secondary);
+}
+.palette-reset-row {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--border-soft, var(--border));
+  display: flex; justify-content: flex-end;
+}
+.palette-reset { font-size: 12px; padding: 6px 12px; }
+

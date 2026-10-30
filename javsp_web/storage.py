@@ -602,6 +602,7 @@ def _normalize_media_server(item: dict[str, Any]) -> dict[str, Any] | None:
         "auto_scan": bool(item.get("auto_scan")),
         "auto_scan_delay": max(0, min(86400, int(item.get("auto_scan_delay", 0) or 0))),
         "libraries": [str(value) for value in (item.get("libraries") or []) if str(value).strip()],
+        "people_scrape": {"enabled": bool((item.get("people_scrape") or {}).get("enabled"))},
     }
 
 

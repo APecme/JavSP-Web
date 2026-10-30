@@ -268,6 +268,18 @@ def _normalize_int(value, default: int, low: int, high: int, label: str) -> int:
     return number
 
 
+def _normalize_optional_int(value, default: int, low: int, high: int, label: str) -> int:
+    """Treat an unset or zero value as "not configured" and fall back to the default.
+
+    Watch（监控新增）只需要目录 + 预设；时间/间隔字段可以整体省略。对最小值
+    大于 0 的字段，0 也不可能是有意填写的合法值，因此同样视为未填写。
+    明确填写的越界值（例如 3 秒扫描间隔）仍然报错，不会被静默纠正。
+    """
+    if value in (None, "", 0) and low > 0:
+        return default
+    return _normalize_int(value, default, low, high, label)
+
+
 def _resolved(path: str) -> str:
     try:
         return os.path.normcase(os.path.realpath(path))
@@ -320,6 +332,8 @@ def normalize_payload(payload: dict, *, rule_id: str | None = None, others: list
         cron = str(payload.get("cron") or "").strip()
         if croniter is None or len(cron.split()) != 5 or not croniter.is_valid(cron):
             raise RuleError("Cron 表达式无效，请使用标准五段格式，例如：0 2 * * *")
+    # watch（监控新增）不要求调度时间；cron/interval 字段缺省时用默认值，
+    # 只有 schedule（定时全量）必须提供 cron。字段在返回结构里始终保留。
     rule = {
         "id": rule_id or uuid.uuid4().hex[:12],
         "name": str(payload.get("name") or "").strip()[:80] or Path(path).name or "目录监控",
@@ -330,11 +344,11 @@ def normalize_payload(payload: dict, *, rule_id: str | None = None, others: list
         "recursive": bool(payload.get("recursive", True)),
         "exclude": _normalize_exclude(payload.get("exclude")),
         "include_existing": bool(payload.get("include_existing", False)),
-        "poll_seconds": _normalize_int(
+        "poll_seconds": _normalize_optional_int(
             payload.get("poll_seconds"), DEFAULT_POLL_SECONDS, MIN_POLL_SECONDS, MAX_POLL_SECONDS, "扫描间隔"),
         "stable_seconds": _normalize_int(
             payload.get("stable_seconds"), DEFAULT_STABLE_SECONDS, MIN_STABLE_SECONDS, MAX_STABLE_SECONDS, "稳定等待时间"),
-        "max_tasks_per_scan": _normalize_int(
+        "max_tasks_per_scan": _normalize_optional_int(
             payload.get("max_tasks_per_scan"), DEFAULT_MAX_TASKS_PER_SCAN, MIN_TASKS_PER_SCAN, MAX_TASKS_PER_SCAN,
             "单次最多提交任务数"),
         "cron": cron,

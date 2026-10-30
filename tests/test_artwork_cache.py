@@ -255,6 +255,59 @@ class FanartThumbnailRouteTests(unittest.TestCase):
         self.assertEqual(conditional.headers['etag'], etag)
         self.assertEqual(conditional.headers['cache-control'], 'private, no-cache')
 
+    def test_view_returns_bounded_jpeg(self):
+        self.setUpFanart()
+        client = self.client()
+        response = client.get('/api/tasks/one/fanart/0?size=view')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers['content-type'], 'image/jpeg')
+        with Image.open(io.BytesIO(response.content)) as image:
+            self.assertLessEqual(max(image.size), 1600)
+            # 竖版 1200x1800 → 等比缩到 1066x1600，而不是简单的截断。
+            self.assertEqual(image.width, 1067)
+
+    def test_view_does_not_affect_original_request(self):
+        source = self.setUpFanart()
+        client = self.client()
+        self.client().get('/api/tasks/one/fanart/0?size=view')
+        response = client.get('/api/tasks/one/fanart/0')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, source.read_bytes())
+
+    def test_view_etag_and_conditional_304(self):
+        self.setUpFanart()
+        client = self.client()
+        response = client.get('/api/tasks/one/fanart/0?size=view&v=abc')
+        self.assertEqual(response.headers['cache-control'], 'private, max-age=300')
+        etag = response.headers['etag']
+        self.assertTrue(etag)
+        conditional = client.get('/api/tasks/one/fanart/0?size=view&v=abc',
+                                headers={'If-None-Match': etag})
+        self.assertEqual(conditional.status_code, 304)
+        self.assertEqual(conditional.headers['etag'], etag)
+
+    def test_view_cache_hit_avoids_reencoding(self):
+        self.setUpFanart()
+        client = self.client()
+        first = client.get('/api/tasks/one/fanart/0?size=view')
+        self.assertEqual(first.status_code, 200)
+        cached = (self.folder / 'view-cache')
+        with patch.object(artwork, 'Image') as mock_image:
+            second = client.get('/api/tasks/one/fanart/0?size=view')
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.content, first.content)
+        mock_image.open.assert_not_called()
+
+    def test_thumbnail_takes_priority_over_view(self):
+        self.setUpFanart()
+        client = self.client()
+        response = client.get('/api/tasks/one/fanart/0?thumbnail=true&size=view')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers['content-type'], 'image/jpeg')
+        with Image.open(io.BytesIO(response.content)) as image:
+            self.assertLessEqual(image.width, 360)
+            self.assertLessEqual(image.height, 540)
+
 
 if __name__ == '__main__':
     unittest.main()

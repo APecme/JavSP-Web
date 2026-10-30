@@ -317,17 +317,33 @@ test('the console keeps the navigation DOM contract and drops the old toggle own
   assert.match(aside, /<nav class="nav" id="sidebar-nav"/);
   assert.doesNotMatch(topbar, /<nav|nav-item|data-view=/);
   assert.match(html, /id="sidebar-backdrop"/);
-  assert.match(html, /<script src="\/assets\/navigation\.js\?v=__ASSET_VERSION__"><\/script>/);
+  assert.match(html, /<script defer src="\/assets\/navigation\.js\?v=__ASSET_VERSION__"><\/script>/);
   assert.match(html, /<link rel="stylesheet" href="\/assets\/navigation\.css\?v=__ASSET_VERSION__">/);
 
-  const views = ['hot', 'download-script', 'overview', 'scrape', 'ai-scrape', 'auto-scrape', 'downloads', 'crawler-config', 'presets', 'settings'];
+  const views = ['hot', 'overview', 'download-script', 'ai-scrape', 'scrape', 'auto-scrape', 'downloads', 'crawler-config', 'presets', 'settings'];
   for (const view of views) assert.match(aside, new RegExp(`data-view="${view}"`), view);
   for (const id of ['ai-scrape-nav', 'auto-scrape-nav', 'crawler-config-nav', 'settings-nav']) {
     assert.match(aside, new RegExp(`id="${id}"`), id);
   }
+  // Grouping: 片区 → 工作区 → 配置, each announced by a nav-label. 片区 = 热片/片库; 工作区 = 下片/AI 刮削/手动刮削/自动刮削/下载管理.
+  const labels = [...aside.matchAll(/<p class="nav-label">([^<]+)<\/p>/g)].map(m => m[1]);
+  assert.deepEqual(labels, ['片区', '工作区', '配置'], 'sidebar group labels');
+  const hotPos = aside.indexOf('data-view="hot"');
+  const overviewPos = aside.indexOf('data-view="overview"');
+  const aiPos = aside.indexOf('data-view="ai-scrape"');
+  const scrapePos = aside.indexOf('data-view="scrape"');
+  const downloadsPos = aside.indexOf('data-view="downloads"');
+  const crawlerPos = aside.indexOf('data-view="crawler-config"');
+  const presetsPos = aside.indexOf('data-view="presets"');
+  const settingsPos = aside.indexOf('data-view="settings"');
+  assert.ok(overviewPos < aiPos && aiPos < scrapePos, 'AI 刮削 sits before 手动刮削 inside 工作区');
+  assert.ok(downloadsPos < crawlerPos && crawlerPos < presetsPos && presetsPos < settingsPos, '配置 group order');
+  assert.ok(hotPos < overviewPos, '热片 before 片库 inside 片区');
+  const downloadPos = aside.indexOf('data-view="download-script"');
+  assert.ok(overviewPos < downloadPos && downloadPos < aiPos, '下片 first inside 工作区, after 片区 group');
   const buttons = [...aside.matchAll(/<button class="nav-item[^"]*"[^>]*data-view="([^"]+)"[^>]*>([\s\S]*?)<\/button>/g)];
   assert.equal(buttons.length, views.length);
-  assert.deepEqual(buttons.map(([, view]) => view), views, 'nav item order: 热片/下片 first, then 片库…');
+  assert.deepEqual(buttons.map(([, view]) => view), views, 'nav item order: 热片/片库 (片区), then 下片/工作区, then 配置');
   for (const [, view, body] of buttons) {
     assert.match(body, /<svg class="nav-item-icon"[^>]*aria-hidden="true"[^>]*>/, `${view}: decorative icon`);
     assert.match(body, /<span class="nav-item-label">[^<]+<\/span>/, `${view}: visible label`);

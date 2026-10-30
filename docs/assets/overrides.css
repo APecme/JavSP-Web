@@ -439,7 +439,7 @@ details[open] > summary::after { transform: rotate(180deg); }
 .overview-cover-card { min-width: 0; }
 .overview-cover { display: grid; gap: 3px; }
 .overview-cover .library-artwork { position: relative; display: block; overflow: hidden; margin-top: 0; border-radius: 8px; background: var(--surface-divider); box-shadow: 0 5px 16px var(--shadow-soft); }
-.overview-cover .library-artwork img, .overview-cover .library-artwork .overview-cover-placeholder { border-radius: 8px; transition: filter .2s ease, transform .2s ease, box-shadow .2s ease; }
+.overview-cover .library-artwork img, .overview-cover .library-artwork .overview-cover-placeholder { border-radius: 8px; transition: transform .2s ease, box-shadow .2s ease; }
 .overview-cover:hover .library-artwork img { transform: scale(1.025); }
 .library-record-count { position: absolute; right: 8px; bottom: 8px; padding: 3px 6px; border-radius: 4px; background: var(--backdrop-media); color: var(--on-accent); font-size: 10px; }
 .library-id { margin-top: 7px; color: var(--profile-link); font: 600 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -465,6 +465,12 @@ html[data-privacy-mode="1"] .detail-fanart-grid img { filter: blur(18px); transf
 html[data-privacy-mode="1"] .overview-cover,
 html[data-privacy-mode="1"] .detail-poster-wrap,
 html[data-privacy-mode="1"] .detail-fanart-grid { overflow: hidden; }
+/* Explicit un-blur when privacy mode is off: forces compositors to drop stale blur layers. */
+html[data-privacy-mode="0"] .stills-image,
+html[data-privacy-mode="0"] .lc-film-art img,
+html[data-privacy-mode="0"] .overview-cover img,
+html[data-privacy-mode="0"] .detail-fanart-grid img,
+html[data-privacy-mode="0"] img.detail-poster { filter: none !important; transform: none !important; }
 .comments-section { display: grid; gap: 14px; padding-top: 18px; border-top: 1px solid var(--border); }
 .comments-section[hidden], .comments-section [hidden] { display: none; }
 .comments-more { justify-self: center; }
@@ -539,7 +545,7 @@ html[data-privacy-mode="1"] .detail-fanart-grid { overflow: hidden; }
 }
 
 @media (max-width: 640px) {
-  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+  html, body { width: 100%; max-width: 100%; overflow-x: clip; }
   .task-detail-dialog { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); padding: 14px 12px; }
   .task-detail-dialog .panel-heading { gap: 10px; margin-bottom: 12px; }
   .task-detail-dialog .panel-heading h2 { overflow-wrap: anywhere; }
@@ -827,4 +833,45 @@ html[data-privacy-mode="1"] .overview-cover:hover .library-artwork img,html[data
 @keyframes crawler-button-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .button[data-busy]::before { animation: none; }
+}
+
+/* Media server people scrape: toggle, run button and collapsible log. */
+.people-scrape {
+  flex-basis: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.people-scrape-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+}
+.people-scrape-row .muted {
+  overflow-wrap: anywhere;
+}
+.people-scrape-log {
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.people-scrape-log .muted { font-family: inherit; }
+@media (max-width: 560px) {
+  .people-scrape-row { gap: 8px; }
+  .people-scrape-log { max-height: 140px; }
 }

@@ -11,7 +11,7 @@ import tempfile
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
@@ -56,7 +56,6 @@ from .storage import (
     record_auto_scrape_schedule_result,
     record_auto_scrape_schedule_empty,
     skip_auto_scrape_schedule_run,
-    load_auto_scrape_history,
     save_preset,
     save_qbittorrent_settings,
     save_cookiecloud_settings,
@@ -64,7 +63,6 @@ from .storage import (
     save_disabled_built_in_crawlers,
     save_downloaders,
     save_path_mappings,
-    save_auto_scrape_history,
     save_auto_scrape_schedules,
     save_media_servers,
     save_qbittorrent_management,
@@ -77,6 +75,8 @@ from .media import connection_error, list_media_libraries, overview_libraries, p
 from .tasks import NoScrapeTasksError, active_schedule_task_ids, cancel_task, create_tasks, delete_task, get_cover_path, get_fanart_path, get_task, google_captcha_browser_active, google_cover_thumbnail, list_task_summaries, recover_interrupted_tasks, retry_task_images, restore_task_files, save_uploaded_cover, search_google_cover, select_google_cover, update_task_metadata
 from .timeutils import local_now, timezone_name
 from .artwork import image_response
+from .artwork import view_response
+from .storage import DATA_DIR
 from .avatars import avatar_directory, avatar_url
 from . import library as film_library
 from .media import catalog_task, catalog_image, update_catalog_metadata, clear_catalog_cache
@@ -131,13 +131,14 @@ def _app_version() -> str:
 
 
 @app.middleware("http")
-async def disable_asset_cache(request, call_next):
+async def asset_cache_headers(request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/assets/"):
-        fresh = request.query_params.get("v") == asset_version()
-        # Only responses for the current content version may be cached long-term;
-        # stale versions and non-2xx/304 results (404, 500, ...) always revalidate.
-        if fresh and response.status_code in (200, 304):
+        # Any non-empty ?v= marks a versioned URL: the URL itself changes when the
+        # content does, so it may be cached for a year without revalidation.
+        # Unversioned requests (and non-2xx/304 results: 404, 500, ...) always revalidate.
+        versioned = bool(request.query_params.get("v"))
+        if versioned and response.status_code in (200, 304):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         else:
             response.headers["Cache-Control"] = "public, no-cache"
@@ -291,11 +292,6 @@ class AutoScrapeRuleBody(BaseModel):
     tags: str = Field(default="", max_length=512)
     category: str = Field(default="", max_length=256)
     preset_id: str = Field(default="default", max_length=128)
-
-
-class DownloadAutoScrapePathCheckBody(BaseModel):
-    tags: str = Field(default="", max_length=512)
-    category: str = Field(default="", max_length=256)
 
 
 class AutoScrapeScheduleBody(BaseModel):
@@ -1141,6 +1137,156 @@ def get_crawler_config_names(_: dict = Depends(current_user)) -> dict:
     }
 
 
+CRAWLER_STATS_WINDOW_DAYS = 30
+CRAWLER_STATS_CACHE_SECONDS = 30.0
+_crawler_stats_cache: dict[str, tuple[float, dict]] = {}
+
+# Bare hosts that show up in crawler sources but never identify the target site.
+_CRAWLER_URL_IGNORE_HOSTS = {
+    "www.google.com", "google.com", "www.baidu.com", "github.com", "raw.githubusercontent.com",
+    "www.w3.org", "schema.org", "purl.org", "www.sitemaps.org",
+    "www.zhihu.com", "zhihu.com", "stackoverflow.com",
+}
+
+# Crawler sources that have no literal URL (domains come from runtime proxy-free lookup).
+_CRAWLER_FALLBACK_SITES = {
+    "avsox": ["avsox.click"],
+    "javdb": ["javdb.com"],
+}
+
+
+def _extract_crawler_sites(name: str) -> list[str]:
+    """Read crawler source (custom first, then built-in) and collect site hosts."""
+    import re as _re
+    crawler = _crawler_source(name)
+    if not crawler:
+        return []
+    source = crawler.get("source") or ""
+    hosts: list[str] = []
+    seen: set[str] = set()
+    for rest in _re.findall(r"https?://([^/\s\"'<>)]+)", source):
+        host = rest.split("@")[-1].split(":")[0].strip(".").lower()
+        # ignore f-string interpolation remnants like '{site}'
+        if "{" in host or "}" in host:
+            continue
+        if not host or host in seen or host in _CRAWLER_URL_IGNORE_HOSTS:
+            continue
+        # Skip obvious CDN/asset hosts unless nothing else exists.
+        if any(piece in host for piece in ("cdnjs", "jsdelivr", "unpkg", "w3.org")):
+            continue
+        seen.add(host)
+        hosts.append(host)
+        if len(hosts) >= 5:
+            break
+    for fallback in _CRAWLER_FALLBACK_SITES.get(name, []):
+        if fallback not in seen:
+            seen.add(fallback)
+            hosts.append(fallback)
+    return hosts[:5]
+
+
+def _extract_preset_selection_crawlers() -> dict[str, list[dict]]:
+    """Map crawler name -> referencing auto-scrape rules (directory-watch rules)."""
+    import yaml as _yaml
+    from . import directory_watch
+    rules: dict[str, list[dict]] = {}
+    for rule in directory_watch.read_rules():
+        try:
+            preset = get_preset(rule.get("preset_id") or "default")
+        except Exception:
+            preset = None
+        if not preset:
+            continue
+        try:
+            if preset.get("mode") == "yaml":
+                data = _yaml.safe_load(preset.get("content") or "") or {}
+            else:
+                data = _deep_merge(load_base_config(), preset.get("form") or {})
+            selection = ((data.get("crawler") or {}).get("selection") or {})
+        except Exception:
+            continue
+        for names in (selection.values() if isinstance(selection, dict) else []):
+            for value in (names if isinstance(names, list) else []):
+                crawler_name = str(value)
+                if crawler_name not in rules:
+                    rules[crawler_name] = []
+                if not any(entry["id"] == rule["id"] for entry in rules[crawler_name]):
+                    rules[crawler_name].append({"id": rule["id"], "name": rule.get("name") or ""})
+    return rules
+
+
+def _crawler_stats_entry(sites: list[str], rules: list[dict]) -> dict:
+    return {
+        "sites": sites,
+        "rules": rules,
+        "scrapes": 0, "attempts": 0, "success": 0, "failure": 0, "misses": 0,
+        "success_rate": None,
+        "last_success_at": None, "last_failure_at": None,
+        "tasks": 0,
+    }
+
+
+def _crawler_stats_payload(window_days: int = CRAWLER_STATS_WINDOW_DAYS) -> dict:
+    from zoneinfo import ZoneInfo
+    try:
+        zone = ZoneInfo(timezone_name())
+    except Exception:
+        zone = timezone.utc
+    cutoff = (datetime.now(zone) - timedelta(days=window_days)).isoformat()
+    rule_map = _extract_preset_selection_crawlers()
+    crawlers: dict[str, dict] = {}
+    for name in sorted({item["name"] for item in _crawler_catalog()} | set(rule_map)):
+        crawlers[name] = _crawler_stats_entry(_extract_crawler_sites(name), rule_map.get(name, []))
+    from . import task_store
+    for summary in task_store.summaries():
+        created = str(summary.get("created_at") or "")
+        if cutoff and created < cutoff:
+            continue
+        details = ((summary.get("progress") or {}).get("crawlers") or {})
+        for crawler_name, label in details.items():
+            entry = crawlers.get(crawler_name)
+            if entry is None:
+                entry = crawlers.setdefault(crawler_name, _crawler_stats_entry([], rule_map.get(crawler_name, [])))
+            # attempts counts every recorded invocation, whatever the outcome.
+            entry["attempts"] += 1
+            label = str(label)
+            if label == "完成":
+                entry["success"] += 1
+                entry["last_success_at"] = entry["last_success_at"] or created
+            elif label == "失败":
+                entry["failure"] += 1
+                entry["last_failure_at"] = entry["last_failure_at"] or created
+            elif label == "未找到":
+                # The crawler answered normally but had nothing for this ID.
+                entry["misses"] += 1
+            # Anything else (重试/重试中/重复/抓取中/未知) stays attempt-only:
+            # retries are intermediate, duplicates are successes elsewhere, and
+            # unknown labels must never inflate the failure count.
+        if details:
+            # count task once toward the crawlers it exercised
+            for crawler_name in details:
+                if crawler_name in crawlers:
+                    crawlers[crawler_name]["tasks"] += 1
+    for entry in crawlers.values():
+        # scrapes (legacy field) = decided outcomes, i.e. success+failure+misses.
+        entry["scrapes"] = entry["success"] + entry["failure"] + entry["misses"]
+        decided = entry["success"] + entry["failure"]
+        if decided:
+            entry["success_rate"] = round(entry["success"] / decided, 4)
+    return {"window_days": window_days, "crawlers": crawlers}
+
+
+@app.get("/api/crawler-config/stats")
+def get_crawler_stats(_: dict = Depends(require_admin)) -> dict:
+    now = time.monotonic()
+    cached = _crawler_stats_cache.get("stats")
+    if cached and now - cached[0] < CRAWLER_STATS_CACHE_SECONDS:
+        return cached[1]
+    payload = _crawler_stats_payload()
+    _crawler_stats_cache["stats"] = (now, payload)
+    return payload
+
+
 @app.get("/api/crawler-config/{name}")
 def get_crawler_source(name: str, _: dict = Depends(require_admin)) -> dict:
     crawler = _crawler_source(name)
@@ -1395,32 +1541,67 @@ def update_task_details(task_id: str, body: TaskMetadataBody, _: dict = Depends(
 
 
 @app.get("/api/tasks/{task_id}/cover/{index:int}")
-def task_cover(task_id: str, index: int, request: Request, thumbnail: bool = False, _: dict = Depends(current_user)) -> Response:
+def task_cover(task_id: str, index: int, request: Request, thumbnail: bool = False, size: str = "",
+               _: dict = Depends(current_user)) -> Response:
     if task_id.startswith('media-'):
-        return _media_image_response(task_id, 'cover', index)
+        return _media_image_response(task_id, 'cover', index, request, size)
     path = get_cover_path(task_id, index)
     if not path or not path.is_file():
         raise HTTPException(status_code=404, detail="封面不存在")
+    if not thumbnail and size == 'view':
+        return view_response(path, request)
     return image_response(path, request, thumbnail)
 
 
 @app.get("/api/tasks/{task_id}/fanart/{index:int}")
-def task_fanart(task_id: str, index: int, request: Request, thumbnail: bool = False, _: dict = Depends(current_user)) -> Response:
+def task_fanart(task_id: str, index: int, request: Request, thumbnail: bool = False, size: str = "",
+                _: dict = Depends(current_user)) -> Response:
     if task_id.startswith('media-'):
-        return _media_image_response(task_id, 'fanart', index)
+        return _media_image_response(task_id, 'fanart', index, request, size)
     path = get_fanart_path(task_id, index)
     if not path or not path.is_file():
         raise HTTPException(status_code=404, detail="剧照不存在")
+    if not thumbnail and size == 'view':
+        return view_response(path, request)
     return image_response(path, request, thumbnail)
 
 
-def _media_image_response(task_id, kind, index):
+def _media_image_response(task_id, kind, index, request=None, size: str = ""):
     try:
+        if size == 'view':
+            # The media server already transcodes originals (?MaxWidth=1200); the
+            # viewer variant reuses that response as a bounded-size local view.
+            return _media_view_response(task_id, kind, index, request)
         response = catalog_image(task_id, kind, index)
         return Response(response.content, media_type=response.headers.get('Content-Type', 'image/jpeg'),
                         headers={'Cache-Control': 'private, max-age=300'})
     except Exception as exc:
         raise HTTPException(404, '媒体库图片读取失败') from exc
+
+
+def _media_view_response(task_id, kind, index, request):
+    """Locally re-encode the media-server image as a cached 1600px JPEG with ETag."""
+    import io
+    stat_key = f'{task_id}:{kind}:{index}'
+    content = catalog_image(task_id, kind, index).content
+    revision = hashlib.sha256((stat_key + ':' + str(len(content))).encode()).hexdigest()
+    etag = '"' + revision + '"'
+    versioned = bool(request and request.query_params.get('v'))
+    cache_control = 'private, max-age=300' if versioned else 'private, no-cache'
+    headers = {'Cache-Control': cache_control, 'ETag': etag}
+    from .artwork import _etag_matches
+    if request and _etag_matches(request.headers.get('if-none-match', ''), etag):
+        return Response(status_code=304, headers=headers)
+    cache_dir = DATA_DIR / 'view-cache' / 'media'
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    target = cache_dir / (hashlib.sha256(stat_key.encode()).hexdigest() + '.jpg')
+    if not target.exists() or target.stat().st_size == 0:
+        from PIL import Image, ImageOps
+        with Image.open(io.BytesIO(content)) as original:
+            image = ImageOps.exif_transpose(original)
+            image.thumbnail((1600, 1600))
+            image.convert('RGB').save(target, 'JPEG', quality=85, optimize=True)
+    return Response(target.read_bytes(), media_type='image/jpeg', headers=headers)
 
 
 @app.put('/api/tasks/{task_id}/artwork/{kind}/{index}')
@@ -1485,6 +1666,7 @@ def _media_server_from_body(body: MediaServerBody, current: dict | None = None) 
         "auto_scan": body.auto_scan,
         "auto_scan_delay": body.auto_scan_delay,
         "libraries": [str(value).strip() for value in body.libraries if str(value).strip()],
+        "people_scrape": current.get("people_scrape") or {"enabled": False},
     }
 
 
@@ -1561,6 +1743,48 @@ def sync_configured_media_server(server_id: str, _: dict = Depends(require_admin
         return sync_media_server(server)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="媒体库同步失败: " + connection_error(exc)) from exc
+
+
+class PeopleScrapeBody(BaseModel):
+    enabled: bool
+
+
+def _find_media_server_or_404(server_id: str) -> dict:
+    _, server = _find_media_server(server_id)
+    if server is None:
+        raise HTTPException(status_code=404, detail="媒体服务器不存在")
+    return server
+
+
+@app.post("/api/media-servers/{server_id}/people-scrape/run")
+def run_media_people_scrape(server_id: str, _: dict = Depends(require_admin)) -> dict:
+    from . import media_people
+    server = _find_media_server_or_404(server_id)
+    if not server.get("api_key"):
+        raise HTTPException(status_code=400, detail="该服务器未配置 API 密钥，无法刮削演员头像")
+    result = media_people.start_scrape(server)
+    if not result.get("started"):
+        # 并发语义：正在跑的刮削不会被打断，返回 409 让前端提示"进行中"。
+        raise HTTPException(status_code=409, detail="演员头像刮削正在进行中，请等待完成后再试")
+    return {"started": True}
+
+
+@app.get("/api/media-servers/{server_id}/people-scrape")
+def get_media_people_scrape(server_id: str, _: dict = Depends(require_admin)) -> dict:
+    from . import media_people
+    server = _find_media_server_or_404(server_id)
+    return media_people.scrape_state(server)
+
+
+@app.put("/api/media-servers/{server_id}/people-scrape")
+def update_media_people_scrape(server_id: str, body: PeopleScrapeBody, _: dict = Depends(require_admin)) -> dict:
+    from . import media_people
+    server = _find_media_server_or_404(server_id)
+    servers = list_media_servers()
+    index, _ = _find_media_server(server_id)
+    servers[index]["people_scrape"] = {"enabled": bool(body.enabled)}
+    save_media_servers(servers)
+    return media_people.scrape_state(servers[index])
 
 
 @app.post("/api/media-servers/libraries")
@@ -1796,19 +2020,6 @@ def _auto_scrape_rules(management: dict) -> list[dict]:
     return rules
 
 
-def _auto_scrape_match(item: dict, rule: dict) -> bool:
-    if not rule.get("enabled") or float(item.get("progress", 0) or 0) < 100:
-        return False
-    return _auto_scrape_download_matches(item, rule)
-
-
-def _auto_scrape_download_matches(item: dict, rule: dict) -> bool:
-    tags = {value.strip() for value in str(rule.get("tags") or "").split(",") if value.strip()}
-    item_tags = {value.strip() for value in str(item.get("tags") or "").split(",") if value.strip()}
-    category = str(rule.get("category") or "").strip()
-    return (not tags or bool(tags & item_tags)) and (not category or item.get("category") == category)
-
-
 def _map_download_path(source_path: str, mappings: list[dict]) -> str:
     source = str(source_path or "").strip().replace("\\", "/").rstrip("/")
     if not source:
@@ -1825,83 +2036,6 @@ def _map_download_path(source_path: str, mappings: list[dict]) -> str:
             suffix = source[len(source_root):].lstrip("/")
             return os.path.normpath(os.path.join(target_root, *suffix.split("/"))) if suffix else os.path.normpath(target_root)
     return source_path
-
-
-def _check_download_auto_scrape_path(rule: dict) -> dict:
-    """Probe current qBittorrent paths before a download-auto-scrape rule is added."""
-    mappings = list_path_mappings()
-    candidates = 0
-    accessible = 0
-    issues: list[str] = []
-    for downloader in list_downloaders():
-        try:
-            downloads = list_downloads(downloader)
-        except QbittorrentError as exc:
-            issues.append(f"{downloader.get('name') or '下载器'} 无法读取：{exc}")
-            continue
-        for item in downloads:
-            if not _auto_scrape_download_matches(item, rule):
-                continue
-            source_path = str(item.get("content_path") or "").strip()
-            if not source_path:
-                continue
-            candidates += 1
-            mapped_path = _map_download_path(source_path, mappings)
-            if os.path.exists(mapped_path):
-                accessible += 1
-            else:
-                name = str(item.get("name") or item.get("hash") or "未命名任务")
-                issues.append(f"{name}：{source_path} 无法映射到当前环境可访问的文件")
-    return {
-        "ok": not any("无法映射" in issue for issue in issues),
-        "candidates": candidates,
-        "accessible": accessible,
-        "issues": issues,
-        "message": "未找到可验证的现有下载任务；规则已允许创建，首个匹配任务会再次校验路径。" if not candidates else "路径映射可识别当前匹配下载任务。",
-    }
-
-
-def _auto_scrape_downloads(downloader: dict, downloads: list[dict], management: dict) -> None:
-    rules = [rule for rule in _auto_scrape_rules(management) if rule.get("enabled")]
-    if not rules:
-        return
-    mappings = list_path_mappings()
-    history = load_auto_scrape_history()
-    changed = False
-    for item in downloads:
-        # A completed download starts at most one scrape. The first matching rule
-        # defines the preset so broad fallback rules can safely be placed last.
-        rule = next((candidate for candidate in rules if _auto_scrape_match(item, candidate)), None)
-        if rule is None:
-            continue
-        key = f"{downloader.get('id')}:{item.get('hash')}"
-        if key in history:
-            continue
-        preset_id = rule["preset_id"]
-        if not get_preset(preset_id):
-            continue
-        mapped_path = _map_download_path(str(item.get("content_path") or ""), mappings)
-        if not mapped_path or not os.path.exists(mapped_path):
-            continue
-        try:
-            created = create_tasks(mapped_path, preset_id, source="download")
-        except ValueError:
-            continue
-        history[key] = {
-            "id": key,
-            "created_at": now_iso(),
-            "downloader_id": str(downloader.get("id") or ""),
-            "downloader_name": str(downloader.get("name") or "下载器"),
-            "rule_id": str(rule.get("id") or ""),
-            "download_name": str(item.get("name") or ""),
-            "download_path": str(item.get("content_path") or ""),
-            "path": mapped_path,
-            "preset_id": preset_id,
-            "task_ids": [task["id"] for task in created],
-        }
-        changed = True
-    if changed:
-        save_auto_scrape_history(history)
 
 
 def _auto_remove_downloads(settings: dict, downloads: list[dict], management: dict) -> list[str]:
@@ -1922,21 +2056,6 @@ def _auto_remove_downloads(settings: dict, downloads: list[dict], management: di
 @app.get("/api/downloads/settings")
 def get_download_management(_: dict = Depends(require_admin)) -> dict:
     return _public_qbittorrent_management(get_qbittorrent_management())
-
-
-@app.post("/api/downloads/auto-scrape/path-check")
-def check_download_auto_scrape_path(body: DownloadAutoScrapePathCheckBody, _: dict = Depends(require_admin)) -> dict:
-    return _check_download_auto_scrape_path({"enabled": True, "tags": body.tags.strip(), "category": body.category.strip()})
-
-
-@app.get("/api/download-auto-scrape-runs")
-def download_auto_scrape_runs(_: dict = Depends(require_admin)) -> list[dict]:
-    runs = [
-        {**entry, "id": str(entry.get("id") or run_id)}
-        for run_id, entry in load_auto_scrape_history().items()
-        if isinstance(entry, dict)
-    ]
-    return run_counts(sorted(runs, key=lambda item: str(item.get("created_at") or ""), reverse=True))
 
 
 @app.put("/api/downloads/settings")
@@ -2185,7 +2304,7 @@ def _qbittorrent_management_worker() -> None:
     while True:
         try:
             management = get_qbittorrent_management()
-            if management.get("takeover_enabled") or any(rule.get("enabled") for rule in _auto_scrape_rules(management)):
+            if management.get("takeover_enabled"):
                 for settings in list_downloaders():
                     try:
                         downloads = list_downloads(settings)
@@ -2200,7 +2319,6 @@ def _qbittorrent_management_worker() -> None:
                                 )
                                 set_share_limits(settings, item["hash"], management)
                             _auto_remove_downloads(settings, managed, management)
-                        _auto_scrape_downloads(settings, downloads, management)
                     except QbittorrentError:
                         continue
         except QbittorrentError:
