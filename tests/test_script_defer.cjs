@@ -14,6 +14,7 @@ const EXPECTED_ORDER = [
   'community.js',
   'app.js',
   'directory-watch.js',
+  'hot.js',
   'navigation.js',
   'ai-markdown.js',
   'ai.js',

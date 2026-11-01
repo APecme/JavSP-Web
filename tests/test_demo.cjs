@@ -24,7 +24,7 @@ function demo() {
 }
 
 test('demo uses the current application assets and all documentation links resolve', () => {
-  for (const name of ['theme.css', 'theme.js', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'icons.js', 'navigation.js', 'navigation.css', 'page-layouts.css', 'directory-watch.js', 'directory-watch.css', 'ai.js', 'ai-markdown.js']) {
+  for (const name of ['theme.css', 'theme.js', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'icons.js', 'navigation.js', 'navigation.css', 'page-layouts.css', 'directory-watch.js', 'directory-watch.css', 'hot.js', 'hot.css', 'ai.js', 'ai-markdown.js']) {
     assert.equal(read(`docs/assets/${name === 'app.js' ? 'demo-app.js' : name}`), read(`javsp_web/web/assets/${name}`));
   }
   const pages = ['docs.html', ...fs.readdirSync(path.join(root, 'docs')).filter(file => /^guide-.*\.html$/.test(file))];
@@ -154,4 +154,23 @@ test('personal profile changes stay in the offline demo', async () => {
   const profile = await json('/api/profile', 'PUT', { display_name: '新名字', avatar_id: 'example' });
   assert.equal(profile.display_name, '新名字');
   assert.equal((await json('/api/profile')).avatar_id, 'example');
+});
+
+
+test('hot discovery demo supports categories, ordering and batch check without external traffic', async () => {
+  const { json, request } = demo();
+  const initial = await json('/api/hot/connections');
+  assert.equal(initial.sources.length, 30);
+  assert.equal(initial.sources[0].result.state, 'unchecked');
+  const checked = await json('/api/hot/connections', 'POST', {});
+  assert.equal(checked.job.completed, 30);
+  assert.match(checked.sources[0].result.message, /演示/);
+  await json('/api/hot/refresh', 'POST', { category: 'all', sort: 'latest' });
+  const all = await json('/api/hot/films?category=all&sort=latest');
+  assert.equal(all.total, 4);
+  const uncensored = await json('/api/hot/films?category=uncensored&sort=hot');
+  assert.equal(uncensored.groups.length, 1);
+  assert.equal(uncensored.groups[0].category, 'uncensored');
+  assert.deepEqual(uncensored.groups[0].items.map(i => i.rank), [1, 2]);
+  assert.equal((await request('https://faleno.jp/top/')).status, 409);
 });

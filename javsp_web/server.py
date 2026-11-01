@@ -97,6 +97,8 @@ app.include_router(ai_router)
 from .directory_watch_router import router as directory_watch_router
 from .directory_watch import start_scheduler as start_directory_watch_scheduler, stop_scheduler as stop_directory_watch_scheduler
 app.include_router(directory_watch_router)
+from .hot_router import router as hot_router
+app.include_router(hot_router)
 from .comments_proxy import router as comments_router, runtime_entry as comments_runtime
 app.include_router(comments_router)
 app.router.add_event_handler("shutdown", stop_directory_watch_scheduler)

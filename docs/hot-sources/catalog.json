@@ -1,0 +1,718 @@
+{
+  "schema_version": 1,
+  "researched_at": "2026-10-30",
+  "scope": "Preliminary source research only; not runtime configuration or active scraping support.",
+  "sources": [
+    {
+      "id": "avbase",
+      "name": "AvBase",
+      "url": "https://www.avbase.net/",
+      "category": "资料库",
+      "identity_basis": "observed",
+      "description": "影片、出演者与发行日资料库。",
+      "access": "readable",
+      "ranking_signal": "performer_rank",
+      "recommended_role": "metadata",
+      "existing_crawlers": [],
+      "notes": "已核实出演者榜由过去30日关注与收藏按日汇总；不是作品热榜。今日发行、新着与热度必须分开。",
+      "entries": [
+        {
+          "url": "https://www.avbase.net/works/date",
+          "kind": "releases",
+          "verification": "link_observed",
+          "evidence_id": "avbase"
+        },
+        {
+          "url": "https://www.avbase.net/works/recent",
+          "kind": "recently_added",
+          "verification": "link_observed",
+          "evidence_id": "avbase"
+        },
+        {
+          "url": "https://www.avbase.net/talents/popular",
+          "kind": "performer_rank",
+          "verification": "page_checked",
+          "evidence_id": "avbase-talents"
+        }
+      ],
+      "evidence_ids": [
+        "avbase"
+      ],
+      "source_group": "avbase"
+    },
+    {
+      "id": "avsox",
+      "name": "AVSOX",
+      "url": "https://avsox.click/cn",
+      "category": "资料库",
+      "identity_basis": "observed",
+      "description": "自述为无码影片信息、收藏管理与交流站。",
+      "access": "js_shell",
+      "ranking_signal": "unverified",
+      "recommended_role": "metadata",
+      "existing_crawlers": [
+        "avsox"
+      ],
+      "notes": "本次只有前端挂载容器，未取得作品列表或榜单。现有 XPath 刮削器需另行验证兼容性。",
+      "entries": [],
+      "evidence_ids": [
+        "avsox"
+      ],
+      "source_group": "avsox"
+    },
+    {
+      "id": "dahlia",
+      "name": "DAHLIA",
+      "url": "https://dahlia-av.jp/",
+      "category": "片商官网",
+      "identity_basis": "observed",
+      "description": "以网络发行为主的片商官网。",
+      "access": "readable",
+      "ranking_signal": "publisher_rank",
+      "recommended_role": "publisher_feed",
+      "existing_crawlers": [],
+      "notes": "首页有作品排名及新作板块，未见统计周期或算法；只能称品牌站内排名。",
+      "entries": [
+        {
+          "url": "https://dahlia-av.jp/",
+          "kind": "publisher_rank",
+          "verification": "section_observed",
+          "evidence_id": "dahlia"
+        }
+      ],
+      "evidence_ids": [
+        "dahlia"
+      ],
+      "source_group": "dahlia"
+    },
+    {
+      "id": "dmm",
+      "name": "DMM 视频 / FANZA 视频",
+      "url": "https://video.dmm.co.jp/",
+      "category": "官方商城",
+      "identity_basis": "observed",
+      "description": "视频商城入口；本次重定向至 FANZA 年龄确认。",
+      "access": "age_gate",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_primary",
+      "existing_crawlers": [
+        "fanza"
+      ],
+      "notes": "旧爬虫使用 www.dmm.co.jp；与 video.dmm.co.jp 新站结构不等价，不能直接宣称兼容。",
+      "entries": [],
+      "evidence_ids": [
+        "dmm"
+      ],
+      "source_group": "fanza"
+    },
+    {
+      "id": "faleno",
+      "name": "FALENO",
+      "url": "https://faleno.jp/top/",
+      "category": "片商官网",
+      "identity_basis": "observed",
+      "description": "片商官网，展示作品、专属演员及发行信息。",
+      "access": "readable",
+      "ranking_signal": "publisher_rank",
+      "recommended_role": "publisher_feed",
+      "existing_crawlers": [],
+      "notes": "首页 RANKING 有作品、演员和配信日；统计口径/周期尚未确认。",
+      "entries": [
+        {
+          "url": "https://faleno.jp/top/",
+          "kind": "publisher_rank",
+          "verification": "section_observed",
+          "evidence_id": "faleno"
+        }
+      ],
+      "evidence_ids": [
+        "faleno"
+      ],
+      "source_group": "faleno"
+    },
+    {
+      "id": "fc2",
+      "name": "FC2 内容市场",
+      "url": "https://adult.contents.fc2.com/",
+      "category": "官方商城",
+      "identity_basis": "observed",
+      "description": "用户/卖家发布的数字内容市场，包含视频及其他内容类型。",
+      "access": "readable",
+      "ranking_signal": "product_sales_rank",
+      "recommended_role": "primary_candidate",
+      "existing_crawlers": [
+        "fc2"
+      ],
+      "notes": "商品榜与新卖家榜、卖家榜分开；需限定视频类，排除 PR，官方原始编号不能与社区演员识别混为一谈。",
+      "entries": [
+        {
+          "url": "https://adult.contents.fc2.com/ranking/",
+          "kind": "product_sales_rank",
+          "verification": "page_checked",
+          "evidence_id": "fc2-ranking"
+        },
+        {
+          "url": "https://adult.contents.fc2.com/ranking/article/daily",
+          "kind": "product_sales_rank",
+          "verification": "link_observed",
+          "evidence_id": "fc2-ranking"
+        },
+        {
+          "url": "https://adult.contents.fc2.com/ranking/article/weekly",
+          "kind": "product_sales_rank",
+          "verification": "link_observed",
+          "evidence_id": "fc2-ranking"
+        },
+        {
+          "url": "https://adult.contents.fc2.com/ranking/article/monthly",
+          "kind": "product_sales_rank",
+          "verification": "link_observed",
+          "evidence_id": "fc2-ranking"
+        }
+      ],
+      "evidence_ids": [
+        "fc2"
+      ],
+      "source_group": "fc2"
+    },
+    {
+      "id": "fc2ppvdb",
+      "name": "FC2PPVDB",
+      "url": "https://www.fc2ppvdb.com/",
+      "category": "FC2 资料库（待核）",
+      "identity_basis": "repository",
+      "description": "仓库已有同名来源用于 FC2 作品、卖家和演员资料。",
+      "access": "challenge",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_metadata",
+      "existing_crawlers": [
+        "fc2ppvdb"
+      ],
+      "notes": "用户给的 www 主机返回 Cloudflare Access denied；旧模块用不带 www 的主机，本次未将两者视为访问等价。",
+      "entries": [],
+      "evidence_ids": [
+        "fc2ppvdb"
+      ],
+      "source_group": "fc2ppvdb"
+    },
+    {
+      "id": "freejavbt",
+      "name": "FREE JAV BT",
+      "url": "https://freejavbt.com/ja/uncensored",
+      "category": "聚合目录",
+      "identity_basis": "observed",
+      "description": "影片索引，含分类、作品及站内排名入口。",
+      "access": "readable",
+      "ranking_signal": "site_rank_unknown_metric",
+      "recommended_role": "secondary_candidate",
+      "existing_crawlers": [],
+      "notes": "用户提供的是无码最新列表；导航默认链接有码日榜，日榜页另有无码/FC2 切换。算法未说明，不能称销量榜。资源授权与转载条款待核，不接入下载地址。",
+      "entries": [
+        {
+          "url": "https://freejavbt.com/ja/rank/censored/day",
+          "kind": "site_rank",
+          "verification": "page_checked",
+          "evidence_id": "freejavbt-day"
+        },
+        {
+          "url": "https://freejavbt.com/ja/rank/uncensored/day",
+          "kind": "site_rank",
+          "verification": "link_observed",
+          "evidence_id": "freejavbt-day"
+        },
+        {
+          "url": "https://freejavbt.com/ja/rank/fc2/day",
+          "kind": "site_rank",
+          "verification": "link_observed",
+          "evidence_id": "freejavbt-day"
+        }
+      ],
+      "evidence_ids": [
+        "freejavbt"
+      ],
+      "source_group": "freejavbt"
+    },
+    {
+      "id": "getchu",
+      "name": "Getchu",
+      "url": "https://www.getchu.com/",
+      "category": "综合商城",
+      "identity_basis": "observed",
+      "description": "美少女游戏、动画与相关商品商城。",
+      "access": "readable",
+      "ranking_signal": "non_film_sales_rank",
+      "recommended_role": "separate_catalog",
+      "existing_crawlers": [
+        "dl_getchu"
+      ],
+      "notes": "销售/预约榜不等于真人影片榜；仓库 dl_getchu 针对 dl.getchu.com，不是用户给的 www 商城。导航中榜单 query 原文含两个问号，需后续核实，不擅自修正。",
+      "entries": [
+        {
+          "url": "https://www.getchu.com/rank/?type=sales?age=normal",
+          "kind": "non_film_sales_rank",
+          "verification": "link_observed",
+          "evidence_id": "getchu"
+        },
+        {
+          "url": "https://www.getchu.com/rank/?type=reserve?age=normal",
+          "kind": "reservation_rank",
+          "verification": "link_observed",
+          "evidence_id": "getchu"
+        }
+      ],
+      "evidence_ids": [
+        "getchu"
+      ],
+      "source_group": "getchu"
+    },
+    {
+      "id": "giga",
+      "name": "GIGA",
+      "url": "https://www.giga-web.jp/top.php",
+      "category": "片商官网",
+      "identity_basis": "observed",
+      "description": "自述为特摄题材专门片商。",
+      "access": "age_gate",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_publisher",
+      "existing_crawlers": [],
+      "notes": "只看到年龄确认页与品牌说明，未确认作品列表、榜单和周期。",
+      "entries": [],
+      "evidence_ids": [
+        "giga"
+      ],
+      "source_group": "giga"
+    },
+    {
+      "id": "iqqtv",
+      "name": "iQQTV",
+      "url": "https://iqqtv.net/",
+      "category": "在线内容平台",
+      "identity_basis": "observed",
+      "description": "繁体中文在线内容平台，有演员、分类、搜索和最新排序。",
+      "access": "readable",
+      "ranking_signal": "latest_only_observed",
+      "recommended_role": "reference_only",
+      "existing_crawlers": [],
+      "notes": "已见 order=latest、分类和演员入口；没有核实热榜算法。播放、会员及授权范围不在本轮测试内。",
+      "entries": [],
+      "evidence_ids": [
+        "iqqtv"
+      ],
+      "source_group": "iqqtv"
+    },
+    {
+      "id": "jav321",
+      "name": "JAV321",
+      "url": "https://www.jav321.com/",
+      "category": "资料索引",
+      "identity_basis": "observed",
+      "description": "影片索引，导航包含年份畅销、流行列表及发行日排序。",
+      "access": "readable",
+      "ranking_signal": "mixed_listings",
+      "recommended_role": "secondary_candidate",
+      "existing_crawlers": [
+        "jav321"
+      ],
+      "notes": "实测年份页标题为 2025 ベストセラー；人気リスト周期不明，列表含较旧作品，不应包装为当日热片。",
+      "entries": [
+        {
+          "url": "https://www.jav321.com/best_seller/1/2025/1",
+          "kind": "historical_bestseller",
+          "verification": "page_checked",
+          "evidence_id": "jav321-sales"
+        },
+        {
+          "url": "https://www.jav321.com/type/1/1",
+          "kind": "popular_unknown_window",
+          "verification": "page_checked",
+          "evidence_id": "jav321-popular"
+        },
+        {
+          "url": "https://www.jav321.com/list/release_date/1",
+          "kind": "releases",
+          "verification": "link_observed",
+          "evidence_id": "jav321"
+        }
+      ],
+      "evidence_ids": [
+        "jav321"
+      ],
+      "source_group": "jav321"
+    },
+    {
+      "id": "javbus",
+      "name": "JavBus",
+      "url": "https://www.javbus.com/",
+      "category": "资料库",
+      "identity_basis": "observed_and_repository",
+      "description": "番号、演员、片商等作品资料索引。",
+      "access": "age_gate",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_metadata",
+      "existing_crawlers": [
+        "javbus"
+      ],
+      "notes": "当前重定向至年龄确认，仅见类别/演员导航；未验证热榜。现有单片解析能力不等于排行榜能力。",
+      "entries": [],
+      "evidence_ids": [
+        "javbus"
+      ],
+      "source_group": "javbus"
+    },
+    {
+      "id": "javdb",
+      "name": "JavDB",
+      "url": "https://javdb.com/",
+      "category": "资料库",
+      "identity_basis": "repository",
+      "description": "仓库已有作品资料和评分解析器；线上本次只有地区限制提示。",
+      "access": "region_blocked",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_primary",
+      "existing_crawlers": [
+        "javdb"
+      ],
+      "notes": "HTTP 200 明示因版权限制禁止当前网络所在国家访问；不能把此响应当空榜，也不能依赖换域名绕过。",
+      "entries": [],
+      "evidence_ids": [
+        "javdb"
+      ],
+      "source_group": "javdb"
+    },
+    {
+      "id": "javlibrary",
+      "name": "JAVLibrary",
+      "url": "https://www.javlibrary.com",
+      "category": "资料库",
+      "identity_basis": "repository",
+      "description": "仓库已有番号、演员、评分等单片解析器。",
+      "access": "challenge",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_primary",
+      "existing_crawlers": [
+        "javlib"
+      ],
+      "notes": "用户附带的 kin 含义不明，本轮仅研究所给主域；403 挑战页，不虚构榜单 URL 或周期。",
+      "entries": [],
+      "evidence_ids": [
+        "javlibrary"
+      ],
+      "source_group": "javlibrary"
+    },
+    {
+      "id": "minnano",
+      "name": "みんなのAV / Minnano",
+      "url": "https://www.minnano-av.com/",
+      "category": "社区资料站（待核）",
+      "identity_basis": "unverified",
+      "description": "常见定位为用户评价/影片资料；本次未获得业务页面，定位待验证。",
+      "access": "challenge",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_metadata",
+      "existing_crawlers": [],
+      "notes": "403 Just a moment；未验证评分、收藏、榜单及字段。",
+      "entries": [],
+      "evidence_ids": [
+        "minnano"
+      ],
+      "source_group": "minnano"
+    },
+    {
+      "id": "prestige",
+      "name": "PRESTIGE",
+      "url": "https://www.prestige-av.com/",
+      "category": "片商官网",
+      "identity_basis": "observed_and_repository",
+      "description": "片商官网；本次显示临时服务器维护公告。",
+      "access": "maintenance",
+      "ranking_signal": "unverified",
+      "recommended_role": "defer",
+      "existing_crawlers": [
+        "prestige"
+      ],
+      "notes": "403 响应正文是官方站服务暂停通知，不是一般反爬判断；恢复后重测。",
+      "entries": [],
+      "evidence_ids": [
+        "prestige"
+      ],
+      "source_group": "prestige"
+    },
+    {
+      "id": "r18dev",
+      "name": "R18.dev",
+      "url": "https://r18.dev/",
+      "category": "资料库",
+      "identity_basis": "observed",
+      "description": "带演员、片商、分类和导演索引的数据站。",
+      "access": "readable",
+      "ranking_signal": "catalog_count_snapshot",
+      "recommended_role": "metadata",
+      "existing_crawlers": [],
+      "notes": "页面明确 Top 按实体关联影片数统计，快照日期为 2025-01-24。不是实时流行度，不将其与 R18.com 的服务混为一谈。",
+      "entries": [],
+      "evidence_ids": [
+        "r18dev"
+      ],
+      "source_group": "r18dev"
+    },
+    {
+      "id": "xcity",
+      "name": "XCITY",
+      "url": "https://xcity.jp/",
+      "category": "官方内容平台",
+      "identity_basis": "observed",
+      "description": "定额视频服务，覆盖多类内容。",
+      "access": "age_gate",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_primary",
+      "existing_crawlers": [],
+      "notes": "只取得年龄确认页；本轮不提交确认，不推断榜单路径与字段。",
+      "entries": [],
+      "evidence_ids": [
+        "xcity"
+      ],
+      "source_group": "xcity"
+    },
+    {
+      "id": "fanza",
+      "name": "FANZA",
+      "url": "https://www.fanza.jp/",
+      "category": "官方商城",
+      "identity_basis": "observed",
+      "description": "FANZA 门户入口，跳转 DMM.co.jp 年龄确认。",
+      "access": "age_gate",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_primary",
+      "existing_crawlers": [
+        "fanza"
+      ],
+      "notes": "与 DMM 视频分入口但同来源族；即使后续业务榜单不同也需用 service/category 区分，避免跨站重复加权。",
+      "entries": [],
+      "evidence_ids": [
+        "fanza"
+      ],
+      "source_group": "fanza"
+    },
+    {
+      "id": "aventertainments",
+      "name": "AV Entertainment",
+      "url": "https://www.aventertainments.com/",
+      "category": "官方商城",
+      "identity_basis": "observed",
+      "description": "正版 DVD 与视频下载销售入口。",
+      "access": "age_gate",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_primary",
+      "existing_crawlers": [],
+      "notes": "只核实门页的 DVD/PPV 与日英分流；未经验证不宣称存在日周月榜，不请求视频下载。",
+      "entries": [],
+      "evidence_ids": [
+        "aventertainments"
+      ],
+      "source_group": "aventertainments"
+    },
+    {
+      "id": "av-wiki",
+      "name": "AV女優の名前が知りたい！",
+      "url": "https://av-wiki.net/",
+      "category": "身份映射资料站",
+      "identity_basis": "observed",
+      "description": "以出演者识别和作品/系列/品牌索引为核心的资料站。",
+      "access": "readable",
+      "ranking_signal": "updates_not_rank",
+      "recommended_role": "metadata",
+      "existing_crawlers": [
+        "avwiki"
+      ],
+      "notes": "本日更新和“热门系列/品牌”导航不等于作品热度榜；适合演员别名补全，社区识别需标注来源与置信度。",
+      "entries": [],
+      "evidence_ids": [
+        "av-wiki"
+      ],
+      "source_group": "av-wiki"
+    },
+    {
+      "id": "avwikidb",
+      "name": "AVWikiDB",
+      "url": "https://avwikidb.com/",
+      "category": "资料站（待核）",
+      "identity_basis": "unverified",
+      "description": "仅有挑战页，无法依据域名确认业务内容。",
+      "access": "challenge",
+      "ranking_signal": "unverified",
+      "recommended_role": "defer",
+      "existing_crawlers": [],
+      "notes": "与 av-wiki.net 是不同域名；不将旧 avwiki 适配器错误标为已支持本域。",
+      "entries": [],
+      "evidence_ids": [
+        "avwikidb"
+      ],
+      "source_group": "avwikidb"
+    },
+    {
+      "id": "xcream",
+      "name": "XCREAM 繁体中文站",
+      "url": "https://zh-hant.xcream.net/",
+      "category": "数字内容商城",
+      "identity_basis": "observed",
+      "description": "同时经营一般和成人数字内容的多语言平台。",
+      "access": "general_catalog",
+      "ranking_signal": "unverified",
+      "recommended_role": "conditional_primary",
+      "existing_crawlers": [],
+      "notes": "当前匿名首页为一般内容导航；成人入口需确认年龄。不得把一般分类的排名混入成人热片。",
+      "entries": [],
+      "evidence_ids": [
+        "xcream"
+      ],
+      "source_group": "xcream"
+    },
+    {
+      "id": "hanime1",
+      "name": "Hanime1",
+      "url": "https://hanime1.me/",
+      "category": "动画平台（待核）",
+      "identity_basis": "unverified",
+      "description": "常见定位为成人动画平台；本次业务页面未验证。",
+      "access": "challenge",
+      "ranking_signal": "unverified",
+      "recommended_role": "separate_catalog",
+      "existing_crawlers": [],
+      "notes": "403 Cloudflare，无法核实排行榜；若后续接入，动画独立分类和标识，不强行映射真人番号。",
+      "entries": [],
+      "evidence_ids": [
+        "hanime1"
+      ],
+      "source_group": "hanime1"
+    },
+    {
+      "id": "javrate",
+      "name": "Javrate",
+      "url": "https://www.javrate.com/",
+      "category": "在线内容/索引平台",
+      "identity_basis": "observed",
+      "description": "影片、演员和分类索引，另有热门作品页。",
+      "access": "readable",
+      "ranking_signal": "site_rank_unknown_metric",
+      "recommended_role": "secondary_candidate",
+      "existing_crawlers": [],
+      "notes": "热门页明确最近一周200部，并有月/半年选项；热度计算及其他筛选参数仍未核实，名称含 rate 不代表专业评分榜。",
+      "entries": [
+        {
+          "url": "https://www.javrate.com/t1wj9o/best",
+          "kind": "site_rank",
+          "verification": "page_checked",
+          "evidence_id": "javrate-hot"
+        }
+      ],
+      "evidence_ids": [
+        "javrate"
+      ],
+      "source_group": "javrate"
+    },
+    {
+      "id": "jvid",
+      "name": "JVID",
+      "url": "https://www.jvid.com/",
+      "category": "创作者平台",
+      "identity_basis": "observed",
+      "description": "创作者视频和写真平台，包含模型/创作者、价格与商品分类。",
+      "access": "readable",
+      "ranking_signal": "ui_popularity_options",
+      "recommended_role": "separate_catalog",
+      "existing_crawlers": [],
+      "notes": "可见趋势、热门、最新、热门销售等界面文字；未确认请求参数/统计周期。商品 ID 和创作者 ID 应独立于 JAV 番号体系。",
+      "entries": [],
+      "evidence_ids": [
+        "jvid"
+      ],
+      "source_group": "jvid"
+    },
+    {
+      "id": "supjav",
+      "name": "SupJav",
+      "url": "https://supjav.com/zh/",
+      "category": "在线内容站（待核）",
+      "identity_basis": "unverified",
+      "description": "常见定位为在线内容聚合；本次只有挑战页，业务未核实。",
+      "access": "challenge",
+      "ranking_signal": "unverified",
+      "recommended_role": "defer",
+      "existing_crawlers": [],
+      "notes": "中文路径返回403，不假定有稳定榜单或允许聚合播放。",
+      "entries": [],
+      "evidence_ids": [
+        "supjav"
+      ],
+      "source_group": "supjav"
+    },
+    {
+      "id": "fd2ppv",
+      "name": "FD2",
+      "url": "https://fd2ppv.cc/",
+      "category": "FC2 资料库",
+      "identity_basis": "observed",
+      "description": "FC2 作品、演员、卖家、标签及趋势索引。",
+      "access": "readable",
+      "ranking_signal": "site_trending",
+      "recommended_role": "primary_candidate",
+      "existing_crawlers": [],
+      "notes": "/ranking 是会员贡献榜；/trending 才是作品/演员趋势，带实时、1日、1周、30日选项。具体算法、授权和稳定性待核。",
+      "entries": [
+        {
+          "url": "https://fd2ppv.cc/trending",
+          "kind": "site_trending",
+          "verification": "page_checked",
+          "evidence_id": "fd2-trending"
+        },
+        {
+          "url": "https://fd2ppv.cc/trending?filter=day",
+          "kind": "site_trending",
+          "verification": "link_observed",
+          "evidence_id": "fd2-trending"
+        },
+        {
+          "url": "https://fd2ppv.cc/trending?filter=week",
+          "kind": "site_trending",
+          "verification": "link_observed",
+          "evidence_id": "fd2-trending"
+        },
+        {
+          "url": "https://fd2ppv.cc/trending?filter=month",
+          "kind": "site_trending",
+          "verification": "link_observed",
+          "evidence_id": "fd2-trending"
+        },
+        {
+          "url": "https://fd2ppv.cc/ranking",
+          "kind": "contributor_rank",
+          "verification": "page_checked",
+          "evidence_id": "fd2-contributions"
+        }
+      ],
+      "evidence_ids": [
+        "fd2ppv"
+      ],
+      "source_group": "fd2ppv"
+    },
+    {
+      "id": "ouxiangdanganku",
+      "name": "偶像档案库（用户给定名称）",
+      "url": "https://www.ouxiangdanganku.com/",
+      "category": "未知/疑似域名停放",
+      "identity_basis": "observed",
+      "description": "本次响应只有隐私入口和域名出售相关脚本，未见影片业务。",
+      "access": "parking_suspected",
+      "ranking_signal": "none",
+      "recommended_role": "exclude",
+      "existing_crawlers": [],
+      "notes": "HTTP 200 不能视为有效站点。缺乏可核实片库/榜单，不能将广告、停放或跳转页面自动信任为数据源。",
+      "entries": [],
+      "evidence_ids": [
+        "ouxiangdanganku"
+      ],
+      "source_group": "ouxiangdanganku"
+    }
+  ]
+}

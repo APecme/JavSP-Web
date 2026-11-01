@@ -15,9 +15,9 @@ DOCS = ROOT / 'docs'
 
 
 def build():
-    assets = ['theme.css', 'theme.js', 'icons.js', 'navigation.js', 'navigation.css', 'directory-watch.js', 'directory-watch.css', 'page-layouts.css', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js', 'markdown-it.min.js', 'markdown-it.LICENSE', 'comment-markdown.js']
+    assets = ['theme.css', 'theme.js', 'icons.js', 'navigation.js', 'navigation.css', 'directory-watch.js', 'directory-watch.css', 'hot.js', 'hot.css', 'page-layouts.css', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js', 'markdown-it.min.js', 'markdown-it.LICENSE', 'comment-markdown.js']
     inputs = [ROOT / 'VERSION', WEB / 'index.html', WEB / 'assets' / 'avatar-catalog.json', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
-              ROOT / 'vendor' / 'JavSP' / 'config.yml', DOCS / 'demo-mock.js', DOCS / 'demo.css',
+              ROOT / 'vendor' / 'JavSP' / 'config.yml', ROOT / 'javsp_web' / 'hot_sources.py', DOCS / 'demo-mock.js', DOCS / 'demo.css',
               Path(__file__), *sorted((ROOT / 'javsp_web' / 'skills').glob('*/SKILL.md'))]
     revision = hashlib.sha256(b''.join(path.read_text(encoding='utf-8').encode('utf-8') for path in inputs)).hexdigest()[:12]
     tree = ast.parse((ROOT / 'javsp_web' / 'ai.py').read_text(encoding='utf-8'))
@@ -43,7 +43,10 @@ def build():
     config = yaml.safe_load((ROOT / 'vendor' / 'JavSP' / 'config.yml').read_text(encoding='utf-8'))
     config['scanner']['input_directory'] = '/video/待整理'
     config['crawler']['ai_enabled'] = True
-    seed = {'version': f'demo.{revision}', 'revision': revision, 'ai': settings, 'skills': skills, 'config': config,
+    # Fixed source descriptors are safe for the offline demo, never fetch sites.
+    import runpy
+    hot_sources = runpy.run_path(str(ROOT / 'javsp_web' / 'hot_sources.py'))
+    seed = {'hot_sources': list(hot_sources['BY_ID'].values()), 'version': f'demo.{revision}', 'revision': revision, 'ai': settings, 'skills': skills, 'config': config,
             'config_yaml': yaml.safe_dump(config, allow_unicode=True, sort_keys=False)}
     (DOCS / 'demo-seed.js').write_text('window.JavspDemoSeed = ' + json.dumps(seed, ensure_ascii=False) + ';\n', encoding='utf-8')
     for name in assets:

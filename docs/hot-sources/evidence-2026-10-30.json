@@ -1,0 +1,597 @@
+{
+  "schema_version": 1,
+  "method": "Anonymous HTTPS GET; static HTML text inspection only; no age confirmation, login, challenge bypass, images or videos requested. UTF-8 HTML hashes refer to local inspection copies, not original wire bytes.",
+  "observations": [
+    {
+      "id": "avbase",
+      "requested_url": "https://www.avbase.net/",
+      "checked_at": "2026-10-30T14:55:42+00:00",
+      "status": 200,
+      "final_url": "https://www.avbase.net/",
+      "title": "AV検索データベース | アダルトビデオの情報基地！",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "b11963aaba30dd3d10d597c6cd2c090003d757d13c5e8272eb8492e2b3e4014a",
+      "observed_fragments": [
+        "AV検索データベース",
+        "本日発売",
+        "新着作品",
+        "注目の出演者"
+      ]
+    },
+    {
+      "id": "avsox",
+      "requested_url": "https://avsox.click/cn",
+      "checked_at": "2026-10-30T14:55:42+00:00",
+      "status": 200,
+      "final_url": "https://avsox.click/cn",
+      "title": "AVSOX",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "aa2612142e83225f9960a298b191c6303a3cfc6e531ab0d53a980f2114f516fa",
+      "observed_fragments": [
+        "AVSOX - Your online informative source for Japanese uncensored adult videos; manage your video collection and share your thoughts.",
+        "javu-site-index"
+      ]
+    },
+    {
+      "id": "dahlia",
+      "requested_url": "https://dahlia-av.jp/",
+      "checked_at": "2026-10-30T14:55:42+00:00",
+      "status": 200,
+      "final_url": "https://dahlia-av.jp/",
+      "title": "DAHLIA（ダリア） | 配信特化型 新世代AVメーカー",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "756750d4e73596bd3171667ba0899c12dfb01a113fe1eac4e459a48a826a65b9",
+      "observed_fragments": [
+        "配信特化型 新世代AVメーカー",
+        "Ranking",
+        "ランキング",
+        "Latest Works",
+        "New Works"
+      ]
+    },
+    {
+      "id": "dmm",
+      "requested_url": "https://video.dmm.co.jp/",
+      "checked_at": "2026-10-30T14:55:42+00:00",
+      "status": 200,
+      "final_url": "https://www.dmm.co.jp/age_check/=/?rurl=https%3A%2F%2Fvideo.dmm.co.jp%2F",
+      "title": "年齢認証 - FANZA",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "aa4215c3706e2bfa3972e3681deccf677defa73f85d5f8f95f483cbc0416bb7c",
+      "observed_fragments": [
+        "年齢認証 - FANZA"
+      ]
+    },
+    {
+      "id": "faleno",
+      "requested_url": "https://faleno.jp/top/",
+      "checked_at": "2026-10-30T14:55:42+00:00",
+      "status": 200,
+      "final_url": "https://faleno.jp/top/",
+      "title": "",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "e37d530501b8a33f5a0752c4c5788c67201ca877fb60d55d112cd2120e1ee724",
+      "observed_fragments": [
+        "RANKING",
+        "ランキング",
+        "出演女優",
+        "配信日"
+      ]
+    },
+    {
+      "id": "fc2",
+      "requested_url": "https://adult.contents.fc2.com/",
+      "checked_at": "2026-10-30T14:55:42+00:00",
+      "status": 200,
+      "final_url": "https://adult.contents.fc2.com/",
+      "title": "FC2コンテンツマーケットアダルト | 様々なアダルトコンテンツを販売・購入できるオンラインマーケットプレイス",
+      "content_type": "text/html;charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "9bda16fe15fa7e8dbc317124e80b10b9d48d3ba89accd5841eab90072d34f447",
+      "observed_fragments": [
+        "ランキング",
+        "新着商品"
+      ]
+    },
+    {
+      "id": "fc2ppvdb",
+      "requested_url": "https://www.fc2ppvdb.com/",
+      "checked_at": "2026-10-30T14:55:43+00:00",
+      "status": 403,
+      "final_url": "https://www.fc2ppvdb.com/",
+      "title": "Access denied | www.fc2ppvdb.com used Cloudflare to restrict access | www.fc2ppvdb.com | Cloudflare",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "132068df5b143d7f9b4a66cff5520156d5f2cf0cab2bad6de72fb72f31fd09a5",
+      "observed_fragments": [
+        "Access denied"
+      ]
+    },
+    {
+      "id": "freejavbt",
+      "requested_url": "https://freejavbt.com/ja/uncensored",
+      "checked_at": "2026-10-30T14:55:44+00:00",
+      "status": 200,
+      "final_url": "https://freejavbt.com/ja/uncensored",
+      "title": "最新無修正動画情報最新無修正動画情報 | 日本AVデータベース",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "f695d21f5f5d6b3efc9329d7fb9e2f5b892b9bae89908d27ebd3671dbd7ead90",
+      "observed_fragments": [
+        "最新無修正動画情報",
+        "日間ランキング",
+        "週間ランキング",
+        "月間ランキング"
+      ]
+    },
+    {
+      "id": "getchu",
+      "requested_url": "https://www.getchu.com/",
+      "checked_at": "2026-10-30T14:55:44+00:00",
+      "status": 200,
+      "final_url": "https://www.getchu.com/",
+      "title": "美少女ゲーム・アニメ通販ならGetchu.com(げっちゅ屋)｜限定特典・新作予約多数",
+      "content_type": "text/html; charset=EUC-JP",
+      "truncated": false,
+      "html_utf8_sha256": "a7375fed5677067e906aeabf7fc88c28eac2bd7fcd2f44849665ee1ea296e7f4",
+      "observed_fragments": [
+        "美少女ゲーム・アニメ通販ならGetchu.com",
+        "セールスランキング",
+        "予約ランキング"
+      ]
+    },
+    {
+      "id": "giga",
+      "requested_url": "https://www.giga-web.jp/top.php",
+      "checked_at": "2026-10-30T14:55:44+00:00",
+      "status": 200,
+      "final_url": "https://www.giga-web.jp/top.php",
+      "title": "GIGA 特撮ヒロインAV | GIGA(ギガ)闘う特撮ヒロイン",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "67cd43677ff55fb3be7c38af71a7c43317b22d3b208ea943cad27da7d2d60c21",
+      "observed_fragments": [
+        "特撮ヒロインAV専門メーカー",
+        "あなたは18歳以上ですか？"
+      ]
+    },
+    {
+      "id": "iqqtv",
+      "requested_url": "https://iqqtv.net/",
+      "checked_at": "2026-10-30T14:55:45+00:00",
+      "status": 200,
+      "final_url": "https://iqqtv.net/",
+      "title": "iQQTV - 三上悠亞的線上成人A片高清直播",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "4072b33dfe1a4485b4489e3806cbc5d1609c0469e2730b5068e591198a6a24f8",
+      "observed_fragments": [
+        "女優",
+        "會員登入",
+        "order=latest"
+      ]
+    },
+    {
+      "id": "jav321",
+      "requested_url": "https://www.jav321.com/",
+      "checked_at": "2026-10-30T14:55:45+00:00",
+      "status": 200,
+      "final_url": "https://www.jav321.com/",
+      "title": "JAV321 dmm",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "2151bae47b93987bcc79418761bdcfd7ef29bc7d1fda0f17c7b68b183cac573e",
+      "observed_fragments": [
+        "最新である",
+        "Most Popular Download",
+        "人気リスト",
+        "2025"
+      ]
+    },
+    {
+      "id": "javbus",
+      "requested_url": "https://www.javbus.com/",
+      "checked_at": "2026-10-30T14:55:46+00:00",
+      "status": 200,
+      "final_url": "https://www.javbus.com/doc/driver-verify?referer=https%3A%2F%2Fwww.javbus.com%2F",
+      "title": "Age Verification JavBus - JavBus",
+      "content_type": "text/html;Charset=utf-8;;charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "6e96e2fba33b989d3b664cb47e8edd67040c95506ea2cad4da682e2566a63c15",
+      "observed_fragments": [
+        "Age Verification JavBus"
+      ]
+    },
+    {
+      "id": "javdb",
+      "requested_url": "https://javdb.com/",
+      "checked_at": "2026-10-30T14:55:46+00:00",
+      "status": 200,
+      "final_url": "https://javdb.com/",
+      "title": "",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "7561ef8a3883ce6113ab2bb1850b61ddbc4a74865196eb7499401cebf74f90a3",
+      "observed_fragments": [
+        "Due to copyright restrictions, access to this site is prohibited in the country where your internet is located."
+      ]
+    },
+    {
+      "id": "javlibrary",
+      "requested_url": "https://www.javlibrary.com",
+      "checked_at": "2026-10-30T14:55:47+00:00",
+      "status": 403,
+      "final_url": "https://www.javlibrary.com",
+      "title": "Just a moment...",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "8eafe8d40b23f3d90fa4250b478361c6f22a2c5967fa6b518e96d18b035acdd4",
+      "observed_fragments": [
+        "Just a moment..."
+      ]
+    },
+    {
+      "id": "minnano",
+      "requested_url": "https://www.minnano-av.com/",
+      "checked_at": "2026-10-30T14:55:47+00:00",
+      "status": 403,
+      "final_url": "https://www.minnano-av.com/",
+      "title": "Just a moment...",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "3d4d53a1bd7c68f34fc865c5db323b25cfcb33fdcc2bbc795dfbf6ec4512cd1c",
+      "observed_fragments": [
+        "Just a moment..."
+      ]
+    },
+    {
+      "id": "prestige",
+      "requested_url": "https://www.prestige-av.com/",
+      "checked_at": "2026-10-30T14:55:48+00:00",
+      "status": 403,
+      "final_url": "https://www.prestige-av.com/",
+      "title": "PRESTIGE",
+      "content_type": "text/html",
+      "truncated": false,
+      "html_utf8_sha256": "02e42716222d4e3e36538373ad356f6c565731222236c8b97391e7d35c099759",
+      "observed_fragments": [
+        "公式サイト",
+        "一時停止のお知らせ",
+        "臨時サーバーメンテナンス"
+      ]
+    },
+    {
+      "id": "r18dev",
+      "requested_url": "https://r18.dev/",
+      "checked_at": "2026-10-30T14:55:48+00:00",
+      "status": 200,
+      "final_url": "https://r18.dev/",
+      "title": "R18.dev",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "ad2bc1a34913ec5ebcadc1976ced435534b70210bf5dab489786a942a63dd441",
+      "observed_fragments": [
+        "R18.dev",
+        "Database dumps",
+        "\"Top\" is determined by the number of videos associated with that entity as of 2025-01-24."
+      ]
+    },
+    {
+      "id": "xcity",
+      "requested_url": "https://xcity.jp/",
+      "checked_at": "2026-10-30T14:55:48+00:00",
+      "status": 200,
+      "final_url": "https://xcity.jp/?over18=1&r=/",
+      "title": "有料アダルト動画が見放題！総合アダルトサイトXCITY（エックスシティ）",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "bee63bad455da973dd94342c2f7fbe6d751cf780a8a834774386a232423a5185",
+      "observed_fragments": [
+        "総合アダルトサイトXCITY",
+        "18歳未満の方は"
+      ]
+    },
+    {
+      "id": "fanza",
+      "requested_url": "https://www.fanza.jp/",
+      "checked_at": "2026-10-30T14:55:48+00:00",
+      "status": 200,
+      "final_url": "https://www.dmm.co.jp/age_check/=/?rurl=https%3A%2F%2Fwww.dmm.co.jp%2Ftop%2F",
+      "title": "年齢認証 - FANZA",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "70f70d9e42a1052f859a5c4102312b46832ba7846c194afce5fed7ab79a7a0c1",
+      "observed_fragments": [
+        "年齢認証 - FANZA"
+      ]
+    },
+    {
+      "id": "aventertainments",
+      "requested_url": "https://www.aventertainments.com/",
+      "checked_at": "2026-10-30T14:55:48+00:00",
+      "status": 200,
+      "final_url": "https://www.aventertainments.com/",
+      "title": "AVエンターテインメント : 世界最大のジャポルノストア 正規無修正DVD販売、正規無修正動画ダウンロード配信サイト",
+      "content_type": "text/html",
+      "truncated": false,
+      "html_utf8_sha256": "e649d11ebafcd87edfc211e1a6d1c0b57e435c5019d862c1e31fd5fe848f4b7d",
+      "observed_fragments": [
+        "正規無修正DVD販売",
+        "動画ダウンロード販売",
+        "18歳以上の方のみ"
+      ]
+    },
+    {
+      "id": "av-wiki",
+      "requested_url": "https://av-wiki.net/",
+      "checked_at": "2026-10-30T14:55:48+00:00",
+      "status": 200,
+      "final_url": "https://av-wiki.net/",
+      "title": "AV女優の名前が知りたい！ 本館 | シロウト女優、キカタン（企画単体）AV女優名のまとめサイト – シロウト女優、キカタン（企画単体）AV女優名まとめ",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "8e8084df03878cfbf5951ec1eb26dd10c8225cc9719a79a11bddb9e86555ce4a",
+      "observed_fragments": [
+        "シロウト女優、キカタン（企画単体）AV女優名まとめ",
+        "本日の更新情報"
+      ]
+    },
+    {
+      "id": "avwikidb",
+      "requested_url": "https://avwikidb.com/",
+      "checked_at": "2026-10-30T14:55:50+00:00",
+      "status": 403,
+      "final_url": "https://avwikidb.com/",
+      "title": "Just a moment...",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "672ebd4ac961eb0501fbb3480ed7e8422cc2722925ce0ff873a0a9af14f36c0a",
+      "observed_fragments": [
+        "Just a moment..."
+      ]
+    },
+    {
+      "id": "xcream",
+      "requested_url": "https://zh-hant.xcream.net/",
+      "checked_at": "2026-10-30T14:55:50+00:00",
+      "status": 200,
+      "final_url": "https://zh-hant.xcream.net/",
+      "title": "XCREAM | 日本最大級の動画サイト、20万以上の動画が今すぐ見れる",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "1b5655c672b34309143e16b19ebdde53f418610627e581a524f806e2b74ab578",
+      "observed_fragments": [
+        "從一般商品",
+        "從成人作品",
+        "種類一覽"
+      ]
+    },
+    {
+      "id": "hanime1",
+      "requested_url": "https://hanime1.me/",
+      "checked_at": "2026-10-30T14:55:51+00:00",
+      "status": 403,
+      "final_url": "https://hanime1.me/",
+      "title": "Attention Required! | Cloudflare",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "4f482d4df3dba0dff87c5cbaacc28b04c3afb9280654d9b038897dedae2b4a42",
+      "observed_fragments": [
+        "Attention Required!",
+        "Cloudflare"
+      ]
+    },
+    {
+      "id": "javrate",
+      "requested_url": "https://www.javrate.com/",
+      "checked_at": "2026-10-30T14:55:51+00:00",
+      "status": 200,
+      "final_url": "https://www.javrate.com/",
+      "title": "正妹AV,日本A片,國產AV,免費在綫看 - Javrate",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "a4de28067cf76d86c598371ba3fb5820bf85be566cbb7e483c24fe0810e19553",
+      "observed_fragments": [
+        "熱門A片",
+        "最新更新"
+      ]
+    },
+    {
+      "id": "jvid",
+      "requested_url": "https://www.jvid.com/",
+      "checked_at": "2026-10-30T14:55:52+00:00",
+      "status": 200,
+      "final_url": "https://www.jvid.com/",
+      "title": "JVID - アジアをリードするオンラインビデオ写真プラットフォーム, 大量のHDビデオ写真をオンラインでご覧下さい",
+      "content_type": "text/html;charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "36497ad8f183d5f2e15ecf3f4b3f8c3c0d039cb102dd3fca7a4905e77cea141a",
+      "observed_fragments": [
+        "クリエイター",
+        "トレンド",
+        "人気トップ",
+        "最新",
+        "人気販売"
+      ]
+    },
+    {
+      "id": "supjav",
+      "requested_url": "https://supjav.com/zh/",
+      "checked_at": "2026-10-30T14:55:53+00:00",
+      "status": 403,
+      "final_url": "https://supjav.com/zh/",
+      "title": "Just a moment...",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "9bd187117e731874497901b07437fc2e2ce8d9eac25714a87112d6ff00460142",
+      "observed_fragments": [
+        "Just a moment..."
+      ]
+    },
+    {
+      "id": "fd2ppv",
+      "requested_url": "https://fd2ppv.cc/",
+      "checked_at": "2026-10-30T14:55:53+00:00",
+      "status": 200,
+      "final_url": "https://fd2ppv.cc/",
+      "title": "すべての作品 - FC2 メタデータ検索 | FD2",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "8d9cac073c56dc13b73b108ffb8638156a6ce675446ea09361978292613f1e78",
+      "observed_fragments": [
+        "FC2 メタデータ検索",
+        "メンバー貢献ランキング",
+        "他のユーザーも見ています"
+      ]
+    },
+    {
+      "id": "ouxiangdanganku",
+      "requested_url": "https://www.ouxiangdanganku.com/",
+      "checked_at": "2026-10-30T14:55:54+00:00",
+      "status": 200,
+      "final_url": "https://www.ouxiangdanganku.com/",
+      "title": "",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "97dc6c57938833858094e7dddefcbc272a5471da6dab4778246cd22b6e6bff77",
+      "observed_fragments": [
+        "https://assets.abovedomains.com/javascript/forsale.min.js?d=ouxiangdanganku.com"
+      ]
+    },
+    {
+      "id": "avbase-talents",
+      "requested_url": "https://www.avbase.net/talents/popular",
+      "checked_at": "2026-10-30T15:02:46+00:00",
+      "status": 200,
+      "final_url": "https://www.avbase.net/talents/popular",
+      "title": "注目の出演者ランキング | AV検索データベース",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "0a2b6a9ecb0c9c74968fd1ede837bb9513c3d511ace2dd13a1fef7c2767ca17d",
+      "observed_fragments": [
+        "注目の出演者ランキング",
+        "過去30日間のフォローとブックマークから日ごとに集計"
+      ]
+    },
+    {
+      "id": "fc2-ranking",
+      "requested_url": "https://adult.contents.fc2.com/ranking/",
+      "checked_at": "2026-10-30T15:02:46+00:00",
+      "status": 200,
+      "final_url": "https://adult.contents.fc2.com/ranking/",
+      "title": "ランキングトップ - アダルト | FC2コンテンツマーケット",
+      "content_type": "text/html;charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "fb74a2279263617a0b887b65cd08b2fcb9e6419aab7700f18367b9991f04b8a3",
+      "observed_fragments": [
+        "商品ランキング",
+        "リアルタイム",
+        "デイリー",
+        "ウィークリー",
+        "マンスリー",
+        "年間",
+        "ランキングベスト100"
+      ]
+    },
+    {
+      "id": "freejavbt-day",
+      "requested_url": "https://freejavbt.com/ja/rank/censored/day",
+      "checked_at": "2026-10-30T15:02:46+00:00",
+      "status": 200,
+      "final_url": "https://freejavbt.com/ja/rank/censored/day",
+      "title": "有修正の日間ランキングランキング有修正の日間ランキングランキング | 日本AVデータベース",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "6dd5f65ff26f7767e58dc707586ba355c3d137310fbecfe40922e29d6568f9a7",
+      "observed_fragments": [
+        "有修正の日間ランキング",
+        "日間ランキング",
+        "週間ランキング",
+        "月間ランキング"
+      ]
+    },
+    {
+      "id": "jav321-popular",
+      "requested_url": "https://www.jav321.com/type/1/1",
+      "checked_at": "2026-10-30T15:02:46+00:00",
+      "status": 200,
+      "final_url": "https://www.jav321.com/type/1/1",
+      "title": "AV dmm",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "0d1f8d5bc30c674c6b8019e9641749b9cb94f6e55af6e07d758d35f469b5e8a9",
+      "observed_fragments": [
+        "AV"
+      ]
+    },
+    {
+      "id": "jav321-sales",
+      "requested_url": "https://www.jav321.com/best_seller/1/2025/1",
+      "checked_at": "2026-10-30T15:02:46+00:00",
+      "status": 200,
+      "final_url": "https://www.jav321.com/best_seller/1/2025/1",
+      "title": "JAV321 dmm",
+      "content_type": "text/html; charset=UTF-8",
+      "truncated": false,
+      "html_utf8_sha256": "c64093bd4272fa2d5484b95d3e726d59053f833c5c91753255068da2b7ed59cf",
+      "observed_fragments": [
+        "2025 ベストセラー"
+      ]
+    },
+    {
+      "id": "fd2-trending",
+      "requested_url": "https://fd2ppv.cc/trending",
+      "checked_at": "2026-10-30T15:02:47+00:00",
+      "status": 200,
+      "final_url": "https://fd2ppv.cc/trending",
+      "title": "他のユーザーも見ています - FC2 メタデータ検索 | FD2",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "d4a8bd757c3c126d1075af7283aa85c96e8233e0e959f5139d7f1f62c3661538",
+      "observed_fragments": [
+        "他のユーザーも見ています",
+        "リアルタイム",
+        "過去1日",
+        "過去1週間",
+        "過去30日"
+      ]
+    },
+    {
+      "id": "fd2-contributions",
+      "requested_url": "https://fd2ppv.cc/ranking",
+      "checked_at": "2026-10-30T15:02:48+00:00",
+      "status": 200,
+      "final_url": "https://fd2ppv.cc/ranking",
+      "title": "メンバー貢献ランキング - FC2 メタデータ検索 | FD2",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "5f7b997703ae4e73b9c9d4dc9ab34806efc1f80503cab6c7674ea6d70ea47d50",
+      "observed_fragments": [
+        "メンバー貢献ランキング"
+      ]
+    },
+    {
+      "id": "javrate-hot",
+      "requested_url": "https://www.javrate.com/t1wj9o/best",
+      "checked_at": "2026-10-30T15:02:48+00:00",
+      "status": 200,
+      "final_url": "https://www.javrate.com/t1wj9o/best",
+      "title": "熱門A片200部 | 第1頁 | Javrate",
+      "content_type": "text/html; charset=utf-8",
+      "truncated": false,
+      "html_utf8_sha256": "fd8f8933910257f3eecdc254f0fbc4a89aba053602764740c2802cf05124cc9c",
+      "observed_fragments": [
+        "熱門A片",
+        "最近一周",
+        "共200部",
+        "最近一月",
+        "最近半年"
+      ]
+    }
+  ]
+}

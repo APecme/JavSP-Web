@@ -62,6 +62,34 @@
     return json(existing || items);
   };
   let demoProfile = { username: 'demo', display_name: '演示用户', avatar_id: '', comment_token: 'demo-identity-for-offline-preview-only-00000000' };
+  // Hot discovery is fully offline. These neutral examples are deliberately
+  // labeled demo; testing connectivity never issues an external request.
+  let hotChecked = false;
+  let hotLoaded = false;
+  const hotConnections = () => ({ can_check: true, network_mode: 'demo',
+    job: { running: false, completed: hotChecked ? 30 : 0, total: 30, retry_after: 0,
+      finished_at: hotChecked ? now() : '' },
+    sources: (seed.hot_sources || []).map(source => ({ ...source, result: {
+      state: hotChecked ? 'ok' : 'unchecked', message: hotChecked ? '演示结果，未连接此站点' : '尚未检测（演示）',
+      checked_at: hotChecked ? now() : '', http_status: hotChecked ? 200 : null,
+      elapsed_ms: hotChecked ? 80 : null, responded: hotChecked,
+    } })),
+  });
+  const hotFilms = (category, sort) => {
+    const kinds = category === 'all' ? ['censored', 'uncensored'] : [category];
+    return { category, sort, job: { running: false, completed: 2, total: 2, retry_after: 0 },
+      notice: '离线演示：影片与连接状态均为模拟数据，不访问外部站点。',
+      groups: kinds.map(kind => ({ id: 'demo:' + kind, source_id: 'demo', source_name: '演示来源（模拟）',
+        category: kind, label: sort === 'hot' ? '模拟来源排名' : '模拟发行日期',
+        url: '', state: hotLoaded ? 'ok' : 'not_loaded', stale: false, fetched_at: hotLoaded ? now() : '',
+        items: hotLoaded ? (sort === 'hot' ? [1, 2] : [2, 1]).map(n => ({
+          id: `DEMO-${kind}-${n}`, identifier: `DEMO-${kind}-${n}`, source_name: '演示来源',
+          category: kind, title: `热片界面示例 ${n}（模拟数据）`, url: '',
+          date: `2026-10-${10 + n}`, rank: sort === 'hot' ? n : null,
+        })) : [],
+      })), total: hotLoaded ? kinds.length * 2 : 0,
+    };
+  };
   const assetFetch = window.fetch?.bind(window);
   window.fetch = async (input, options = {}) => {
     const url = new URL(typeof input === 'string' ? input : input.url, location.origin);
@@ -71,6 +99,15 @@
     try { body = JSON.parse(options.body || '{}'); } catch { return denied(); }
     if (url.origin === location.origin && path.endsWith('/assets/avatar-catalog.json') && assetFetch) return assetFetch(input, options);
     if (url.origin !== location.origin || !path.startsWith('/api/')) return denied();
+    if (path === '/api/hot/connections') {
+      if (method === 'POST') hotChecked = true;
+      return json(hotConnections(), method === 'POST' ? 202 : 200);
+    }
+    if (path === '/api/hot/refresh' && method === 'POST') {
+      hotLoaded = true;
+      return json(hotFilms(body.category || 'all', body.sort || 'latest'), 202);
+    }
+    if (path === '/api/hot/films') return json(hotFilms(url.searchParams.get('category') || 'all', url.searchParams.get('sort') || 'latest'));
     if (path === '/api/profile') { if (method === 'PUT') demoProfile = { ...demoProfile, display_name: body.display_name, avatar_id: body.avatar_id }; return json(demoProfile); }
     if (path === '/api/auth/me') return json({ username: 'demo', role: 'admin' });
     if (path.startsWith('/api/auth/')) return denied();

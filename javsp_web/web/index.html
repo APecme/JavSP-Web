@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/assets/cinema.css?v=__ASSET_VERSION__">
   <link rel="stylesheet" href="/assets/page-layouts.css?v=__ASSET_VERSION__">
   <link rel="stylesheet" href="/assets/directory-watch.css?v=__ASSET_VERSION__">
+  <link rel="stylesheet" href="/assets/hot.css?v=__ASSET_VERSION__">
   <link rel="stylesheet" href="/assets/navigation.css?v=__ASSET_VERSION__">
 </head>
 <body>
@@ -151,9 +152,21 @@
         </div>
       </section>
 
-      <section class="view" data-panel="hot">
-        <div class="panel">
-          <div class="panel-heading"><div><p class="muted">热片功能规划中。</p></div></div>
+      <section class="view" data-panel="hot" aria-label="热片发现">
+        <div class="panel hot-panel" id="hot-panel">
+          <div class="hot-heading"><div><p class="page-kicker">发现</p><h2>热片发现</h2><p class="muted">浏览来源新作与站内热榜，按码类筛选。</p></div><div class="hot-actions"><button class="button secondary" id="hot-refresh" type="button"><span data-icon="refresh"></span>刷新列表</button><button class="button primary" id="hot-check" type="button"><span data-icon="refresh"></span>检测连接</button></div></div>
+          <div class="hot-toolbar">
+            <div class="hot-tabs" role="tablist" aria-label="影片码类">
+              <button type="button" id="hot-tab-all" role="tab" aria-selected="true" aria-controls="hot-results" data-hot-category="all" tabindex="0">全部</button>
+              <button type="button" id="hot-tab-censored" role="tab" aria-selected="false" aria-controls="hot-results" data-hot-category="censored" tabindex="-1">有码</button>
+              <button type="button" id="hot-tab-uncensored" role="tab" aria-selected="false" aria-controls="hot-results" data-hot-category="uncensored" tabindex="-1">无码</button>
+            </div>
+            <div class="hot-sort" role="group" aria-label="影片排序"><button class="button secondary" type="button" data-hot-sort="latest" aria-pressed="true">最新</button><button class="button secondary" type="button" data-hot-sort="hot" aria-pressed="false">最热</button></div>
+          </div>
+          <p class="muted hot-notice" id="hot-notice">最热按来源原始名次展示，不将不同站点的热度直接相加。首批接入 FALENO、DAHLIA、FREE JAV BT，其余站点仅检测连接。</p>
+          <p id="hot-message" class="hot-message" role="status" aria-live="polite"></p>
+          <div id="hot-results" role="tabpanel" aria-labelledby="hot-tab-all" aria-busy="false"><p class="muted">正在准备热片列表…</p></div>
+          <details class="hot-connections" id="hot-connections"><summary>来源连接状态 <span id="hot-connection-count" class="muted">30 个站点</span></summary><p class="muted">由服务端直连检测全部站点，不使用浏览器登录态、CookieCloud 或刮削代理。可达不代表榜单已接入；检测结果在服务重启后重置。批量检测仅管理员可执行。</p><p id="hot-check-message" role="status" aria-live="polite"></p><progress id="hot-check-progress" max="30" value="0" hidden aria-label="站点检测进度"></progress><div id="hot-source-list" class="hot-source-list"></div></details>
         </div>
       </section>
 
@@ -262,6 +275,7 @@
   <script defer src="/assets/community.js?v=__ASSET_VERSION__"></script>
   <script defer src="/assets/app.js?v=__ASSET_VERSION__"></script>
   <script defer src="/assets/directory-watch.js?v=__ASSET_VERSION__"></script>
+  <script defer src="/assets/hot.js?v=__ASSET_VERSION__"></script>
   <script defer src="/assets/navigation.js?v=__ASSET_VERSION__"></script>
   <script defer src="/assets/ai-markdown.js?v=__ASSET_VERSION__"></script>
   <script defer src="/assets/ai.js?v=__ASSET_VERSION__"></script>

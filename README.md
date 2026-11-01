@@ -88,3 +88,8 @@ docker run -d --name javsp-web --restart unless-stopped -p 8090:8090 -v "./data:
 感谢 [Yuukiy / JavSP](https://github.com/Yuukiy/JavSP) 提供刮削核心，以及 [Gfriends](https://github.com/gfriends/gfriends) 项目提供的女优资料与头像资源。
 
 项目包含 JavSP 核心，遵循 [GPL-3.0](./vendor/JavSP/LICENSE) 与 [Anti 996 License](https://github.com/996icu/996.ICU/blob/master/LICENSE_CN) 的相关条款。
+
+## 开发调研
+
+- [热片页面说明](./docs/hot-page.md)：全部／有码／无码、最新／最热、30 站批量连接检测及接入范围。
+- [热片来源调研（30 站概览与页面建设建议）](./docs/hot-sources/README.md)：第一阶段调研档案；当前实现以热片页面说明为准。
