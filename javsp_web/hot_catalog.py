@@ -34,7 +34,7 @@ def merge_items(groups, sort):
                 target['category'] = 'unknown'
             for field in ('actors', 'tags'):
                 target[field] = list(dict.fromkeys(target.get(field, []) + item.get(field, [])))[:20]
-            for field in ('studio', 'seller', 'score', 'score_scale', 'views', 'favorites', 'comments', 'duration', 'date'):
+            for field in ('studio', 'seller', 'score', 'score_scale', 'views', 'favorites', 'comments', 'duration', 'date', 'cover'):
                 if target.get(field) in (None, '', []):
                     target[field] = item.get(field)
     items = list(merged.values())

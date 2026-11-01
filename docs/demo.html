@@ -9,19 +9,19 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
   <title>交互示例 | JavSP WEB</title>
   <style>html[data-initial-view] [data-panel]{display:none}.view.active{display:block}html[data-initial-view="overview"] [data-panel="overview"],html[data-initial-view="scrape"] [data-panel="scrape"],html[data-initial-view="auto-scrape"] [data-panel="auto-scrape"],html[data-initial-view="downloads"] [data-panel="downloads"],html[data-initial-view="crawler-config"] [data-panel="crawler-config"],html[data-initial-view="presets"] [data-panel="presets"],html[data-initial-view="settings"] [data-panel="settings"]{display:block}</style>
-    <link rel="stylesheet" href="assets/theme.css?v=a19ebc2e2d23">
-  <link rel="stylesheet" href="assets/app.css?v=a19ebc2e2d23">
-  <link rel="stylesheet" href="assets/overrides.css?v=a19ebc2e2d23">
-  <link rel="stylesheet" href="assets/cinema.css?v=a19ebc2e2d23">
-  <link rel="stylesheet" href="assets/page-layouts.css?v=a19ebc2e2d23">
-  <link rel="stylesheet" href="assets/directory-watch.css?v=a19ebc2e2d23">
-  <link rel="stylesheet" href="assets/hot.css?v=a19ebc2e2d23">
-  <link rel="stylesheet" href="assets/navigation.css?v=a19ebc2e2d23">
-<link rel="stylesheet" href="demo.css?v=a19ebc2e2d23">
+    <link rel="stylesheet" href="assets/theme.css?v=4288cc1cd057">
+  <link rel="stylesheet" href="assets/app.css?v=4288cc1cd057">
+  <link rel="stylesheet" href="assets/overrides.css?v=4288cc1cd057">
+  <link rel="stylesheet" href="assets/cinema.css?v=4288cc1cd057">
+  <link rel="stylesheet" href="assets/page-layouts.css?v=4288cc1cd057">
+  <link rel="stylesheet" href="assets/directory-watch.css?v=4288cc1cd057">
+  <link rel="stylesheet" href="assets/hot.css?v=4288cc1cd057">
+  <link rel="stylesheet" href="assets/navigation.css?v=4288cc1cd057">
+<link rel="stylesheet" href="demo.css?v=4288cc1cd057">
 </head>
 <body class="demo-mode">
-<script src="demo-seed.js?v=a19ebc2e2d23"></script>
-<script src="demo-mock.js?v=a19ebc2e2d23"></script>
+<script src="demo-seed.js?v=4288cc1cd057"></script>
+<script src="demo-mock.js?v=4288cc1cd057"></script>
   <script>(function(){try{var v=localStorage.getItem('javsp-web.active-view');if(v)document.documentElement.dataset.initialView=v;if(localStorage.getItem('javsp-web.privacy-mode')==='1')document.documentElement.dataset.privacyMode='1';}catch(e){}})();</script>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="主导航">
@@ -169,9 +169,9 @@
           <p class="muted hot-notice" id="hot-notice">统一影片墙合并已接入站点并去重，来源和原始排名保留。最新按日期排序，最热按来源名次交错排列，不冒充全网热度。</p>
           <p id="hot-message" class="hot-message" role="status" aria-live="polite"></p>
           <div id="hot-results" role="tabpanel" aria-labelledby="hot-tab-all" aria-busy="false"><p class="muted">正在准备热片列表…</p></div>
-          <dialog class="app-dialog hot-dialog" id="hot-age-dialog" aria-labelledby="hot-age-title"><div class="hot-dialog-heading"><h2 id="hot-age-title">确认年龄声明</h2><button class="icon-button" id="hot-age-close" type="button" aria-label="关闭年龄确认"><span data-icon="close"></span></button></div><form id="hot-age-form" class="hot-dialog-body stack"><p id="hot-age-site"></p><p class="muted">仅提交原站普通年龄声明并重新检测。不处理账号登录、验证码或证件核验；失败时可在原站操作，或使用 CookieCloud。确认后的会话 Cookie 仅存于此服务内存，重启或12小时后失效，由本服务登录用户共享。</p><label class="check-label"><input type="checkbox" id="hot-age-confirm" required>我已达到该站点与所在地要求的法定年龄，授权提交该站年龄声明并保存服务会话</label><p id="hot-age-message" role="status" aria-live="polite"></p><button class="button primary" type="submit" id="hot-age-submit">确认并重新检测</button></form></dialog>
+          <dialog class="app-dialog hot-dialog" id="hot-age-dialog" aria-labelledby="hot-age-title"><div class="hot-dialog-heading"><h2 id="hot-age-title">确认年龄声明</h2><button class="icon-button" id="hot-age-close" type="button" aria-label="关闭年龄确认"><span data-icon="close"></span></button></div><form id="hot-age-form" class="hot-dialog-body stack"><p id="hot-age-site"></p><p class="muted">仅提交原站普通年龄声明并重新检测。不处理账号登录、验证码或证件核验；原站需要登录或脚本时，请在原站操作后使用 CookieCloud；提交后此窗口显示进度与最终结果。确认后的会话 Cookie 仅存于此服务内存，重启或12小时后失效，由本服务登录用户共享。</p><label class="check-label"><input type="checkbox" id="hot-age-confirm" required>我已达到该站点与所在地要求的法定年龄，授权提交该站年龄声明并保存服务会话</label><p id="hot-age-message" role="status" aria-live="polite"></p><button class="button primary" type="submit" id="hot-age-submit">确认并重新检测</button></form></dialog>
           <p class="hot-connection-short"><button id="hot-show-connections" type="button" class="button secondary">查看连接结果</button><span id="hot-connection-count" class="muted">30 个站点</span></p>
-          <dialog class="app-dialog hot-dialog" id="hot-connections" aria-labelledby="hot-connections-title"><div class="hot-dialog-heading"><div><h2 id="hot-connections-title">站点连接检测</h2><p class="muted">逐站显示当前环境的连接状态，关闭窗口不会取消后台检测。</p></div><button class="icon-button" id="hot-connections-close" type="button" aria-label="关闭连接检测"><span data-icon="close"></span></button></div><div class="hot-dialog-body"><p class="muted">匿名直连；已启用 CookieCloud 时使用匹配域名的 Cookie。连接可达不等于榜单已接入。</p><p id="hot-check-message" role="status" aria-live="polite"></p><progress id="hot-check-progress" max="30" value="0" hidden aria-label="站点检测进度"></progress><div class="hot-dialog-tools"><button type="button" class="button secondary" data-hot-cookiecloud>设置 CookieCloud</button></div><div id="hot-source-list" class="hot-source-list"></div></div></dialog>
+          <dialog class="app-dialog hot-dialog" id="hot-connections" aria-labelledby="hot-connections-title"><div class="hot-dialog-heading"><div><h2 id="hot-connections-title">站点连接检测</h2><p class="muted">检测来自服务端，不是当前浏览器；关闭窗口不会取消后台任务。</p></div><button class="icon-button" id="hot-connections-close" type="button" aria-label="关闭连接检测"><span data-icon="close"></span></button></div><div class="hot-dialog-body"><p class="muted">使用默认刮削预设的代理与超时；已启用 CookieCloud 时同步匹配域名 Cookie。HTTP 连通与页面内容解析分开判定，需脚本渲染不表示连接失败。浏览器可能使用不同的代理、DNS 和登录态。</p><p id="hot-check-message" role="status" aria-live="polite"></p><progress id="hot-check-progress" max="30" value="0" hidden aria-label="站点检测进度"></progress><div class="hot-dialog-tools"><button type="button" class="button secondary" data-hot-cookiecloud>设置 CookieCloud</button></div><div id="hot-source-list" class="hot-source-list"></div></div></dialog>
 
 
         </div>
@@ -275,16 +275,16 @@
       <button id="update-overlay-close" class="button secondary" type="button" hidden>关闭提示</button>
     </div>
   </div>
-  <script defer src="assets/theme.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/icons.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/markdown-it.min.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/comment-markdown.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/community.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/demo-app.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/directory-watch.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/hot.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/navigation.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/ai-markdown.js?v=a19ebc2e2d23"></script>
-  <script defer src="assets/ai.js?v=a19ebc2e2d23"></script>
+  <script defer src="assets/theme.js?v=4288cc1cd057"></script>
+  <script defer src="assets/icons.js?v=4288cc1cd057"></script>
+  <script defer src="assets/markdown-it.min.js?v=4288cc1cd057"></script>
+  <script defer src="assets/comment-markdown.js?v=4288cc1cd057"></script>
+  <script defer src="assets/community.js?v=4288cc1cd057"></script>
+  <script defer src="assets/demo-app.js?v=4288cc1cd057"></script>
+  <script defer src="assets/directory-watch.js?v=4288cc1cd057"></script>
+  <script defer src="assets/hot.js?v=4288cc1cd057"></script>
+  <script defer src="assets/navigation.js?v=4288cc1cd057"></script>
+  <script defer src="assets/ai-markdown.js?v=4288cc1cd057"></script>
+  <script defer src="assets/ai.js?v=4288cc1cd057"></script>
 </body>
 </html>

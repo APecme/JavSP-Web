@@ -230,7 +230,8 @@ test('age declaration requires explicit checkbox and posts only the fixed source
   const call=h.calls.find(c=>c.options.method==='POST');
   assert.equal(call.url,'/api/hot/age/giga');
   assert.deepEqual(JSON.parse(call.options.body),{confirmed:true});
-  assert.equal(h.ids['hot-age-dialog'].open,false);
+  assert.equal(h.ids['hot-age-dialog'].open,true);
+  assert.equal(h.ids['hot-age-confirm'].checked,false);
 });
 
 test('running age confirmation keeps connection polling and CookieCloud fallback', async () => {
@@ -240,4 +241,37 @@ test('running age confirmation keeps connection polling and CookieCloud fallback
   assert.match(h.ids['hot-source-list'].innerHTML,/年龄确认中/);
   assert.match(h.ids['hot-source-list'].innerHTML,/CookieCloud 备用同步/);
   assert.ok([...h.timers.values()].some(t=>t.delay===2000));
+});
+
+
+test('age progress stays visible until completion and renders failure then success', async () => {
+  const h=harness();
+  h.api.state.ageSource='giga';h.api.state.ageSeenRun=true;
+  h.handle(()=>({sources:[{id:'giga',name:'GIGA',age:{running:true,phase:'submitting',message:'正在提交…'},result:{state:'age_gate'}}],job:{}}));
+  await h.api.loadConnections();assert.match(h.ids['hot-age-message'].textContent,/正在提交/);assert.equal(h.ids['hot-age-submit'].disabled,true);
+  h.handle(()=>({sources:[{id:'giga',name:'GIGA',age:{running:false,phase:'finished',success:false,message:'原站仍要求确认'},result:{state:'age_gate'}}],job:{}}));
+  await h.api.loadConnections();assert.match(h.ids['hot-age-message'].textContent,/原站仍要求/);assert.equal(h.ids['hot-age-message'].dataset.error,'true');
+  h.handle(()=>({sources:[{id:'giga',name:'GIGA',age:{running:false,phase:'finished',success:true,message:'确认已通过'},result:{state:'ok'}}],job:{}}));
+  await h.api.loadConnections();assert.match(h.ids['hot-age-message'].textContent,/确认已通过/);assert.equal(h.ids['hot-age-message'].dataset.error,'false');
+});
+
+test('script-rendered HTML is counted connected; timeout offers server-specific retry', async()=>{
+ const h=harness();h.handle(()=>({can_check:true,network:{label:'默认预设代理'},job:{finished_at:'2026-11-02T00:00:00Z'},sources:[
+  {id:'avsox',name:'AVSOX',result:{state:'js_shell',message:'HTTP 已连通'}},
+  {id:'dmm',name:'DMM',result:{state:'timeout',message:'服务端超时'}}]}));
+ await h.api.loadConnections();assert.match(h.ids['hot-connection-count'].textContent,/1 个已连通/);assert.match(h.ids['hot-source-list'].innerHTML,/需脚本渲染/);assert.match(h.ids['hot-source-list'].innerHTML,/重测此站/);assert.match(h.ids['hot-check-message'].textContent,/默认预设代理/);
+});
+
+
+test('covers use only registered same-origin URLs with lazy loading and escaped alt', async()=>{
+ const h=harness();const d=data();d.items=[{...d.groups[0].items[0],identifier:'ABC-123',cover:'/api/hot/covers/'+'a'.repeat(64)+'.jpg'}];h.handle(()=>d);await h.api.loadFilms();
+ const html=h.ids['hot-results'].innerHTML;assert.match(html,/class="hot-cover-image"/);assert.match(html,/loading="lazy"/);assert.match(html,/decoding="async"/);assert.match(html,/ABC-123 封面/);
+ assert.equal(h.api.coverUrl('https://evil.invalid/cover.jpg'),'');assert.equal(h.api.coverUrl('javascript:alert(1)'),'');
+ d.items[0].cover='https://remote.invalid/image.jpg';await h.api.loadFilms();assert.doesNotMatch(h.ids['hot-results'].innerHTML,/<img/);assert.match(h.ids['hot-results'].innerHTML,/暂无封面/);
+});
+
+test('cover failure and subsequent load toggle accessible placeholder and retry',()=>{
+ const h=harness();const placeholder={textContent:''};const retry={hidden:true};const wrap={dataset:{},querySelector:selector=>selector.includes('placeholder')?placeholder:retry};
+ const image={matches:()=>true,closest:()=>wrap};h.api.coverFailed({target:image});assert.equal(wrap.dataset.coverState,'error');assert.equal(retry.hidden,false);assert.equal(placeholder.textContent,'封面加载失败');
+ h.api.coverLoaded({target:image});assert.equal(wrap.dataset.coverState,'loaded');assert.equal(retry.hidden,true);assert.equal(placeholder.textContent,'');
 });

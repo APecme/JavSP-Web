@@ -40,7 +40,7 @@ FREE = '''<html><title>Latest works</title><body>
 
 class HotTests(unittest.TestCase):
     def setUp(self):
-        for name in ('_check', '_checks', '_feed_job', '_cache'):
+        for name in ('_check', '_checks', '_feed_job', '_cache', '_single_checks', '_check_revisions'):
             self.enterContext(patch.object(hot, name, {}))
 
     def test_runtime_sources_match_all_thirty_researched_urls(self):
@@ -230,7 +230,7 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(resolve.call_args.args[0], 'http://127.0.0.1/private')
 
     def test_transport_pins_address_and_keeps_hostname_for_tls_and_host(self):
-        with patch.object(hot_network, 'resolve_public', return_value=(hot_network.urlsplit('https://example.invalid/path'), '8.8.8.8')):
+        with patch.object(hot_network, 'resolve_public', return_value=(hot_network.urlsplit('https://example.invalid/path'), '8.8.8.8')), patch.object(hot_network, 'public_candidates', return_value=['8.8.8.8']):
             with patch.object(hot_network, 'PinnedTLSAdapter') as tls:
                 response = MagicMock()
                 tls.return_value.send.return_value = response
@@ -268,7 +268,7 @@ class NetworkTests(unittest.TestCase):
         self.assertFalse(kwargs['allow_redirects'])
         session.cookies.clear.assert_not_called()
         self.assertNotIn('cookies', kwargs)
-        self.assertLessEqual(kwargs['timeout'][0], 5)
+        self.assertLessEqual(kwargs['timeout'][0], 10)
 
     def test_redirect_each_hop_uses_pinned_adapter_and_has_limit(self):
         session = self.session([(302, {'Location': '/next'}, b''), (200, {'Content-Type': 'text/html'}, b'ok')])
@@ -285,7 +285,7 @@ class NetworkTests(unittest.TestCase):
 
     def test_slow_read_deadline_and_urllib3_timeout_are_reported(self):
         session = self.session([(200, {'Content-Type': 'text/html'}, b'hello')])
-        with patch.object(hot_network.requests, 'Session', return_value=session), patch.object(hot_network.time, 'monotonic', side_effect=[0, 0, 21]):
+        with patch.object(hot_network.requests, 'Session', return_value=session), patch.object(hot_network.time, 'monotonic', side_effect=[0, 0, 46]):
             with self.assertRaises(hot_network.NetworkError) as cm:
                 hot_network.read_html('https://example.invalid/')
         self.assertEqual(cm.exception.state, 'timeout')

@@ -85,7 +85,7 @@
         items: hotLoaded ? (sort === 'hot' ? [1, 2] : [2, 1]).map(n => ({
           id: `DEMO-${kind}-${n}`, identifier: `DEMO-${kind}-${n}`, source_name: '演示来源',
           category: kind, title: `热片界面示例 ${n}（模拟数据）`, url: '', actors: ['演示演员'], studio: '演示片商', tags: ['模拟数据'], views: 100 + n,
-          date: `2026-10-${10 + n}`, rank: sort === 'hot' ? n : null,
+          date: `2026-10-${10 + n}`, rank: sort === 'hot' ? n : null, cover: 'assets/hot-demo-cover-' + n + '.jpg',
         })) : [],
       })), total: hotLoaded ? kinds.length * 2 : 0,
     };

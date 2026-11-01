@@ -15,6 +15,7 @@ import requests
 
 from .hot_sources import BY_ID
 from .hot_network import read_html, classify, NetworkError
+from .hot_settings import network_options
 
 SUPPORTED = {'dmm', 'fanza', 'giga', 'xcity', 'javbus', 'aventertainments'}
 _LOCK = threading.RLock()
@@ -51,7 +52,8 @@ def status(id):
     with _LOCK:
         state = _jobs.get(id, {})
         return {'supported': id in SUPPORTED, 'running': state.get('running', False),
-                'message': state.get('message', ''),
+                'message': state.get('message', ''), 'phase': state.get('phase', 'idle'),
+                'completed_at': state.get('completed_at', ''), 'success': state.get('success', False),
                 'retry_after': max(0, int(COOLDOWN - (time.monotonic() - state.get('started', -COOLDOWN))))}
 
 
@@ -108,7 +110,7 @@ def start(id, confirmed, on_result):
             return status(id)
         if status(id)['retry_after']:
             raise ValueError('该站确认正在冷却，请稍后重试')
-        _jobs[id] = {'running': True, 'started': time.monotonic(), 'message': '正在读取并核对原站年龄声明…'}
+        _jobs[id] = {'running': True, 'started': time.monotonic(), 'message': '正在读取并核对原站年龄声明…', 'phase': 'reading', 'success': False}
         try:
             threading.Thread(target=_run, args=(id, on_result), name='hot-age-' + id, daemon=True).start()
         except Exception:
@@ -117,13 +119,28 @@ def start(id, confirmed, on_result):
         return status(id)
 
 
+def _phase(id, phase, message):
+    with _LOCK:
+        _jobs[id].update(phase=phase, message=message)
+
+
+def source_url(id):
+    with _LOCK:
+        state = _sessions.get(id, {})
+        if state.get('expires', 0) > time.monotonic():
+            return state.get('verified_url') or BY_ID[id]['url']
+    return BY_ID[id]['url']
+
+
 def _run(id, on_result):
     started = time.monotonic()
-    result = {'checked_at': '', 'http_status': None, 'responded': False}
+    result = {'checked_at': '', 'http_status': None, 'responded': False, 'reachable': False}
+    verified_url = BY_ID[id]['url']
     try:
         from .storage import get_cookiecloud_settings
         from .cookiecloud import get_synced_cookies, CookieCloudError
         cookie_domains = None
+        options = network_options()
         if get_cookiecloud_settings().get('enabled'):
             try:
                 cookie_domains = get_synced_cookies()
@@ -131,33 +148,47 @@ def _run(id, on_result):
                 raise NetworkError('cookiecloud_error', 'CookieCloud 同步失败，请检查配置') from None
         with requests.Session() as session:
             session.cookies.update(cookies(id))
-            code, url, page = read_html(BY_ID[id]['url'], session=session, cookie_domains=cookie_domains, allowed_hosts=_hosts(id))
+            initial = source_url(id)
+            _phase(id, 'reading', '正在读取原站年龄页面…')
+            code, url, page = read_html(initial, session=session, cookie_domains=cookie_domains,
+                                       allowed_hosts=_hosts(id), **options)
             state, message = classify(code, url, page)
             if state == 'age_gate':
                 flow = action(id, url, page)
                 if not flow:
-                    raise NetworkError('age_gate', '未识别到可安全提交的普通年龄声明，请在原站确认或使用 CookieCloud')
+                    raise NetworkError('age_gate', '当前页面确认方式未适配或已改变，请在原站完成后使用 CookieCloud')
                 method, destination, form = flow
+                session.headers['Referer'] = url
+                if method == 'POST':
+                    p = urlsplit(url)
+                    session.headers['Origin'] = p.scheme + '://' + p.netloc
+                _phase(id, 'submitting', '已核对原站声明，正在提交确认…')
                 code, url, page = read_html(destination, session=session, request_method=method,
-                                           form_data=form, cookie_domains=cookie_domains, allowed_hosts=_hosts(id))
+                                           form_data=form, cookie_domains=cookie_domains,
+                                           allowed_hosts=_hosts(id), **options)
                 state, message = classify(code, url, page)
-                # Always recheck the original source with the returned cookie jar.
                 if state not in ('challenge', 'region_blocked', 'denied', 'http_error'):
-                    code, url, page = read_html(BY_ID[id]['url'], session=session, cookie_domains=cookie_domains, allowed_hosts=_hosts(id))
+                    _phase(id, 'verifying', '已提交，正在使用同一会话验证网页…')
+                    # AV Entertainment root is a permanent language/age landing
+                    # page: its original first-party entry, not '/', is the proof.
+                    verified_url = destination if id == 'aventertainments' else BY_ID[id]['url']
+                    code, url, page = read_html(verified_url, session=session, cookie_domains=cookie_domains,
+                                               allowed_hosts=_hosts(id), **options)
                     state, message = classify(code, url, page)
-            if state == 'ok':
+            if state in ('ok', 'js_shell'):
                 jar = requests.cookies.RequestsCookieJar()
                 for cookie in session.cookies:
                     domain = cookie.domain.lstrip('.').lower()
-                    if (cookie.name and len(cookie.value) <= 8192 and
-                            domain in _cookie_domains(id)):
+                    if cookie.name and len(cookie.value) <= 8192 and domain in _cookie_domains(id):
                         jar.set_cookie(copy.copy(cookie))
                 with _LOCK:
-                    _sessions[id] = {'expires': time.monotonic() + TTL, 'jar': jar}
-                message = '已提交/核对年龄声明并重检，普通网页可达；会话仅保存在服务内存'
+                    _sessions[id] = {'expires': time.monotonic() + TTL, 'jar': jar, 'verified_url': verified_url}
+                message = ('年龄声明已验证，HTTP 已连通；页面仍需 JavaScript 渲染' if state == 'js_shell' else
+                           '年龄声明已验证并重检成功；服务端会话已保存')
             elif state == 'age_gate':
-                message = '已尝试确认，但原站仍要求年龄确认；请在原站操作或使用 CookieCloud'
-            result.update(state=state, message=message, http_status=code, responded=True)
+                message = '原站仍返回年龄页；本次确认未生效，请在原站完成后使用 CookieCloud'
+            result.update(state=state, message=message, http_status=code, responded=True,
+                          reachable=200 <= code < 400)
     except NetworkError as error:
         result.update(state=error.state, message=error.message)
     except Exception:
@@ -166,10 +197,9 @@ def _run(id, on_result):
         from datetime import datetime, timezone
         result['checked_at'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
         result['elapsed_ms'] = round((time.monotonic() - started) * 1000)
-        # Publish the fresh connection result BEFORE marking the task finished.
-        # A polling client must never see done + stale age_gate at the boundary.
         try:
             on_result(id, result)
         finally:
             with _LOCK:
-                _jobs[id].update(running=False, message=result['message'])
+                _jobs[id].update(running=False, message=result['message'], phase='finished',
+                                 success=result['state'] in ('ok', 'js_shell'), completed_at=result['checked_at'])

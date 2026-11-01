@@ -18,8 +18,9 @@ def build():
     assets = ['theme.css', 'theme.js', 'icons.js', 'navigation.js', 'navigation.css', 'directory-watch.js', 'directory-watch.css', 'hot.js', 'hot.css', 'page-layouts.css', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js', 'markdown-it.min.js', 'markdown-it.LICENSE', 'comment-markdown.js']
     inputs = [ROOT / 'VERSION', WEB / 'index.html', WEB / 'assets' / 'avatar-catalog.json', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
               ROOT / 'vendor' / 'JavSP' / 'config.yml', ROOT / 'javsp_web' / 'hot_sources.py', DOCS / 'demo-mock.js', DOCS / 'demo.css',
+              DOCS / 'assets' / 'hot-demo-cover-1.jpg', DOCS / 'assets' / 'hot-demo-cover-2.jpg',
               Path(__file__), *sorted((ROOT / 'javsp_web' / 'skills').glob('*/SKILL.md'))]
-    revision = hashlib.sha256(b''.join(path.read_text(encoding='utf-8').encode('utf-8') for path in inputs)).hexdigest()[:12]
+    revision = hashlib.sha256(b''.join(path.read_bytes().replace(b'\r\n', b'\n') if path.suffix not in ('.jpg', '.png') else path.read_bytes() for path in inputs)).hexdigest()[:12]
     tree = ast.parse((ROOT / 'javsp_web' / 'ai.py').read_text(encoding='utf-8'))
     prompt = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
                   and any(isinstance(target, ast.Name) and target.id == 'DEFAULT_SYSTEM_PROMPT' for target in node.targets))

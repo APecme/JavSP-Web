@@ -2,13 +2,13 @@
 (function () {
   'use strict';
   const LABELS = { unchecked: '未检测', ok: '可达', age_gate: '年龄确认', challenge: '验证拦截',
-    region_blocked: '地区限制', maintenance: '维护中', parking: '疑似停放', js_shell: '前端空壳',
-    denied: '拒绝访问', rate_limited: '请求受限', http_error: 'HTTP 错误', timeout: '超时',
+    region_blocked: '地区限制', maintenance: '维护中', parking: '疑似停放', js_shell: '已连通 · 需脚本渲染',
+    denied: '拒绝访问', rate_limited: '请求受限', http_error: 'HTTP 错误', timeout: '服务端超时', proxy_error: '代理连接失败',
     dns_error: 'DNS 失败', tls_error: '证书错误', network_error: '连接失败', unsafe_redirect: '跳转受阻', dns_blocked: '服务端 DNS 受限',
     redirect_error: '跳转失败', not_html: '非网页', too_large: '超出上限', error: '失败',
     not_loaded: '待获取', parse_error: '解析失败', cookiecloud_error: 'CookieCloud 同步失败' };
   const state = { category: 'all', sort: 'latest', films: null, connections: null,
-    generation: 0, connectionGeneration: 0, ageSource: null, agePosting: false, loading: false, checking: false, refreshPending: false, loaded: false,
+    generation: 0, connectionGeneration: 0, ageSource: null, agePosting: false, ageSeenRun: false, loading: false, checking: false, refreshPending: false, loaded: false,
     timer: null, checkingTimer: null, failedPolls: 0, checkFailedPolls: 0 };
   const $ = id => document.getElementById(id);
   const escape = value => String(value == null ? '' : value).replace(/[&<>"']/g, c =>
@@ -43,6 +43,34 @@
     $('hot-message').textContent = text;
     $('hot-message').dataset.error = String(error);
   }
+  function coverUrl(value) {
+    const path = String(value || '');
+    // Never let source HTML inject a remote browser image request.
+    if (document.body?.classList?.contains('demo-mode') && /^assets\/hot-demo-cover-[12]\.jpg$/.test(path)) return path;
+    return /^\/api\/hot\/covers\/[a-f0-9]{64}\.jpg$/.test(path) ? path : '';
+  }
+  function coverMarkup(item) {
+    const src = coverUrl(item.cover);
+    return `<div class="hot-cover" data-cover-state="${src ? 'loading' : 'missing'}"><span class="hot-cover-placeholder" role="status">${src ? '封面加载中…' : '暂无封面'}</span>${src ? `<img class="hot-cover-image" data-hot-cover src="${escape(src)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="${escape(item.identifier)} 封面"><button type="button" class="button secondary hot-cover-retry" data-hot-cover-retry hidden>重试封面</button>` : ''}</div>`;
+  }
+  function coverLoaded(event) {
+    const image = event.target;
+    if (!image?.matches?.('[data-hot-cover]')) return;
+    const wrap = image.closest('.hot-cover');
+    if (!wrap) return;
+    wrap.dataset.coverState = 'loaded';
+    wrap.querySelector('.hot-cover-placeholder').textContent = '';
+    wrap.querySelector('[data-hot-cover-retry]').hidden = true;
+  }
+  function coverFailed(event) {
+    const image = event.target;
+    if (!image?.matches?.('[data-hot-cover]')) return;
+    const wrap = image.closest('.hot-cover');
+    if (!wrap) return;
+    wrap.dataset.coverState = 'error';
+    wrap.querySelector('.hot-cover-placeholder').textContent = '封面加载失败';
+    wrap.querySelector('[data-hot-cover-retry]').hidden = false;
+  }
   function card(item) {
     const sources = item.sources || [{ source_name: item.source_name, url: item.url, rank: item.rank }];
     const facts = [
@@ -52,7 +80,7 @@
       ['浏览', item.views], ['收藏', item.favorites], ['评论', item.comments],
     ].filter(([, value]) => value != null && value !== '');
     const url = safeUrl(item.url);
-    return `<article class="hot-card"><div class="hot-card-top"><span class="hot-type">${escape(categoryLabel(item.category))}</span>${item.rank ? `<span class="hot-rank" title="来源原始名次">#${escape(item.rank)}</span>` : ''}</div><p class="hot-identifier">${escape(item.identifier)}</p><h4>${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(item.title)}</a>` : escape(item.title)}</h4><dl class="hot-facts">${facts.map(([name, value]) => `<div><dt>${escape(name)}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl><div class="hot-tags">${(item.tags || []).slice(0, 8).map(tag => `<span>${escape(tag)}</span>`).join('')}</div><details class="hot-card-sources"><summary>${sources.length} 个资料来源</summary>${sources.map(source => { const href = safeUrl(source.url); return `<p>${href ? `<a href="${escape(href)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.source_name)} ↗</a>` : escape(source.source_name)}${source.rank ? ` · 原站 #${escape(source.rank)}` : ''}<small>${escape(source.label || '')}${source.stale ? ' · 缓存过期/刷新失败' : ''}${source.fetched_at ? ' · ' + escape(time(source.fetched_at)) : ''}</small></p>`; }).join('')}</details></article>`;
+    return `<article class="hot-card">${coverMarkup(item)}<div class="hot-card-top"><span class="hot-type">${escape(categoryLabel(item.category))}</span>${item.rank ? `<span class="hot-rank" title="来源原始名次">#${escape(item.rank)}</span>` : ''}</div><p class="hot-identifier">${escape(item.identifier)}</p><h4>${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(item.title)}</a>` : escape(item.title)}</h4><dl class="hot-facts">${facts.map(([name, value]) => `<div><dt>${escape(name)}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl><div class="hot-tags">${(item.tags || []).slice(0, 8).map(tag => `<span>${escape(tag)}</span>`).join('')}</div><details class="hot-card-sources"><summary>${sources.length} 个资料来源</summary>${sources.map(source => { const href = safeUrl(source.url); return `<p>${href ? `<a href="${escape(href)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.source_name)} ↗</a>` : escape(source.source_name)}${source.rank ? ` · 原站 #${escape(source.rank)}` : ''}<small>${escape(source.label || '')}${source.stale ? ' · 缓存过期/刷新失败' : ''}${source.fetched_at ? ' · ' + escape(time(source.fetched_at)) : ''}</small></p>`; }).join('')}</details></article>`;
   }
   function renderFilms() {
     const data = state.films;
@@ -63,6 +91,9 @@
     const failed = groups.filter(group => !['ok', 'not_loaded'].includes(group.state));
     const warnings = failed.length ? `<details class="hot-source-warnings"><summary>${failed.length} 个来源读取异常（成功数据仍保留）</summary>${failed.map(group => `<p>${escape(group.source_name)}：${escape(group.message)}${group.state === 'age_gate' || group.state === 'cookiecloud_error' ? '；请在设置启用 CookieCloud 并同步。' : ''}</p>`).join('')}</details>` : '';
     $('hot-results').innerHTML = warnings + (items.length ? `<div class="hot-grid" aria-label="统一热片影片墙">${items.map(card).join('')}</div>` : `<div class="hot-empty">暂无可用作品。点击“刷新列表”获取；连接限制详情请打开检测窗口。</div>`);
+    $('hot-results').querySelectorAll?.('[data-hot-cover]').forEach(image => {
+      if (image.complete) (image.naturalWidth > 0 ? coverLoaded : coverFailed)({ target: image });
+    });
     const running = Boolean(data.job?.running);
     $('hot-results').setAttribute('aria-busy', String(running || state.loading));
     $('hot-refresh').disabled = running || state.refreshPending;
@@ -77,22 +108,23 @@
     const sources = data.sources || [];
     const job = data.job || {};
     const checked = sources.filter(s => s.result?.state !== 'unchecked').length;
-    const good = sources.filter(s => s.result?.state === 'ok').length;
-    $('hot-connection-count').textContent = `${sources.length} 个站点 · ${good} 个可达 · 已检测 ${checked}`;
+    const good = sources.filter(s => ['ok', 'js_shell'].includes(s.result?.state)).length;
+    $('hot-connection-count').textContent = `${sources.length} 个站点 · ${good} 个已连通 · 已检测 ${checked}`;
     const button = $('hot-check');
     button.disabled = false; // Always permit reopening the result dialog; server enforces permission/cooldown.
     button.textContent = job.running ? `检测中 ${job.completed}/${job.total}` : job.retry_after > 0 ? `检测连接（${job.retry_after}s）` : '检测连接';
     button.title = data.can_check === false ? '需要管理员权限' : '检测全部30站，不受影片分类影响';
     $('hot-check-message').textContent = job.running ? `正在检测 ${job.completed}/${job.total}，部分站点可能需要等待。` :
-      job.finished_at ? `最近检测完成：${time(job.finished_at)} · 直连/可选 CookieCloud；异常/限制 ${checked - good} 个。` : '尚未检测。点击“检测连接”批量检测全部站点。';
+      job.finished_at ? `最近检测完成：${time(job.finished_at)} · ${data.network?.label || '服务端网络'}；待确认/受限 ${checked - good} 个。` : '尚未检测。点击“检测连接”批量检测全部站点。';
     $('hot-check-progress').hidden = !job.running;
     $('hot-check-progress').max = job.total || 30;
     $('hot-check-progress').value = job.completed || 0;
     $('hot-source-list').innerHTML = sources.map(source => {
       const r = source.result || {};
       const url = safeUrl(source.url);
-      return `<article class="hot-source" data-state="${escape(r.state)}"><div class="hot-source-heading">${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.name)} ↗</a>` : `<strong>${escape(source.name)}</strong>`}<span class="hot-state">${escape(LABELS[r.state] || '未知')}</span></div><p>${escape(r.message)}</p>${r.state === 'age_gate' ? `<div class="hot-hint">${source.age?.supported && data.can_check !== false ? `<button class="button secondary" type="button" data-hot-age="${escape(source.id)}" ${source.age?.running ? 'disabled' : ''}>${source.age?.running ? '年龄确认中…' : '确认年龄并重检'}</button>` : '此站请在原站完成确认。'}<button class="button secondary" type="button" data-hot-cookiecloud>CookieCloud 备用同步</button></div>` : r.state === 'cookiecloud_error' ? '<button class="button secondary" type="button" data-hot-cookiecloud>检查 CookieCloud</button>' : ''}${source.age?.running ? '<p>正在核对原站确认结果…</p>' : ''}<small class="muted">${r.http_status ? `HTTP ${escape(r.http_status)} · ` : ''}${r.elapsed_ms != null ? `${escape(r.elapsed_ms)} ms · ` : ''}${escape(r.checked_at ? time(r.checked_at) : '未检测')}</small></article>`;
+      return `<article class="hot-source" data-state="${escape(r.state)}"><div class="hot-source-heading">${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.name)} ↗</a>` : `<strong>${escape(source.name)}</strong>`}<span class="hot-state">${escape(LABELS[r.state] || '未知')}</span></div><p>${escape(r.message)}</p>${source.age?.message && !source.age?.running ? `<p class="hot-age-result">${escape(source.age.message)}</p>` : ''}${r.state === 'age_gate' ? `<div class="hot-hint">${source.age?.supported && data.can_check !== false ? `<button class="button secondary" type="button" data-hot-age="${escape(source.id)}" ${source.age?.running ? 'disabled' : ''}>${source.age?.running ? '年龄确认中…' : '确认年龄并重检'}</button>` : '此站请在原站完成确认。'}<button class="button secondary" type="button" data-hot-cookiecloud>CookieCloud 备用同步</button></div>` : r.state === 'cookiecloud_error' ? '<button class="button secondary" type="button" data-hot-cookiecloud>检查 CookieCloud</button>' : ''}${['timeout','network_error','proxy_error'].includes(r.state) && data.can_check !== false ? `<button class="button secondary" type="button" data-hot-retry="${escape(source.id)}" ${source.probing ? 'disabled' : ''}>${source.probing ? '重测中…' : '重测此站'}</button>` : ''}${source.age?.running ? `<p>${escape(source.age.message || '正在核对原站确认结果…')}</p>` : ''}<small class="muted">${r.http_status ? `HTTP ${escape(r.http_status)} · ` : ''}${r.elapsed_ms != null ? `${escape(r.elapsed_ms)} ms · ` : ''}${escape(r.checked_at ? time(r.checked_at) : '未检测')}</small></article>`;
     }).join('');
+    renderAgeProgress();
   }
   function active() { return document.querySelector('[data-panel="hot"]')?.classList.contains('active'); }
   function scheduleFilms() {
@@ -143,7 +175,7 @@
   }
   function scheduleConnections() {
     clearTimeout(state.checkingTimer);
-    if (active() && (state.connections?.job?.running || state.connections?.job?.retry_after > 0 || state.connections?.sources?.some(source => source.age?.running)))
+    if (active() && (state.connections?.job?.running || state.connections?.job?.retry_after > 0 || state.connections?.sources?.some(source => source.age?.running || source.probing)))
       state.checkingTimer = setTimeout(() => loadConnections(), 2000);
   }
   async function loadConnections() {
@@ -200,22 +232,59 @@
     const source = state.connections?.sources?.find(item => item.id === id);
     if (!source || !source.age?.supported || state.connections?.can_check === false) return;
     state.ageSource = id;
+    state.ageSeenRun = false;
     $('hot-age-site').textContent = `站点：${source.name}。提交后将重检原站，未通过不会显示为可达。`;
     $('hot-age-confirm').checked = false;
     $('hot-age-message').textContent = '';
+    $('hot-age-submit').textContent = '确认并重新检测';
+    $('hot-age-submit').disabled = false;
     openDialog('hot-age-dialog');
+  }
+  function renderAgeProgress() {
+    if (!state.ageSource) return;
+    const source = state.connections?.sources?.find(item => item.id === state.ageSource);
+    const age = source?.age;
+    if (!age) return;
+    if (age.running) state.ageSeenRun = true;
+    if (age.running || (state.ageSeenRun && age.phase === 'finished')) {
+      $('hot-age-message').textContent = age.message || '正在处理…';
+      $('hot-age-message').dataset.error = String(!age.running && !age.success);
+      $('hot-age-submit').disabled = Boolean(age.running) || state.agePosting;
+      $('hot-age-submit').textContent = age.running ? '正在确认并重检…' : age.success ? '重检已完成' : '确认未通过，可稍后重试';
+    }
   }
   async function submitAge(event) {
     event.preventDefault();
     if (state.agePosting || !state.ageSource || !$('hot-age-confirm').checked) return;
     state.agePosting = true;
+    state.ageSeenRun = true;
     $('hot-age-submit').disabled = true;
+    $('hot-age-submit').textContent = '正在提交…';
+    $('hot-age-message').textContent = '任务正在提交，请等待；关闭窗口不会取消后台任务。';
     try {
-      await api('/age/' + encodeURIComponent(state.ageSource), { method: 'POST', body: JSON.stringify({ confirmed: true }) });
-      $('hot-age-dialog').close();
+      const result = await api('/age/' + encodeURIComponent(state.ageSource), { method: 'POST', body: JSON.stringify({ confirmed: true }) });
+      // Keep the window open, so success/failure and individual phases are visible.
+      $('hot-age-message').textContent = result.message || '已受理，正在读取原站…';
+      $('hot-age-confirm').checked = false;
       await loadConnections();
-    } catch (error) { $('hot-age-message').textContent = error.message; }
-    finally { state.agePosting = false; $('hot-age-submit').disabled = false; }
+    } catch (error) {
+      $('hot-age-message').textContent = error.message;
+      $('hot-age-message').dataset.error = 'true';
+      // A lost POST response does not prove the background job never started.
+      await loadConnections();
+    } finally {
+      state.agePosting = false;
+      $('hot-age-submit').disabled = Boolean(state.connections?.sources?.find(item => item.id === state.ageSource)?.age?.running);
+      renderAgeProgress();
+    }
+  }
+  async function retrySource(id, button) {
+    button.disabled = true;
+    try {
+      await api('/connections/' + encodeURIComponent(id), { method: 'POST', body: '{}' });
+      await loadConnections();
+    } catch (error) { $('hot-check-message').textContent = error.message; }
+    finally { button.disabled = false; }
   }
   function syncControls() {
     document.querySelectorAll('[data-hot-category]').forEach(tab => {
@@ -265,6 +334,20 @@
       });
     });
     document.querySelectorAll('[data-hot-sort]').forEach(button => button.addEventListener('click', () => select(state.category, button.dataset.hotSort)));
+    $('hot-results').addEventListener('load', coverLoaded, true);
+    $('hot-results').addEventListener('error', coverFailed, true);
+    $('hot-results').addEventListener('click', event => {
+      const retry = event.target.closest('[data-hot-cover-retry]');
+      if (!retry) return;
+      const wrap = retry.closest('.hot-cover');
+      const image = wrap.querySelector('[data-hot-cover]');
+      const src = coverUrl(image.getAttribute('src').split('?')[0]);
+      if (!src) return;
+      wrap.dataset.coverState = 'loading';
+      wrap.querySelector('.hot-cover-placeholder').textContent = '正在重试封面…';
+      retry.hidden = true;
+      image.src = src + '?retry=' + Date.now();
+    });
     $('hot-refresh').addEventListener('click', refreshFilms);
     $('hot-check').addEventListener('click', checkConnections);
     $('hot-show-connections').addEventListener('click', () => { openDialog('hot-connections'); loadConnections(); });
@@ -275,6 +358,8 @@
       if (event.target.closest('[data-hot-cookiecloud]')) cookieSettings();
       const button = event.target.closest('[data-hot-age]');
       if (button) openAge(button.dataset.hotAge);
+      const retry = event.target.closest('[data-hot-retry]');
+      if (retry) retrySource(retry.dataset.hotRetry, retry);
     });
     $('hot-connections').addEventListener('close', () => $('hot-check').focus());
     const view = document.querySelector('[data-panel="hot"]');
@@ -286,7 +371,7 @@
     new MutationObserver(enter).observe(view, { attributes: true, attributeFilter: ['class'] });
     if (active()) enter();
   }
-  window.JavspHot = { init, openAge, submitAge, api, safeUrl, escape, openDialog, state, select, loadFilms, refreshFilms, loadConnections, checkConnections };
+  window.JavspHot = { init, coverUrl, coverLoaded, coverFailed, openAge, submitAge, renderAgeProgress, api, safeUrl, escape, openDialog, state, select, loadFilms, refreshFilms, loadConnections, checkConnections };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

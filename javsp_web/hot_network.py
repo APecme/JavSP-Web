@@ -1,6 +1,6 @@
 """Anonymous, size/time-limited public HTML reads for fixed hot-page sources.
 
-No environment proxies or challenge solvers. Optional domain-scoped
+No environment proxies or challenge solvers; explicit default-preset proxy only. Optional domain-scoped
 CookieCloud and explicitly confirmed age-session cookies; redirects are checked and DNS pinned.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.exceptions import ReadTimeoutError, SSLError as Urllib3SSLError
 
 MAX_BYTES = 1_500_000
-MAX_SECONDS = 20
+MAX_SECONDS = 45
 MAX_REDIRECTS = 4
 
 
@@ -48,6 +48,17 @@ def resolve_public(url):
         raise NetworkError('unsafe_redirect', '网页地址无效') from None
 
 
+def public_candidates(parsed, first):
+    try:
+        rows = socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
+        values = [row[4][0] for row in rows if ipaddress.ip_address(row[4][0]).is_global
+                  and not ipaddress.ip_address(row[4][0]).is_multicast]
+        values.sort(key=lambda value: ipaddress.ip_address(value).version)
+        return list(dict.fromkeys([first] + values))[:3]
+    except (OSError, ValueError):
+        return [first]
+
+
 class PinnedTLSAdapter(HTTPAdapter):
     def __init__(self, hostname):
         self.hostname = hostname
@@ -68,17 +79,33 @@ class PublicAdapter(HTTPAdapter):
         self.transports = {}
 
     def send(self, request, **kwargs):
-        parsed, address = resolve_public(request.url)
-        wire = request.copy()
-        host = f'[{address}]' if ':' in address else address
-        wire.url = urlunsplit(('https', host, parsed.path or '/', parsed.query, ''))
-        wire.headers['Host'] = parsed.netloc
-        key = (parsed.hostname, address)
-        if key not in self.transports:
-            self.transports[key] = PinnedTLSAdapter(parsed.hostname)
-        response = self.transports[key].send(wire, **kwargs)
-        response.url, response.request = request.url, request
-        return response
+        parsed, first = resolve_public(request.url)
+        last = None
+        candidates = public_candidates(parsed, first) if request.method == 'GET' else [first]
+        # GET can try alternate validated DNS addresses on connect failure, but
+        # never replay a POST whose mutation may already have reached the server.
+        budget = time.monotonic() + min(15, kwargs.get('timeout', (5, 15))[0])
+        for address in candidates:
+            wire = request.copy()
+            host = f'[{address}]' if ':' in address else address
+            wire.url = urlunsplit(('https', host, parsed.path or '/', parsed.query, ''))
+            wire.headers['Host'] = parsed.netloc
+            key = (parsed.hostname, address)
+            if key not in self.transports:
+                self.transports[key] = PinnedTLSAdapter(parsed.hostname)
+            options = dict(kwargs)
+            remaining = max(0.1, budget - time.monotonic())
+            connect, read = options.get('timeout', (5, 15))
+            options['timeout'] = (min(connect, remaining), read)
+            try:
+                response = self.transports[key].send(wire, **options)
+                response.url, response.request = request.url, request
+                return response
+            except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout) as error:
+                last = error
+                if isinstance(error, requests.exceptions.SSLError) or time.monotonic() >= budget:
+                    raise
+        raise last
 
     def close(self):
         for adapter in self.transports.values():
@@ -86,9 +113,10 @@ class PublicAdapter(HTTPAdapter):
         super().close()
 
 
-def read_html(url, *, cookie_domains=None, session=None, request_method="GET", form_data=None, allowed_hosts=None):
+def read_html(url, *, cookie_domains=None, session=None, request_method="GET", form_data=None, allowed_hosts=None, proxy_url=None, timeout_seconds=20):
     """Return (HTTP code, final URL, decoded HTML); errors contain no remote text."""
-    deadline = time.monotonic() + MAX_SECONDS
+    total = max(15, min(60, float(timeout_seconds)))
+    deadline = time.monotonic() + max(MAX_SECONDS, total)
     from contextlib import nullcontext
     try:
         with (nullcontext(session) if session is not None else requests.Session()) as session:
@@ -99,7 +127,8 @@ def read_html(url, *, cookie_domains=None, session=None, request_method="GET", f
             # unguarded HTTP transport. The same adapter rejects non-HTTPS.
             if not isinstance(session.get_adapter('http://'), PublicAdapter):
                 session.mount('http://', PublicAdapter())
-            session.headers.update({'User-Agent': 'Mozilla/5.0 JavSP-Web/Hot-Connectivity',
+            session.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+                                    'Accept-Language': 'zh-TW,ja;q=0.9,en;q=0.7',
                                     'Accept': 'text/html,application/xhtml+xml',
                                     'Accept-Encoding': 'gzip, deflate'})
             for hop in range(MAX_REDIRECTS + 1):
@@ -116,10 +145,14 @@ def read_html(url, *, cookie_domains=None, session=None, request_method="GET", f
                     clean = domain.lstrip('.').lower()
                     if host == clean or host.endswith('.' + clean):
                         for name, value in values.items():
-                            if name not in session.cookies.get_dict(domain=host):
+                            matches = any(cookie.name == name and (host == cookie.domain.lstrip('.') or host.endswith('.' + cookie.domain.lstrip('.')))
+                                          and not cookie.is_expired() for cookie in session.cookies)
+                            if not matches:
                                 session.cookies.set(name, value, domain=host, path='/', secure=True)
                 options = dict(stream=True, allow_redirects=False,
-                               timeout=(min(5, remaining), min(3, remaining)))
+                               timeout=(min(10, remaining), min(total, remaining)))
+                if proxy_url:
+                    options['proxies'] = {'http': proxy_url, 'https': proxy_url}
                 request = (session.post(url, data=form_data, **options) if request_method == 'POST'
                            else session.get(url, **options))
                 with request as response:
@@ -167,10 +200,12 @@ def read_html(url, *, cookie_domains=None, session=None, request_method="GET", f
                     return code, url, text
     except NetworkError:
         raise
+    except requests.exceptions.ProxyError:
+        raise NetworkError('proxy_error', '服务端代理连接失败，请检查默认刮削预设 → 网络；浏览器使用的代理不一定与服务端相同') from None
     except (requests.exceptions.SSLError, Urllib3SSLError):
         raise NetworkError('tls_error', 'TLS 证书验证失败') from None
     except (requests.exceptions.Timeout, ReadTimeoutError, TimeoutError):
-        raise NetworkError('timeout', '连接或读取超时') from None
+        raise NetworkError('timeout', '服务端连接或读取超时；不代表浏览器无法访问，请检查默认预设的代理/DNS与站点响应速度') from None
     except Exception:
         # Do not echo exceptions: they can contain URLs, proxy auth or HTML.
         raise NetworkError('network_error', '连接失败或响应中断') from None
@@ -192,13 +227,13 @@ def classify(code, url, text):
         return 'maintenance', '站点维护中'
     if re.search(r'access to this site is prohibited in the country|not available in your (country|region)|禁止了你的網路所在國家', visible):
         return 'region_blocked', '已响应，但当前地区受限'
-    if (re.search(r'age[_-]?check|driver-verify', url, re.I)
-            or re.search(r'年齢認証|age verification', title)
-            or (len(visible) < 1600 and re.search(r'あなたは18歳以上|18歳以上の方のみ|18歳未満の方は', visible))):
-        return 'age_gate', '已响应，需在原站确认年龄'
     if (re.search(r'just a moment|attention required|access denied', title)
             or (code == 403 and re.search(r'cloudflare|captcha', visible))):
         return 'challenge', '已响应，但被验证或访问策略拦截'
+    if (re.search(r'年齢認証|age verification', title)
+            or (len(visible) < 1600 and re.search(r'あなたは18歳以上|18歳以上の方のみ|18歳未満の方は', visible))
+            or re.search(r'age[_-]?check|driver-verify', url, re.I)):
+        return 'age_gate', '已响应，需确认年龄'
     if code in (401, 403):
         return 'denied', f'已响应，但拒绝访问（HTTP {code}）'
     if code == 429:
@@ -206,7 +241,7 @@ def classify(code, url, text):
     if not 200 <= code < 300:
         return 'http_error', f'HTTP {code}'
     if not visible:
-        return 'js_shell', '仅有前端空壳或空响应，内容可用性未确认'
+        return 'js_shell', 'HTTP 已连通；静态响应未包含可解析内容（本检测不执行 JavaScript）'
     if len(visible) < 80 and re.search(r'javu-site-index|id=["\'](?:app|root|__nuxt)', text):
-        return 'js_shell', '已响应，内容依赖前端脚本'
+        return 'js_shell', 'HTTP 已连通；页面需要 JavaScript 渲染，浏览器正常打开与此结果不冲突'
     return 'ok', '网页可达；不代表影片列表已接入'

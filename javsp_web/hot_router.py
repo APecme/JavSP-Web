@@ -1,7 +1,7 @@
 """Authenticated read APIs; bounded outbound work only on explicit POSTs."""
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Response, HTTPException
+from fastapi import APIRouter, Depends, Response, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 from . import hot
@@ -60,3 +60,33 @@ def confirm_age(source_id: str, body: AgeConfirmBody, response: Response,
         return hot.confirm_age(source_id, body.confirmed)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from None
+
+
+@router.post('/connections/{source_id}', status_code=202)
+def retry_connection(source_id: str, body: CheckBody, response: Response,
+                     _: dict = Depends(require_admin)):
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        return hot.retry_source(source_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from None
+
+
+@router.get('/covers/{cover_key}.jpg')
+def cover_image(cover_key: str, request: Request):
+    from .hot_covers import get_cover, CoverError
+    import hashlib
+    try:
+        data = get_cover(cover_key)
+    except KeyError:
+        raise HTTPException(status_code=404, detail='封面尚未注册，请刷新热片列表') from None
+    except CoverError as error:
+        raise HTTPException(status_code=503, detail=str(error), headers={
+            'Cache-Control': 'no-store', 'Retry-After': '30'}) from None
+    etag = '"' + hashlib.sha256(data).hexdigest() + '"'
+    headers = {'Cache-Control': 'private, max-age=300', 'ETag': etag,
+               'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'"}
+    from .artwork import _etag_matches
+    if _etag_matches(request.headers.get('if-none-match', ''), etag):
+        return Response(status_code=304, headers=headers)
+    return Response(data, media_type='image/jpeg', headers=headers)

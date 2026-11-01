@@ -18,7 +18,9 @@ import lxml.html
 from .hot_network import NetworkError, classify, read_html
 from .hot_sources import BY_ID, FEEDS, SOURCES
 from .hot_catalog import merge_items
+from .hot_covers import image_from_card
 from . import hot_age
+from .hot_settings import network_options, public_network
 
 CHECK_COOLDOWN = 60
 FEED_COOLDOWN = 120
@@ -27,6 +29,8 @@ MAX_ITEMS = 40
 _LOCK = threading.RLock()
 _check = {}
 _checks = {}
+_single_checks = {}
+_check_revisions = {}
 _feed_job = {}
 _cache = {}
 
@@ -47,8 +51,8 @@ def _public_job(job, cooldown):
 
 def connections():
     with _LOCK:
-        return {'job': _public_job(_check, CHECK_COOLDOWN), 'network_mode': 'direct_cookiecloud_optional',
-                'sources': [dict(BY_ID[id], age=hot_age.status(id), result=copy.deepcopy(_checks.get(id, {
+        return {'job': _public_job(_check, CHECK_COOLDOWN), 'network_mode': 'default_preset', 'network': public_network(),
+                'sources': [dict(BY_ID[id], probing=_single_checks.get(id, {}).get('running', False), age=hot_age.status(id), result=copy.deepcopy(_checks.get(id, {
                     'state': 'unchecked', 'message': '尚未检测', 'checked_at': '', 'http_status': None,
                     'elapsed_ms': None, 'responded': False}))) for id, _, _ in SOURCES]}
 
@@ -57,9 +61,9 @@ def _probe(source):
     start = time.monotonic()
     result = {'checked_at': now(), 'http_status': None, 'responded': False}
     try:
-        code, url, text = _read_source(source['url'], source['id'])
+        code, url, text = _read_source(hot_age.source_url(source['id']), source['id'])
         state, message = classify(code, url, text)
-        result.update(state=state, message=message, http_status=code, responded=True)
+        result.update(state=state, message=message, http_status=code, responded=True, reachable=200 <= code < 400)
     except NetworkError as error:
         result.update(state=error.state, message=error.message)
     except Exception:
@@ -71,6 +75,8 @@ def _probe(source):
 def _run_checks():
     try:
         with ThreadPoolExecutor(max_workers=6, thread_name_prefix='hot-probe') as pool:
+            with _LOCK:
+                revisions = dict(_check_revisions)
             pending = {pool.submit(_probe, BY_ID[id]): id for id, _, _ in SOURCES}
             for future in as_completed(pending):
                 id = pending[future]
@@ -80,7 +86,10 @@ def _run_checks():
                     result = {'state': 'error', 'message': '检测失败', 'checked_at': now(),
                               'http_status': None, 'elapsed_ms': None, 'responded': False}
                 with _LOCK:
-                    _checks[id] = result
+                    age_status = hot_age.status(id)
+                    newer = _checks.get(id, {}).get('checked_at', '') > result.get('checked_at', '')
+                    if not age_status.get('running') and not newer and _check_revisions.get(id, 0) == revisions.get(id, 0):
+                        _checks[id] = result
                     _check['completed'] += 1
     finally:
         with _LOCK:
@@ -101,6 +110,38 @@ def start_checks():
         except Exception:
             _check.update(running=False, finished_at=now())
             raise
+        return connections()
+
+
+def retry_source(id):
+    if id not in BY_ID:
+        raise ValueError('站点不存在')
+    with _LOCK:
+        current = _single_checks.get(id, {})
+        if current.get('running'):
+            return connections()
+        if sum(bool(job.get('running')) for job in _single_checks.values()) >= 3:
+            raise ValueError('单站重测最多同时3站，请稍后再试')
+        if _check.get('running') or hot_age.status(id)['running']:
+            raise ValueError('站点正在检测或确认年龄，请等待当前任务结束')
+        if time.monotonic() - current.get('started', -30) < 30:
+            raise ValueError('单站重测请间隔30秒')
+        _single_checks[id] = {'running': True, 'started': time.monotonic()}
+        version = _check_revisions.get(id, 0)
+        def run():
+            try:
+                result = _probe(BY_ID[id])
+                with _LOCK:
+                    if not hot_age.status(id)['running'] and _check_revisions.get(id, 0) == version:
+                        _checks[id] = result
+            finally:
+                with _LOCK:
+                    _single_checks[id]['running'] = False
+        try:
+            threading.Thread(target=run, name='hot-retry-' + id, daemon=True).start()
+        except Exception:
+            _single_checks[id]['running'] = False
+            raise ValueError('无法开始重测，请稍后再试') from None
         return connections()
 
 
@@ -127,7 +168,7 @@ def _item(id, category, url, title, identifier, date='', rank=None):
     return {'actors': [], 'tags': [], 'studio': '', 'seller': '', 'date_kind': '来源日期',
             'id': id + ':' + identifier, 'source_id': id, 'source_name': BY_ID[id]['name'],
             'category': category, 'url': url, 'title': title[:500], 'identifier': identifier[:80],
-            'date': date, 'rank': rank}
+            'date': date, 'rank': rank, 'cover': ''}
 
 
 def parse_feed(id, category, sort, page, url):
@@ -155,6 +196,7 @@ def parse_feed(id, category, sort, page, url):
                          len(items) + 1 if sort == 'hot' else None)
             if not item:
                 continue
+            item['cover'] = image_from_card(id, card, url)
             item['tags'] = [_text(a, '.')[:60] for a in card.xpath('.//div[contains(@class,"artist-tags")]/a')][:15]
             item['actors'] = [_text(a, '.')[:80] for a in card.xpath('.//div[contains(@class,"articles-avatar")]//a') if _text(a, '.')][:15]
             for metric, icon in [('views', 'remove_red_eye'), ('favorites', 'icon-favorite'), ('comments', 'textsms')]:
@@ -175,6 +217,7 @@ def parse_feed(id, category, sort, page, url):
                          _date(_text(card, './/span[contains(@class,"text-muted")]')),
                          len(items) + 1 if sort == 'hot' else None)
             if item:
+                item['cover'] = image_from_card(id, card, url)
                 item['tags'] = [_text(tag, '.').lstrip('#')[:60] for tag in card.xpath('.//div[contains(@class,"video-list-item-genres")]/span') if _text(tag, '.').strip()][:15]
                 items.append(item)
     elif id in ('faleno', 'dahlia'):
@@ -212,6 +255,7 @@ def parse_feed(id, category, sort, page, url):
                     continue
             item = _item(id, category, href, title, identifier, date, rank)
             if item:
+                item['cover'] = image_from_card(id, card, url)
                 item['studio'] = BY_ID[id]['name']
                 item['date_kind'] = '配信日期'
                 actor = _text(card, './/div[contains(@class,"text_ranking01")][span[contains(text(),"出演女優")]]/p') if id == 'faleno' else _text(card, './/div[contains(@class,"ranking-actress")]/div')
@@ -236,7 +280,9 @@ def _read_source(url, source_id=None):
         except CookieCloudError:
             raise NetworkError('cookiecloud_error', 'CookieCloud 同步失败，请在系统设置测试连接并立即同步') from None
     jar = hot_age.cookies(source_id) if source_id else None
-    options = {'cookie_domains': cookie_domains} if cookie_domains is not None else {}
+    options = network_options()
+    if cookie_domains is not None:
+        options['cookie_domains'] = cookie_domains
     if jar:
         import requests
         with requests.Session() as session:
@@ -248,8 +294,12 @@ def _read_source(url, source_id=None):
 def confirm_age(source_id, confirmed):
     def record(id, result):
         with _LOCK:
+            _check_revisions[id] = _check_revisions.get(id, 0) + 1
             _checks[id] = result
-    return hot_age.start(source_id, confirmed, record)
+    with _LOCK:
+        if _single_checks.get(source_id, {}).get('running'):
+            raise ValueError('该站正在重测，请完成后再确认年龄')
+        return hot_age.start(source_id, confirmed, record)
 
 
 def _refresh_feed(feed):
