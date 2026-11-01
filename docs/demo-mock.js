@@ -70,7 +70,7 @@
     job: { running: false, completed: hotChecked ? 30 : 0, total: 30, retry_after: 0,
       finished_at: hotChecked ? now() : '' },
     sources: (seed.hot_sources || []).map(source => ({ ...source, age: {supported: source.id === 'giga', running:false}, result: {
-      state: hotChecked ? (source.id === 'giga' ? 'age_gate' : 'ok') : 'unchecked', message: hotChecked ? '演示结果，未连接此站点' : '尚未检测（演示）',
+      state: hotChecked ? 'ok' : 'unchecked', message: hotChecked ? '演示结果，未连接此站点' : '尚未检测（演示）',
       checked_at: hotChecked ? now() : '', http_status: hotChecked ? 200 : null,
       elapsed_ms: hotChecked ? 80 : null, responded: hotChecked,
     } })),

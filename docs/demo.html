@@ -9,19 +9,19 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
   <title>交互示例 | JavSP WEB</title>
   <style>html[data-initial-view] [data-panel]{display:none}.view.active{display:block}html[data-initial-view="overview"] [data-panel="overview"],html[data-initial-view="scrape"] [data-panel="scrape"],html[data-initial-view="auto-scrape"] [data-panel="auto-scrape"],html[data-initial-view="downloads"] [data-panel="downloads"],html[data-initial-view="crawler-config"] [data-panel="crawler-config"],html[data-initial-view="presets"] [data-panel="presets"],html[data-initial-view="settings"] [data-panel="settings"]{display:block}</style>
-    <link rel="stylesheet" href="assets/theme.css?v=4288cc1cd057">
-  <link rel="stylesheet" href="assets/app.css?v=4288cc1cd057">
-  <link rel="stylesheet" href="assets/overrides.css?v=4288cc1cd057">
-  <link rel="stylesheet" href="assets/cinema.css?v=4288cc1cd057">
-  <link rel="stylesheet" href="assets/page-layouts.css?v=4288cc1cd057">
-  <link rel="stylesheet" href="assets/directory-watch.css?v=4288cc1cd057">
-  <link rel="stylesheet" href="assets/hot.css?v=4288cc1cd057">
-  <link rel="stylesheet" href="assets/navigation.css?v=4288cc1cd057">
-<link rel="stylesheet" href="demo.css?v=4288cc1cd057">
+    <link rel="stylesheet" href="assets/theme.css?v=65f1fbeb3f5f">
+  <link rel="stylesheet" href="assets/app.css?v=65f1fbeb3f5f">
+  <link rel="stylesheet" href="assets/overrides.css?v=65f1fbeb3f5f">
+  <link rel="stylesheet" href="assets/cinema.css?v=65f1fbeb3f5f">
+  <link rel="stylesheet" href="assets/page-layouts.css?v=65f1fbeb3f5f">
+  <link rel="stylesheet" href="assets/directory-watch.css?v=65f1fbeb3f5f">
+  <link rel="stylesheet" href="assets/hot.css?v=65f1fbeb3f5f">
+  <link rel="stylesheet" href="assets/navigation.css?v=65f1fbeb3f5f">
+<link rel="stylesheet" href="demo.css?v=65f1fbeb3f5f">
 </head>
 <body class="demo-mode">
-<script src="demo-seed.js?v=4288cc1cd057"></script>
-<script src="demo-mock.js?v=4288cc1cd057"></script>
+<script src="demo-seed.js?v=65f1fbeb3f5f"></script>
+<script src="demo-mock.js?v=65f1fbeb3f5f"></script>
   <script>(function(){try{var v=localStorage.getItem('javsp-web.active-view');if(v)document.documentElement.dataset.initialView=v;if(localStorage.getItem('javsp-web.privacy-mode')==='1')document.documentElement.dataset.privacyMode='1';}catch(e){}})();</script>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="主导航">
@@ -45,12 +45,12 @@
     </aside>
     <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
     <main class="main"><aside class="demo-notice" role="note"><strong>在线体验 · v1.1.42 · 模拟数据</strong><span>体验片库分类、明暗主题、隐私模式、预设与 AI 助手。示例不连接模型、不读取影片、不提供真实播放与评论提交；更改在刷新后重置，请勿填写真实密钥。</span><a href="docs.html">使用教程 ↗</a></aside>
-      <header class="topbar"><div><p class="eyebrow" id="section-eyebrow">工作区</p><h1 id="section-title">片库</h1></div><div class="account"><span id="app-version" class="app-version" data-update-status="checking" title="正在检查更新">读取版本…</span><button class="icon-button theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="黑暗模式" title="切换到黑暗模式"><svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="icon-button palette-toggle" type="button" data-accent-toggle aria-expanded="false" aria-label="自定义主题色" title="自定义主题色"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21a9 9 0 1 1 9-9c0 1.8-1.3 3-3 3h-1.6a2.4 2.4 0 0 0-1.8 4c.5.6.2 2-.6 2H12Z"/><circle cx="7.6" cy="11.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="10.4" cy="7.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.8" cy="7.9" r="1.1" fill="currentColor" stroke="none"/><circle cx="16.4" cy="12.3" r="1.1" fill="currentColor" stroke="none"/></svg></button><button class="account-profile" type="button" data-open-profile title="个人中心" aria-label="打开个人中心"><span id="current-avatar"></span><span id="current-user"></span></button><button class="icon-button" id="logout" title="退出登录">退出</button></div></header>
+      <header class="topbar"><div><p class="eyebrow" id="section-eyebrow">工作区</p><h1 id="section-title">片库</h1></div><div class="account"><label class="switch-label global-privacy-toggle" title="全站隐私模式：模糊片库、热片和详情中的图片"><input id="privacy-mode" type="checkbox" role="switch" aria-label="全站隐私模式"><span class="switch-track" aria-hidden="true"></span><span class="global-privacy-label">隐私模式</span></label><span id="app-version" class="app-version" data-update-status="checking" title="正在检查更新">读取版本…</span><button class="icon-button theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="黑暗模式" title="切换到黑暗模式"><svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="icon-button palette-toggle" type="button" data-accent-toggle aria-expanded="false" aria-label="自定义主题色" title="自定义主题色"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21a9 9 0 1 1 9-9c0 1.8-1.3 3-3 3h-1.6a2.4 2.4 0 0 0-1.8 4c.5.6.2 2-.6 2H12Z"/><circle cx="7.6" cy="11.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="10.4" cy="7.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.8" cy="7.9" r="1.1" fill="currentColor" stroke="none"/><circle cx="16.4" cy="12.3" r="1.1" fill="currentColor" stroke="none"/></svg></button><button class="account-profile" type="button" data-open-profile title="个人中心" aria-label="打开个人中心"><span id="current-avatar"></span><span id="current-user"></span></button><button class="icon-button" id="logout" title="退出登录">退出</button></div></header>
 
       <section class="view active" data-panel="overview">
         <div class="lc-overview">
           <div class="metric-grid lc-stats"><article class="metric lc-stat" data-tone="violet"><span class="lc-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg></span><strong id="metric-films">-</strong><span>影片收藏</span></article><article class="metric lc-stat" data-tone="pink"><span class="lc-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span><strong id="metric-total">0</strong><span>任务记录</span></article><article class="metric lc-stat" data-tone="amber"><span class="lc-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></span><strong id="metric-running">0</strong><span>运行中</span></article><article class="metric lc-stat" data-tone="green"><span class="lc-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 16 5-5 4 4 7-7"/><path d="M15 8h5v5"/></svg></span><strong id="metric-result">-</strong><span>最近结果</span></article></div>
-          <div class="lc-toolbar"><div id="overview-group-tabs" class="lc-tabs" role="tablist" aria-label="分类方式"></div><form id="library-search-form" class="library-search-bar lc-search"><label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="library-search" type="search" placeholder="搜索分类名称" aria-label="搜索媒体库" maxlength="200" autocomplete="off"></label><button class="button secondary" type="submit">搜索</button><button class="icon-button" type="reset">清除</button></form><div class="lc-toolbar-actions"><label class="switch-label" title="模糊封面与剧照"><input id="privacy-mode" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span><span>隐私模式</span></label><button class="button primary" data-go="scrape"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>添加影片</button></div></div>
+          <div class="lc-toolbar"><div id="overview-group-tabs" class="lc-tabs" role="tablist" aria-label="分类方式"></div><form id="library-search-form" class="library-search-bar lc-search"><label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="library-search" type="search" placeholder="搜索分类名称" aria-label="搜索媒体库" maxlength="200" autocomplete="off"></label><button class="button secondary" type="submit">搜索</button><button class="icon-button" type="reset">清除</button></form><div class="lc-toolbar-actions"><button class="button primary" data-go="scrape"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>添加影片</button></div></div>
           <div class="overview-panel"><div id="overview-tasks" class="task-list"><p class="lc-loading">正在读取媒体库…</p></div></div>
         </div>
       </section>
@@ -169,9 +169,9 @@
           <p class="muted hot-notice" id="hot-notice">统一影片墙合并已接入站点并去重，来源和原始排名保留。最新按日期排序，最热按来源名次交错排列，不冒充全网热度。</p>
           <p id="hot-message" class="hot-message" role="status" aria-live="polite"></p>
           <div id="hot-results" role="tabpanel" aria-labelledby="hot-tab-all" aria-busy="false"><p class="muted">正在准备热片列表…</p></div>
-          <dialog class="app-dialog hot-dialog" id="hot-age-dialog" aria-labelledby="hot-age-title"><div class="hot-dialog-heading"><h2 id="hot-age-title">确认年龄声明</h2><button class="icon-button" id="hot-age-close" type="button" aria-label="关闭年龄确认"><span data-icon="close"></span></button></div><form id="hot-age-form" class="hot-dialog-body stack"><p id="hot-age-site"></p><p class="muted">仅提交原站普通年龄声明并重新检测。不处理账号登录、验证码或证件核验；原站需要登录或脚本时，请在原站操作后使用 CookieCloud；提交后此窗口显示进度与最终结果。确认后的会话 Cookie 仅存于此服务内存，重启或12小时后失效，由本服务登录用户共享。</p><label class="check-label"><input type="checkbox" id="hot-age-confirm" required>我已达到该站点与所在地要求的法定年龄，授权提交该站年龄声明并保存服务会话</label><p id="hot-age-message" role="status" aria-live="polite"></p><button class="button primary" type="submit" id="hot-age-submit">确认并重新检测</button></form></dialog>
+
           <p class="hot-connection-short"><button id="hot-show-connections" type="button" class="button secondary">查看连接结果</button><span id="hot-connection-count" class="muted">30 个站点</span></p>
-          <dialog class="app-dialog hot-dialog" id="hot-connections" aria-labelledby="hot-connections-title"><div class="hot-dialog-heading"><div><h2 id="hot-connections-title">站点连接检测</h2><p class="muted">检测来自服务端，不是当前浏览器；关闭窗口不会取消后台任务。</p></div><button class="icon-button" id="hot-connections-close" type="button" aria-label="关闭连接检测"><span data-icon="close"></span></button></div><div class="hot-dialog-body"><p class="muted">使用默认刮削预设的代理与超时；已启用 CookieCloud 时同步匹配域名 Cookie。HTTP 连通与页面内容解析分开判定，需脚本渲染不表示连接失败。浏览器可能使用不同的代理、DNS 和登录态。</p><p id="hot-check-message" role="status" aria-live="polite"></p><progress id="hot-check-progress" max="30" value="0" hidden aria-label="站点检测进度"></progress><div class="hot-dialog-tools"><button type="button" class="button secondary" data-hot-cookiecloud>设置 CookieCloud</button></div><div id="hot-source-list" class="hot-source-list"></div></div></dialog>
+          <dialog class="app-dialog hot-dialog" id="hot-connections" aria-labelledby="hot-connections-title"><div class="hot-dialog-heading"><div><h2 id="hot-connections-title">站点连接检测</h2><p class="muted">检测来自服务端，不是当前浏览器；关闭窗口不会取消后台任务。</p></div><button class="icon-button" id="hot-connections-close" type="button" aria-label="关闭连接检测"><span data-icon="close"></span></button></div><div class="hot-dialog-body"><p class="muted">使用默认刮削预设的代理与超时；已适配的普通年龄声明自动处理，遇到登录/验证码/证件核验不自动代办。已启用 CookieCloud 时同步匹配域名 Cookie。HTTP 连通与页面内容解析分开判定，需脚本渲染不表示连接失败。浏览器可能使用不同的代理、DNS 和登录态。</p><p id="hot-check-message" role="status" aria-live="polite"></p><progress id="hot-check-progress" max="30" value="0" hidden aria-label="站点检测进度"></progress><div class="hot-dialog-tools"><button type="button" class="button secondary" data-hot-cookiecloud>设置 CookieCloud</button></div><div id="hot-source-list" class="hot-source-list"></div></div></dialog>
 
 
         </div>
@@ -275,16 +275,16 @@
       <button id="update-overlay-close" class="button secondary" type="button" hidden>关闭提示</button>
     </div>
   </div>
-  <script defer src="assets/theme.js?v=4288cc1cd057"></script>
-  <script defer src="assets/icons.js?v=4288cc1cd057"></script>
-  <script defer src="assets/markdown-it.min.js?v=4288cc1cd057"></script>
-  <script defer src="assets/comment-markdown.js?v=4288cc1cd057"></script>
-  <script defer src="assets/community.js?v=4288cc1cd057"></script>
-  <script defer src="assets/demo-app.js?v=4288cc1cd057"></script>
-  <script defer src="assets/directory-watch.js?v=4288cc1cd057"></script>
-  <script defer src="assets/hot.js?v=4288cc1cd057"></script>
-  <script defer src="assets/navigation.js?v=4288cc1cd057"></script>
-  <script defer src="assets/ai-markdown.js?v=4288cc1cd057"></script>
-  <script defer src="assets/ai.js?v=4288cc1cd057"></script>
+  <script defer src="assets/theme.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/icons.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/markdown-it.min.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/comment-markdown.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/community.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/demo-app.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/directory-watch.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/hot.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/navigation.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/ai-markdown.js?v=65f1fbeb3f5f"></script>
+  <script defer src="assets/ai.js?v=65f1fbeb3f5f"></script>
 </body>
 </html>

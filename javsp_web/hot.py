@@ -279,6 +279,8 @@ def _read_source(url, source_id=None):
             cookie_domains = get_synced_cookies()
         except CookieCloudError:
             raise NetworkError('cookiecloud_error', 'CookieCloud 同步失败，请在系统设置测试连接并立即同步') from None
+    if source_id in hot_age.SUPPORTED:
+        return hot_age.read_automatically(source_id, url, reader=read_html, cookie_domains=cookie_domains, **network_options())
     jar = hot_age.cookies(source_id) if source_id else None
     options = network_options()
     if cookie_domains is not None:

@@ -1,14 +1,14 @@
 /* Hot discovery: no external requests in the browser; independent of app.js. */
 (function () {
   'use strict';
-  const LABELS = { unchecked: '未检测', ok: '可达', age_gate: '年龄确认', challenge: '验证拦截',
+  const LABELS = { unchecked: '未检测', ok: '可达', age_gate: '年龄声明未通过', challenge: '验证拦截',
     region_blocked: '地区限制', maintenance: '维护中', parking: '疑似停放', js_shell: '已连通 · 需脚本渲染',
     denied: '拒绝访问', rate_limited: '请求受限', http_error: 'HTTP 错误', timeout: '服务端超时', proxy_error: '代理连接失败',
     dns_error: 'DNS 失败', tls_error: '证书错误', network_error: '连接失败', unsafe_redirect: '跳转受阻', dns_blocked: '服务端 DNS 受限',
     redirect_error: '跳转失败', not_html: '非网页', too_large: '超出上限', error: '失败',
-    not_loaded: '待获取', parse_error: '解析失败', cookiecloud_error: 'CookieCloud 同步失败' };
+    age_pending: '自动确认中', not_loaded: '待获取', parse_error: '解析失败', cookiecloud_error: 'CookieCloud 同步失败' };
   const state = { category: 'all', sort: 'latest', films: null, connections: null,
-    generation: 0, connectionGeneration: 0, ageSource: null, agePosting: false, ageSeenRun: false, loading: false, checking: false, refreshPending: false, loaded: false,
+    generation: 0, connectionGeneration: 0, loading: false, checking: false, refreshPending: false, loaded: false,
     timer: null, checkingTimer: null, failedPolls: 0, checkFailedPolls: 0 };
   const $ = id => document.getElementById(id);
   const escape = value => String(value == null ? '' : value).replace(/[&<>"']/g, c =>
@@ -122,9 +122,8 @@
     $('hot-source-list').innerHTML = sources.map(source => {
       const r = source.result || {};
       const url = safeUrl(source.url);
-      return `<article class="hot-source" data-state="${escape(r.state)}"><div class="hot-source-heading">${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.name)} ↗</a>` : `<strong>${escape(source.name)}</strong>`}<span class="hot-state">${escape(LABELS[r.state] || '未知')}</span></div><p>${escape(r.message)}</p>${source.age?.message && !source.age?.running ? `<p class="hot-age-result">${escape(source.age.message)}</p>` : ''}${r.state === 'age_gate' ? `<div class="hot-hint">${source.age?.supported && data.can_check !== false ? `<button class="button secondary" type="button" data-hot-age="${escape(source.id)}" ${source.age?.running ? 'disabled' : ''}>${source.age?.running ? '年龄确认中…' : '确认年龄并重检'}</button>` : '此站请在原站完成确认。'}<button class="button secondary" type="button" data-hot-cookiecloud>CookieCloud 备用同步</button></div>` : r.state === 'cookiecloud_error' ? '<button class="button secondary" type="button" data-hot-cookiecloud>检查 CookieCloud</button>' : ''}${['timeout','network_error','proxy_error'].includes(r.state) && data.can_check !== false ? `<button class="button secondary" type="button" data-hot-retry="${escape(source.id)}" ${source.probing ? 'disabled' : ''}>${source.probing ? '重测中…' : '重测此站'}</button>` : ''}${source.age?.running ? `<p>${escape(source.age.message || '正在核对原站确认结果…')}</p>` : ''}<small class="muted">${r.http_status ? `HTTP ${escape(r.http_status)} · ` : ''}${r.elapsed_ms != null ? `${escape(r.elapsed_ms)} ms · ` : ''}${escape(r.checked_at ? time(r.checked_at) : '未检测')}</small></article>`;
+      return `<article class="hot-source" data-state="${escape(r.state)}"><div class="hot-source-heading">${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.name)} ↗</a>` : `<strong>${escape(source.name)}</strong>`}<span class="hot-state">${escape(LABELS[r.state] || '未知')}</span></div><p>${escape(r.message)}</p>${source.age?.message && !source.age?.running ? `<p class="hot-age-result">${escape(source.age.message)}</p>` : ''}${r.state === 'age_gate' ? '<div class="hot-hint">普通年龄声明已自动尝试；若仍受限，可在原站操作后使用 CookieCloud。<button class="button secondary" type="button" data-hot-cookiecloud>CookieCloud 备用同步</button></div>' : r.state === 'cookiecloud_error' ? '<button class="button secondary" type="button" data-hot-cookiecloud>检查 CookieCloud</button>' : ''}${['timeout','network_error','proxy_error'].includes(r.state) && data.can_check !== false ? `<button class="button secondary" type="button" data-hot-retry="${escape(source.id)}" ${source.probing ? 'disabled' : ''}>${source.probing ? '重测中…' : '重测此站'}</button>` : ''}${source.age?.running ? `<p>${escape(source.age.message || '正在核对原站确认结果…')}</p>` : ''}<small class="muted">${r.http_status ? `HTTP ${escape(r.http_status)} · ` : ''}${r.elapsed_ms != null ? `${escape(r.elapsed_ms)} ms · ` : ''}${escape(r.checked_at ? time(r.checked_at) : '未检测')}</small></article>`;
     }).join('');
-    renderAgeProgress();
   }
   function active() { return document.querySelector('[data-panel="hot"]')?.classList.contains('active'); }
   function scheduleFilms() {
@@ -228,56 +227,6 @@
     const panel = $('cookiecloud-panel');
     if (panel) { panel.open = true; panel.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   }
-  function openAge(id) {
-    const source = state.connections?.sources?.find(item => item.id === id);
-    if (!source || !source.age?.supported || state.connections?.can_check === false) return;
-    state.ageSource = id;
-    state.ageSeenRun = false;
-    $('hot-age-site').textContent = `站点：${source.name}。提交后将重检原站，未通过不会显示为可达。`;
-    $('hot-age-confirm').checked = false;
-    $('hot-age-message').textContent = '';
-    $('hot-age-submit').textContent = '确认并重新检测';
-    $('hot-age-submit').disabled = false;
-    openDialog('hot-age-dialog');
-  }
-  function renderAgeProgress() {
-    if (!state.ageSource) return;
-    const source = state.connections?.sources?.find(item => item.id === state.ageSource);
-    const age = source?.age;
-    if (!age) return;
-    if (age.running) state.ageSeenRun = true;
-    if (age.running || (state.ageSeenRun && age.phase === 'finished')) {
-      $('hot-age-message').textContent = age.message || '正在处理…';
-      $('hot-age-message').dataset.error = String(!age.running && !age.success);
-      $('hot-age-submit').disabled = Boolean(age.running) || state.agePosting;
-      $('hot-age-submit').textContent = age.running ? '正在确认并重检…' : age.success ? '重检已完成' : '确认未通过，可稍后重试';
-    }
-  }
-  async function submitAge(event) {
-    event.preventDefault();
-    if (state.agePosting || !state.ageSource || !$('hot-age-confirm').checked) return;
-    state.agePosting = true;
-    state.ageSeenRun = true;
-    $('hot-age-submit').disabled = true;
-    $('hot-age-submit').textContent = '正在提交…';
-    $('hot-age-message').textContent = '任务正在提交，请等待；关闭窗口不会取消后台任务。';
-    try {
-      const result = await api('/age/' + encodeURIComponent(state.ageSource), { method: 'POST', body: JSON.stringify({ confirmed: true }) });
-      // Keep the window open, so success/failure and individual phases are visible.
-      $('hot-age-message').textContent = result.message || '已受理，正在读取原站…';
-      $('hot-age-confirm').checked = false;
-      await loadConnections();
-    } catch (error) {
-      $('hot-age-message').textContent = error.message;
-      $('hot-age-message').dataset.error = 'true';
-      // A lost POST response does not prove the background job never started.
-      await loadConnections();
-    } finally {
-      state.agePosting = false;
-      $('hot-age-submit').disabled = Boolean(state.connections?.sources?.find(item => item.id === state.ageSource)?.age?.running);
-      renderAgeProgress();
-    }
-  }
   async function retrySource(id, button) {
     button.disabled = true;
     try {
@@ -351,13 +300,9 @@
     $('hot-refresh').addEventListener('click', refreshFilms);
     $('hot-check').addEventListener('click', checkConnections);
     $('hot-show-connections').addEventListener('click', () => { openDialog('hot-connections'); loadConnections(); });
-    $('hot-age-close').addEventListener('click', () => $('hot-age-dialog').close());
-    $('hot-age-form').addEventListener('submit', submitAge);
     $('hot-connections-close').addEventListener('click', () => $('hot-connections').close());
     $('hot-connections').addEventListener('click', event => {
       if (event.target.closest('[data-hot-cookiecloud]')) cookieSettings();
-      const button = event.target.closest('[data-hot-age]');
-      if (button) openAge(button.dataset.hotAge);
       const retry = event.target.closest('[data-hot-retry]');
       if (retry) retrySource(retry.dataset.hotRetry, retry);
     });
@@ -371,7 +316,7 @@
     new MutationObserver(enter).observe(view, { attributes: true, attributeFilter: ['class'] });
     if (active()) enter();
   }
-  window.JavspHot = { init, coverUrl, coverLoaded, coverFailed, openAge, submitAge, renderAgeProgress, api, safeUrl, escape, openDialog, state, select, loadFilms, refreshFilms, loadConnections, checkConnections };
+  window.JavspHot = { init, coverUrl, coverLoaded, coverFailed, api, safeUrl, escape, openDialog, state, select, loadFilms, refreshFilms, loadConnections, checkConnections };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

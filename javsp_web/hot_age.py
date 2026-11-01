@@ -1,4 +1,4 @@
-"""Explicit adult self-declaration only; no automated ID/login/captcha solving.
+"""Known ordinary age declarations only; no automated ID/login/captcha solving.
 
 Fixed per-site flows must be present in the current age-gate HTML before any
 submission. Cookies are process-local, source-scoped and expire after 12 hours.
@@ -27,14 +27,14 @@ COOLDOWN = 60
 
 def _hosts(id):
     if id in ('dmm', 'fanza'):
-        return {'www.dmm.co.jp', 'video.dmm.co.jp'}
+        return {'www.dmm.co.jp', 'dmm.co.jp', 'video.dmm.co.jp', 'www.fanza.jp', 'fanza.jp'}
     return {urlsplit(BY_ID[id]['url']).hostname}
 
 
 def _cookie_domains(id):
     # Explicit parent domains, not arbitrary suffixes such as co.jp/com.
     if id in ('dmm', 'fanza'):
-        return {'www.dmm.co.jp', 'video.dmm.co.jp', 'dmm.co.jp'}
+        return _hosts(id)
     host = next(iter(_hosts(id)))
     return {host, host.removeprefix('www.')}
 
@@ -71,8 +71,12 @@ def action(id, url, text):
         qs = parse_qs(p.query)
         if id in ('dmm', 'fanza') and p.hostname == 'www.dmm.co.jp' and p.path == '/age_check/=/declared=yes/':
             targets = qs.get('rurl', [])
-            expected = BY_ID[id]['url'] if id == 'dmm' else 'https://www.dmm.co.jp/top/'
-            if targets != [expected]:
+            if len(targets) != 1:
+                continue
+            target = urlsplit(targets[0])
+            if (target.scheme != 'https' or target.hostname not in _hosts(id) or target.username
+                    or target.password or target.port not in (None, 443) or target.query or target.fragment
+                    or target.path not in ('/', '/top/', '/av/')):
                 continue
             return 'GET', href, None
         if id == 'giga' and p.path == '/cookie_set.php' and not p.query:
@@ -132,63 +136,114 @@ def source_url(id):
     return BY_ID[id]['url']
 
 
+_flow_locks = {id: threading.Lock() for id in SUPPORTED}
+
+
+def _perform(id, reader, target_url, cookie_domains, options, allow_submit=True):
+    """Return the actual last page, never infer success from submitting a button."""
+    verified_url = target_url
+    with requests.Session() as session:
+        session.cookies.update(cookies(id))
+        _phase(id, 'reading', '正在读取原站页面…')
+        code, url, page = reader(target_url, session=session, cookie_domains=cookie_domains,
+                                 allowed_hosts=_hosts(id), **options)
+        state, message = classify(code, url, page)
+        if state == 'age_gate' and allow_submit:
+            flow = action(id, url, page)
+            if not flow:
+                raise NetworkError('age_gate', '当前年龄声明方式未适配或已改变，请在原站完成后使用 CookieCloud')
+            method, destination, form = flow
+            session.headers['Referer'] = url
+            if method == 'POST':
+                p = urlsplit(url)
+                session.headers['Origin'] = p.scheme + '://' + p.netloc
+            _phase(id, 'submitting', '正在自动提交已适配的普通年龄声明…')
+            code, url, page = reader(destination, session=session, request_method=method,
+                                     form_data=form, cookie_domains=cookie_domains,
+                                     allowed_hosts=_hosts(id), **options)
+            state, message = classify(code, url, page)
+            if state not in ('challenge', 'region_blocked', 'denied', 'http_error'):
+                _phase(id, 'verifying', '已自动提交，正在使用同一会话重检…')
+                verified_url = destination if id == 'aventertainments' else target_url
+                code, url, page = reader(verified_url, session=session, cookie_domains=cookie_domains,
+                                         allowed_hosts=_hosts(id), **options)
+                state, message = classify(code, url, page)
+        if state in ('ok', 'js_shell'):
+            jar = requests.cookies.RequestsCookieJar()
+            for cookie in session.cookies:
+                domain = cookie.domain.lstrip('.').lower()
+                if cookie.name and len(cookie.value) <= 8192 and domain in _cookie_domains(id):
+                    jar.set_cookie(copy.copy(cookie))
+            with _LOCK:
+                _sessions[id] = {'expires': time.monotonic() + TTL, 'jar': jar, 'verified_url': verified_url}
+        return code, url, page
+
+
+def _cookiecloud():
+    from .storage import get_cookiecloud_settings
+    from .cookiecloud import get_synced_cookies, CookieCloudError
+    if get_cookiecloud_settings().get('enabled'):
+        try:
+            return get_synced_cookies()
+        except CookieCloudError:
+            raise NetworkError('cookiecloud_error', 'CookieCloud 同步失败，请检查配置') from None
+    return None
+
+
+def _finish(id, code, url, page):
+    state, message = classify(code, url, page)
+    success = state in ('ok', 'js_shell')
+    if success:
+        message = '普通网页可达，年龄声明已自动处理（若原站要求）；服务端会话已复用'
+    elif state == 'age_gate':
+        message = '已自动尝试年龄声明，原站仍返回年龄页；可在浏览器完成后使用 CookieCloud'
+    from datetime import datetime, timezone
+    with _LOCK:
+        _jobs[id].update(running=False, phase='finished', success=success, message=message,
+                         completed_at=datetime.now(timezone.utc).isoformat(timespec='seconds'))
+    return state, message
+
+
+def read_automatically(id, target_url, *, reader=None, cookie_domains=None, **options):
+    """Only invoked by explicitly requested detection/list refresh, never a GET poll.
+
+    One operation per source; a failed declaration is not resubmitted within the
+    cooldown. The page is still read on later requests using any saved session.
+    """
+    if id not in SUPPORTED:
+        raise ValueError('来源未适配普通年龄声明')
+    lock = _flow_locks[id]
+    if not lock.acquire(timeout=2):
+        raise NetworkError('age_pending', '该站正在自动处理年龄声明，请稍后重测')
+    try:
+        with _LOCK:
+            previous = _jobs.get(id, {})
+            allow_submit = time.monotonic() - previous.get('started', -COOLDOWN) >= COOLDOWN
+            started = time.monotonic() if allow_submit else previous.get('started', time.monotonic())
+            _jobs[id] = {'running': True, 'started': started, 'phase': 'reading', 'success': False,
+                         'message': '正在读取，遇到普通年龄声明将自动处理…'}
+        try:
+            result = _perform(id, reader or read_html, target_url, cookie_domains, options, allow_submit)
+            _finish(id, *result)
+            return result
+        except Exception as error:
+            message = error.message if isinstance(error, NetworkError) else '自动年龄确认未完成，请稍后重测或使用 CookieCloud'
+            with _LOCK:
+                _jobs[id].update(running=False, phase='finished', success=False, message=message)
+            raise
+    finally:
+        lock.release()
+
+
 def _run(id, on_result):
+    # Compatibility for explicit retry API; normal detection uses automatic flow.
     started = time.monotonic()
     result = {'checked_at': '', 'http_status': None, 'responded': False, 'reachable': False}
-    verified_url = BY_ID[id]['url']
     try:
-        from .storage import get_cookiecloud_settings
-        from .cookiecloud import get_synced_cookies, CookieCloudError
-        cookie_domains = None
-        options = network_options()
-        if get_cookiecloud_settings().get('enabled'):
-            try:
-                cookie_domains = get_synced_cookies()
-            except CookieCloudError:
-                raise NetworkError('cookiecloud_error', 'CookieCloud 同步失败，请检查配置') from None
-        with requests.Session() as session:
-            session.cookies.update(cookies(id))
-            initial = source_url(id)
-            _phase(id, 'reading', '正在读取原站年龄页面…')
-            code, url, page = read_html(initial, session=session, cookie_domains=cookie_domains,
-                                       allowed_hosts=_hosts(id), **options)
-            state, message = classify(code, url, page)
-            if state == 'age_gate':
-                flow = action(id, url, page)
-                if not flow:
-                    raise NetworkError('age_gate', '当前页面确认方式未适配或已改变，请在原站完成后使用 CookieCloud')
-                method, destination, form = flow
-                session.headers['Referer'] = url
-                if method == 'POST':
-                    p = urlsplit(url)
-                    session.headers['Origin'] = p.scheme + '://' + p.netloc
-                _phase(id, 'submitting', '已核对原站声明，正在提交确认…')
-                code, url, page = read_html(destination, session=session, request_method=method,
-                                           form_data=form, cookie_domains=cookie_domains,
-                                           allowed_hosts=_hosts(id), **options)
-                state, message = classify(code, url, page)
-                if state not in ('challenge', 'region_blocked', 'denied', 'http_error'):
-                    _phase(id, 'verifying', '已提交，正在使用同一会话验证网页…')
-                    # AV Entertainment root is a permanent language/age landing
-                    # page: its original first-party entry, not '/', is the proof.
-                    verified_url = destination if id == 'aventertainments' else BY_ID[id]['url']
-                    code, url, page = read_html(verified_url, session=session, cookie_domains=cookie_domains,
-                                               allowed_hosts=_hosts(id), **options)
-                    state, message = classify(code, url, page)
-            if state in ('ok', 'js_shell'):
-                jar = requests.cookies.RequestsCookieJar()
-                for cookie in session.cookies:
-                    domain = cookie.domain.lstrip('.').lower()
-                    if cookie.name and len(cookie.value) <= 8192 and domain in _cookie_domains(id):
-                        jar.set_cookie(copy.copy(cookie))
-                with _LOCK:
-                    _sessions[id] = {'expires': time.monotonic() + TTL, 'jar': jar, 'verified_url': verified_url}
-                message = ('年龄声明已验证，HTTP 已连通；页面仍需 JavaScript 渲染' if state == 'js_shell' else
-                           '年龄声明已验证并重检成功；服务端会话已保存')
-            elif state == 'age_gate':
-                message = '原站仍返回年龄页；本次确认未生效，请在原站完成后使用 CookieCloud'
-            result.update(state=state, message=message, http_status=code, responded=True,
-                          reachable=200 <= code < 400)
+        with _flow_locks[id]:
+            code, url, page = _perform(id, read_html, source_url(id), _cookiecloud(), network_options())
+            state, message = _finish(id, code, url, page)
+        result.update(state=state, message=message, http_status=code, responded=True, reachable=200 <= code < 400)
     except NetworkError as error:
         result.update(state=error.state, message=error.message)
     except Exception:

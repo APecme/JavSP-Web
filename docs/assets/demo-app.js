@@ -4248,8 +4248,10 @@ function formatLocalDateTime(value) {
 const privacyMode = $('#privacy-mode');
 if (privacyMode) {
   privacyMode.checked = state.privacyMode;
+  privacyMode.setAttribute('aria-checked', String(state.privacyMode));
   privacyMode.addEventListener('change', () => {
     state.privacyMode = privacyMode.checked;
+    privacyMode.setAttribute('aria-checked', String(state.privacyMode));
     document.documentElement.dataset.privacyMode = state.privacyMode ? '1' : '0';
     try { localStorage.setItem('javsp-web.privacy-mode', state.privacyMode ? '1' : '0'); } catch (_) {}
     // Force a reflow so compositor layers drop any stale blur/scale instead of ghosting
