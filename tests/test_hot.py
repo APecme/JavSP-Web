@@ -54,7 +54,7 @@ class HotTests(unittest.TestCase):
         self.assertEqual(len(SOURCES), 30)
         self.assertTrue(all(url.startswith('https://') for _, _, url in SOURCES))
         self.assertEqual(len(BY_ID), 30)
-        self.assertEqual(len(FEEDS), 8)
+        self.assertEqual(len(FEEDS), 10)
 
     def test_latest_parsing_sorts_real_dates_not_source_order(self):
         items = hot.parse_feed('faleno', 'censored', 'latest', FALENO, BY_ID['faleno']['url'])
@@ -91,34 +91,34 @@ class HotTests(unittest.TestCase):
 
     def test_filters_are_separate_and_get_never_reads_network(self):
         with patch.object(hot, 'read_html') as network:
-            self.assertEqual(len(hot.films('all', 'latest')['groups']), 4)
-            self.assertEqual(len(hot.films('censored', 'hot')['groups']), 3)
+            self.assertEqual(len(hot.films('all', 'latest')['groups']), 5)
+            self.assertEqual(len(hot.films('censored', 'hot')['groups']), 4)
             uncensored = hot.films('uncensored', 'hot')
-            self.assertEqual(len(uncensored['groups']), 1)
-            self.assertEqual(uncensored['groups'][0]['category'], 'uncensored')
+            self.assertEqual(len(uncensored['groups']), 2)
+            self.assertEqual(uncensored['groups'][-1]['category'], 'uncensored')
             self.assertEqual(uncensored['total'], 0)
             self.assertEqual(len(hot.connections()['sources']), 30)
             network.assert_not_called()
 
     def test_failed_refresh_keeps_last_success_and_marks_stale(self):
-        feed = FEEDS[1]
+        feed = next(f for f in FEEDS if f[:3] == ('faleno', 'censored', 'hot'))
         hot._feed_job.update(completed=0, running=True)
         with patch.object(hot, 'read_html', return_value=(200, feed[3], FALENO)):
             hot._run_feeds([feed])
-        good = copy.deepcopy(hot.films('censored', 'hot')['groups'][0])
+        good = copy.deepcopy(next(g for g in hot.films('censored', 'hot')['groups'] if g['source_id'] == 'faleno'))
         # FEEDS ordering: faleno appears first in both views.
         self.assertEqual(good['state'], 'ok')
         self.assertFalse(good['stale'])
         with patch.object(hot, 'read_html', side_effect=hot_network.NetworkError('timeout', '读取超时')):
             hot._run_feeds([feed])
-        bad = hot.films('censored', 'hot')['groups'][0]
+        bad = next(g for g in hot.films('censored', 'hot')['groups'] if g['source_id'] == 'faleno')
         self.assertEqual(bad['items'], good['items'])
         self.assertEqual(bad['fetched_at'], good['fetched_at'])
         self.assertEqual(bad['state'], 'timeout')
         self.assertTrue(bad['stale'])
         # Response is a detached copy.
         bad['items'].clear()
-        self.assertTrue(hot.films('censored', 'hot')['groups'][0]['items'])
+        self.assertTrue(next(g for g in hot.films('censored', 'hot')['groups'] if g['source_id'] == 'faleno')['items'])
 
     def test_age_gate_response_does_not_run_parser(self):
         with patch.object(hot, 'read_html', return_value=(200, 'https://www.dmm.co.jp/age_check/', '<title>年齢認証</title>')):

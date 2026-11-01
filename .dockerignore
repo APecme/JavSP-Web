@@ -9,3 +9,11 @@ tmp
 comments-service
 debug.log
 *.spec
+
+# Never send local credentials, agent state, or virtual environments to builders.
+.ssh
+.venv*
+.ekko-tmp
+.test-tmp
+.workbuddy
+.pytest_cache

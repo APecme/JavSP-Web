@@ -12,10 +12,12 @@ function harness() {
     constructor() { this.dataset = {}; this.attrs = {}; this.textContent = ''; this.innerHTML = ''; this.disabled = false; this.events = {}; this.tabIndex = 0; }
     setAttribute(k, v) { this.attrs[k] = v; }
     addEventListener(k, v) { this.events[k] = v; }
+    showModal() { this.open = true; }
+    close() { this.open = false; }
     focus() { this.focused = true; }
   }
   const ids = {};
-  for (const id of ['hot-panel', 'hot-message', 'hot-results', 'hot-refresh', 'hot-check', 'hot-notice', 'hot-connection-count', 'hot-check-message', 'hot-check-progress', 'hot-source-list', 'hot-connections']) ids[id] = new Node();
+  for (const id of ['hot-panel', 'hot-message', 'hot-results', 'hot-refresh', 'hot-check', 'hot-notice', 'hot-connection-count', 'hot-check-message', 'hot-check-progress', 'hot-source-list', 'hot-connections', 'hot-show-connections', 'hot-connections-close']) ids[id] = new Node();
   const tabs = ['all', 'censored', 'uncensored'].map(category => Object.assign(new Node(), { dataset: { hotCategory: category } }));
   const sorts = ['latest', 'hot'].map(sort => Object.assign(new Node(), { dataset: { hotSort: sort } }));
   const timers = new Map(); let timerId = 0;
@@ -105,7 +107,7 @@ test('connection check is independent of category and shows all statuses', async
   assert.deepEqual(JSON.parse(h.calls[0].options.body), {});
   assert.equal(h.ids['hot-connections'].open, true);
   assert.equal(h.ids['hot-check-progress'].value, 2);
-  assert.equal(h.ids['hot-check'].disabled, true);
+  assert.equal(h.ids['hot-check'].disabled, false);
   assert.match(h.ids['hot-source-list'].innerHTML, /地区限制/);
   assert.match(h.ids['hot-source-list'].innerHTML, /&lt;Two&gt;/);
   assert.doesNotMatch(h.ids['hot-source-list'].innerHTML, /javascript:/);
@@ -124,11 +126,11 @@ test('connection post error survives finally and duplicate clicks use one reques
   assert.equal(h.ids['hot-check'].disabled, false);
 });
 
-test('operator sees disabled batch detection while read-only lists remain usable', async () => {
+test('operator can open connection result dialog but cannot dispatch batch detection', async () => {
   const h = harness();
   h.handle(() => ({ can_check: false, sources: [], job: {} }));
   await h.api.loadConnections();
-  assert.equal(h.ids['hot-check'].disabled, true);
+  assert.equal(h.ids['hot-check'].disabled, false);
   assert.match(h.ids['hot-check'].title, /管理员/);
 });
 
@@ -187,6 +189,28 @@ test('late initial connection GET cannot replace a new running detection batch',
   old.resolve({ can_check: true, sources: [], job: { running: false } });
   await loading;
   assert.equal(h.api.state.connections.job.running, true);
-  assert.equal(h.ids['hot-check'].disabled, true);
+  assert.equal(h.ids['hot-check'].disabled, false);
   assert.match(h.ids['hot-check-message'].textContent, /1\/30/);
+});
+
+
+test('unified wall has one grid, richer fields, sources and no site sections', async () => {
+  const h = harness(); const d = data();
+  d.items = [{ ...d.groups[0].items[0], actors: ['Actor'], studio: 'Studio', tags: ['Tag'], views: 42,
+    sources: [{ source_name: 'A', url: 'https://example.invalid/a', rank: 2 }, { source_name: 'B', url: 'https://example.invalid/b', rank: 1 }] }];
+  h.handle(() => d); await h.api.loadFilms();
+  const html = h.ids['hot-results'].innerHTML;
+  assert.equal([...html.matchAll(/class="hot-grid"/g)].length, 1);
+  assert.doesNotMatch(html, /class="hot-group"/);
+  for (const value of ['Actor','Studio','Tag','42','2 个资料来源']) assert.ok(html.includes(value));
+});
+
+test('age gate provides CookieCloud hint and modal remains reopenable during detection', async () => {
+  const h = harness();
+  h.handle(() => ({ can_check: true, sources: [{name:'Site',url:'https://example.invalid/',result:{state:'age_gate',message:'confirm age'}}], job:{running:true,completed:1,total:30} }));
+  await h.api.loadConnections();
+  assert.match(h.ids['hot-source-list'].innerHTML,/CookieCloud/);
+  await h.api.checkConnections();
+  assert.equal(h.ids['hot-connections'].open,true);
+  assert.equal(h.calls.filter(c=>c.options.method==='POST').length,0);
 });

@@ -1,7 +1,7 @@
 """Anonymous, size/time-limited public HTML reads for fixed hot-page sources.
 
-Direct requests only: no environment proxies, CookieCloud, login, challenge
-solvers, or site-mirror substitution. Each redirect is checked and DNS pinned.
+No environment proxies or challenge solvers. Optional administrator-authorized
+proxy and domain-scoped CookieCloud cookies; redirects are checked and DNS pinned.
 """
 from __future__ import annotations
 
@@ -52,6 +52,10 @@ class PinnedTLSAdapter(HTTPAdapter):
         super().init_poolmanager(connections, maxsize, block, assert_hostname=self.hostname,
                                  server_hostname=self.hostname, **kwargs)
 
+    def proxy_manager_for(self, proxy, **kwargs):
+        return super().proxy_manager_for(proxy, assert_hostname=self.hostname,
+                                         server_hostname=self.hostname, **kwargs)
+
 
 class PublicAdapter(HTTPAdapter):
     def __init__(self):
@@ -77,7 +81,7 @@ class PublicAdapter(HTTPAdapter):
         super().close()
 
 
-def read_html(url):
+def read_html(url, *, cookie_domains=None, proxy_url=None):
     """Return (HTTP code, final URL, decoded HTML); errors contain no remote text."""
     deadline = time.monotonic() + MAX_SECONDS
     try:
@@ -96,8 +100,15 @@ def read_html(url):
                     raise NetworkError('timeout', '网页读取超时')
                 # PublicAdapter validates/pins EVERY hop, even with a hostile Location.
                 session.cookies.clear()
+                host = (urlsplit(url).hostname or '').lower()
+                for domain, values in sorted((cookie_domains or {}).items(), key=lambda pair: len(pair[0])):
+                    clean = domain.lstrip('.').lower()
+                    if host == clean or host.endswith('.' + clean):
+                        for name, value in values.items():
+                            session.cookies.set(name, value, domain=host, path='/', secure=True)
+                options = {'proxies': {'http': proxy_url, 'https': proxy_url}} if proxy_url else {}
                 with session.get(url, stream=True, allow_redirects=False,
-                                 timeout=(min(5, remaining), min(3, remaining))) as response:
+                                 timeout=(min(5, remaining), min(3, remaining)), **options) as response:
                     code = response.status_code
                     if code in (301, 302, 303, 307, 308):
                         location = response.headers.get('Location')

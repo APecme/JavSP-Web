@@ -35,9 +35,11 @@ SOURCES = (
 )
 BY_ID = {id: {'id': id, 'name': name, 'url': url} for id, name, url in SOURCES}
 
-# No data is inferred for the other 27 sites. These are HTML list adapters,
+# No data is inferred for unsupported sites. These are HTML list adapters,
 # not players, detail scrapers, or download providers.
 FEEDS = (
+    ('fd2ppv', 'all', 'latest', 'https://fd2ppv.cc/', '来源新作 · 未标记码类的作品仅在全部显示'),
+    ('fd2ppv', 'all', 'hot', 'https://fd2ppv.cc/trending', '作品趋势 · 实时来源顺序'),
     ('faleno', 'censored', 'latest', 'https://faleno.jp/top/', '片商新作 · 配信日期'),
     ('faleno', 'censored', 'hot', 'https://faleno.jp/top/', '品牌站内排名 · 周期未公布'),
     ('dahlia', 'censored', 'latest', 'https://dahlia-av.jp/', '片商新作 · 配信日期'),

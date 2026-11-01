@@ -17,6 +17,7 @@ import lxml.html
 
 from .hot_network import NetworkError, classify, read_html
 from .hot_sources import BY_ID, FEEDS, SOURCES
+from .hot_catalog import merge_items
 
 CHECK_COOLDOWN = 60
 FEED_COOLDOWN = 120
@@ -45,7 +46,7 @@ def _public_job(job, cooldown):
 
 def connections():
     with _LOCK:
-        return {'job': _public_job(_check, CHECK_COOLDOWN), 'network_mode': 'direct',
+        return {'job': _public_job(_check, CHECK_COOLDOWN), 'network_mode': 'direct_cookiecloud_optional',
                 'sources': [dict(BY_ID[id], result=copy.deepcopy(_checks.get(id, {
                     'state': 'unchecked', 'message': '尚未检测', 'checked_at': '', 'http_status': None,
                     'elapsed_ms': None, 'responded': False}))) for id, _, _ in SOURCES]}
@@ -55,7 +56,7 @@ def _probe(source):
     start = time.monotonic()
     result = {'checked_at': now(), 'http_status': None, 'responded': False}
     try:
-        code, url, text = read_html(source['url'])
+        code, url, text = _read_source(source['url'])
         state, message = classify(code, url, text)
         result.update(state=state, message=message, http_status=code, responded=True)
     except NetworkError as error:
@@ -122,7 +123,8 @@ def _item(id, category, url, title, identifier, date='', rank=None):
         return None
     if not title or not identifier:
         return None
-    return {'id': id + ':' + identifier, 'source_id': id, 'source_name': BY_ID[id]['name'],
+    return {'actors': [], 'tags': [], 'studio': '', 'seller': '', 'date_kind': '来源日期',
+            'id': id + ':' + identifier, 'source_id': id, 'source_name': BY_ID[id]['name'],
             'category': category, 'url': url, 'title': title[:500], 'identifier': identifier[:80],
             'date': date, 'rank': rank}
 
@@ -135,7 +137,32 @@ def parse_feed(id, category, sort, page, url):
         raise NetworkError('parse_error', '无法解析来源页面') from None
     items = []
     cls = lambda name: f"contains(concat(' ',normalize-space(@class),' '),' {name} ')"
-    if id == 'freejavbt':
+    if id == 'fd2ppv':
+        seen = set()
+        for card in tree.xpath(f'//div[{cls("artist-card")}]'):
+            hrefs = card.xpath('.//h3/a[starts-with(@href,"/articles/")]/@href')
+            if not hrefs or hrefs[0] in seen:
+                continue
+            match = re.fullmatch(r'/articles/(\d+)', hrefs[0])
+            if not match:
+                continue
+            kind = 'uncensored' if card.xpath('.//i[contains(@class,"icon-mosaic_free")]') else (
+                'censored' if card.xpath('.//i[contains(@class,"icon-mosaic_yes")]') else 'unknown')
+            item = _item(id, kind, urljoin(url, hrefs[0]),
+                         _text(card, './/div[contains(@class,"artist-content")]/a'), 'FC2-' + match[1],
+                         _date(_text(card, './/div[contains(@class,"artist-release")]')),
+                         len(items) + 1 if sort == 'hot' else None)
+            if not item:
+                continue
+            item['tags'] = [_text(a, '.')[:60] for a in card.xpath('.//div[contains(@class,"artist-tags")]/a')][:15]
+            item['actors'] = [_text(a, '.')[:80] for a in card.xpath('.//div[contains(@class,"articles-avatar")]//a') if _text(a, '.')][:15]
+            for metric, icon in [('views', 'remove_red_eye'), ('favorites', 'icon-favorite'), ('comments', 'textsms')]:
+                raw = _text(card, f'.//div[{cls("stat-item")}][.//i[contains(@class,"{icon}")]]/span[contains(@class,"stat-value")]')
+                if raw.isdigit():
+                    item[metric] = int(raw)
+            items.append(item)
+            seen.add(hrefs[0])
+    elif id == 'freejavbt':
         for card in tree.xpath(f'//div[{cls("card")}]'):
             identifier = _text(card, f'.//*[{cls("card-title")}]')
             title = _text(card, f'.//*[{cls("card-text")}]')
@@ -147,6 +174,7 @@ def parse_feed(id, category, sort, page, url):
                          _date(_text(card, './/span[contains(@class,"text-muted")]')),
                          len(items) + 1 if sort == 'hot' else None)
             if item:
+                item['tags'] = [_text(tag, '.').lstrip('#')[:60] for tag in card.xpath('.//div[contains(@class,"video-list-item-genres")]/span') if _text(tag, '.').strip()][:15]
                 items.append(item)
     elif id in ('faleno', 'dahlia'):
         if sort == 'hot':
@@ -183,6 +211,10 @@ def parse_feed(id, category, sort, page, url):
                     continue
             item = _item(id, category, href, title, identifier, date, rank)
             if item:
+                item['studio'] = BY_ID[id]['name']
+                item['date_kind'] = '配信日期'
+                actor = _text(card, './/div[contains(@class,"text_ranking01")][span[contains(text(),"出演女優")]]/p') if id == 'faleno' else _text(card, './/div[contains(@class,"ranking-actress")]/div')
+                item['actors'] = [a.strip() for a in re.split(r'[/／、]', actor) if a.strip()][:15]
                 seen.add(href)
                 items.append(item)
     if not items:
@@ -193,10 +225,24 @@ def parse_feed(id, category, sort, page, url):
     return items[:MAX_ITEMS]
 
 
+def _read_source(url):
+    # Reuse only explicit CookieCloud consent in system settings; failure is
+    # reported, never silently bypassed, and cookies are never returned to UI.
+    from .storage import get_cookiecloud_settings
+    from .cookiecloud import get_synced_cookies, CookieCloudError
+    if get_cookiecloud_settings().get('enabled'):
+        try:
+            cookies = get_synced_cookies()
+        except CookieCloudError:
+            raise NetworkError('cookiecloud_error', 'CookieCloud 同步失败，请在系统设置测试连接并立即同步') from None
+        return read_html(url, cookie_domains=cookies)
+    return read_html(url)
+
+
 def _refresh_feed(feed):
     id, category, sort, url, label = feed
     try:
-        code, final_url, page = read_html(url)
+        code, final_url, page = _read_source(url)
         state, message = classify(code, final_url, page)
         if state != 'ok':
             raise NetworkError(state, message)
@@ -210,7 +256,7 @@ def _refresh_feed(feed):
 
 
 def _selected(category, sort):
-    return [feed for feed in FEEDS if feed[2] == sort and (category == 'all' or feed[1] == category)]
+    return [feed for feed in FEEDS if feed[2] == sort and (category == 'all' or feed[1] in (category, 'all'))]
 
 
 def _key(feed):
@@ -225,17 +271,18 @@ def films(category='all', sort='latest'):
             cached = _cache.get(_key(feed), {})
             groups.append({'id': _key(feed), 'source_id': id, 'source_name': BY_ID[id]['name'],
                            'category': kind, 'label': label, 'url': url,
-                           'items': copy.deepcopy(cached.get('items', [])),
+                           'items': [copy.deepcopy(i) for i in cached.get('items', []) if category == 'all' or i['category'] == category],
                            'state': cached.get('state', 'not_loaded'),
                            'message': cached.get('message', '尚未获取列表'),
                            'fetched_at': cached.get('fetched_at', ''),
                            'checked_at': cached.get('checked_at', ''),
                            'stale': bool(cached.get('items') and (cached.get('state') != 'ok' or
                                time.monotonic() - cached.get('success_mono', 0) > CACHE_SECONDS))})
-        return {'category': category, 'sort': sort, 'groups': groups,
-                'total': sum(len(group['items']) for group in groups),
+        items = merge_items(groups, sort)
+        return {'category': category, 'sort': sort, 'groups': groups, 'items': items,
+                'total': len(items),
                 'job': _public_job(_feed_job, FEED_COOLDOWN),
-                'notice': '按来源分别展示；最热保留来源排名，不生成跨站综合热度。首批接入3站，其余站点仅检测连接。'}
+                'notice': '统一展示4站已接入作品并按可信番号去重；最新按日期降序，最热按来源名次交错排列，不是统一销量/评分。未知码类仅在全部显示。'}
 
 
 def _run_feeds(feeds):

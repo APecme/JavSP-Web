@@ -84,7 +84,7 @@
         url: '', state: hotLoaded ? 'ok' : 'not_loaded', stale: false, fetched_at: hotLoaded ? now() : '',
         items: hotLoaded ? (sort === 'hot' ? [1, 2] : [2, 1]).map(n => ({
           id: `DEMO-${kind}-${n}`, identifier: `DEMO-${kind}-${n}`, source_name: '演示来源',
-          category: kind, title: `热片界面示例 ${n}（模拟数据）`, url: '',
+          category: kind, title: `热片界面示例 ${n}（模拟数据）`, url: '', actors: ['演示演员'], studio: '演示片商', tags: ['模拟数据'], views: 100 + n,
           date: `2026-10-${10 + n}`, rank: sort === 'hot' ? n : null,
         })) : [],
       })), total: hotLoaded ? kinds.length * 2 : 0,
@@ -99,6 +99,8 @@
     try { body = JSON.parse(options.body || '{}'); } catch { return denied(); }
     if (url.origin === location.origin && path.endsWith('/assets/avatar-catalog.json') && assetFetch) return assetFetch(input, options);
     if (url.origin !== location.origin || !path.startsWith('/api/')) return denied();
+    if (path === '/api/hot/clash' && method === 'GET') return json({running:false,results:[],message:'离线演示不连接 Clash，也不切换真实节点。',restore_state:'not_needed'});
+    if (path.startsWith('/api/hot/clash')) return denied();
     if (path === '/api/hot/connections') {
       if (method === 'POST') hotChecked = true;
       return json(hotConnections(), method === 'POST' ? 202 : 200);
