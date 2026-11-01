@@ -196,8 +196,8 @@ class NetworkTests(unittest.TestCase):
     def addresses(self, ip):
         return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', (ip, 443))]
 
-    def test_resolve_rejects_private_and_mixed_dns_and_credentials(self):
-        for ips in [['127.0.0.1'], ['169.254.169.254'], ['10.0.0.1'], ['8.8.8.8', '192.168.0.1']]:
+    def test_resolve_rejects_private_only_dns_and_credentials(self):
+        for ips in [['127.0.0.1'], ['169.254.169.254'], ['10.0.0.1']]:
             with self.subTest(ips=ips), patch.object(socket, 'getaddrinfo', return_value=sum([self.addresses(ip) for ip in ips], [])):
                 with self.assertRaises(hot_network.NetworkError):
                     hot_network.resolve_public('https://example.invalid/')
@@ -266,7 +266,7 @@ class NetworkTests(unittest.TestCase):
         kwargs = session.get.call_args.kwargs
         self.assertTrue(kwargs['stream'])
         self.assertFalse(kwargs['allow_redirects'])
-        session.cookies.clear.assert_called_once()
+        session.cookies.clear.assert_not_called()
         self.assertNotIn('cookies', kwargs)
         self.assertLessEqual(kwargs['timeout'][0], 5)
 
@@ -276,7 +276,7 @@ class NetworkTests(unittest.TestCase):
             result = hot_network.read_html('https://example.invalid/')
         self.assertEqual(result[1], 'https://example.invalid/next')
         self.assertEqual(session.get.call_count, 2)
-        self.assertEqual(session.cookies.clear.call_count, 2)
+        self.assertEqual(session.cookies.clear.call_count, 0)
         session = self.session([(302, {'Location': '/'}, b'')] * 5)
         with patch.object(hot_network.requests, 'Session', return_value=session):
             with self.assertRaises(hot_network.NetworkError) as cm:

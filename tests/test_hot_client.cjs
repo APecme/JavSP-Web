@@ -17,7 +17,7 @@ function harness() {
     focus() { this.focused = true; }
   }
   const ids = {};
-  for (const id of ['hot-panel', 'hot-message', 'hot-results', 'hot-refresh', 'hot-check', 'hot-notice', 'hot-connection-count', 'hot-check-message', 'hot-check-progress', 'hot-source-list', 'hot-connections', 'hot-show-connections', 'hot-connections-close']) ids[id] = new Node();
+  for (const id of ['hot-panel', 'hot-message', 'hot-results', 'hot-refresh', 'hot-check', 'hot-notice', 'hot-connection-count', 'hot-check-message', 'hot-check-progress', 'hot-source-list', 'hot-connections', 'hot-show-connections', 'hot-connections-close', 'hot-age-close', 'hot-age-form', 'hot-age-dialog', 'hot-age-confirm', 'hot-age-message', 'hot-age-submit', 'hot-age-site']) ids[id] = new Node();
   const tabs = ['all', 'censored', 'uncensored'].map(category => Object.assign(new Node(), { dataset: { hotCategory: category } }));
   const sorts = ['latest', 'hot'].map(sort => Object.assign(new Node(), { dataset: { hotSort: sort } }));
   const timers = new Map(); let timerId = 0;
@@ -213,4 +213,31 @@ test('age gate provides CookieCloud hint and modal remains reopenable during det
   await h.api.checkConnections();
   assert.equal(h.ids['hot-connections'].open,true);
   assert.equal(h.calls.filter(c=>c.options.method==='POST').length,0);
+});
+
+
+test('age declaration requires explicit checkbox and posts only the fixed source id', async () => {
+  const h = harness();
+  h.api.state.connections = { can_check:true, sources:[{id:'giga',name:'GIGA',age:{supported:true}}] };
+  h.api.openAge('giga');
+  assert.equal(h.ids['hot-age-dialog'].open,true);
+  assert.equal(h.ids['hot-age-confirm'].checked,false);
+  await h.api.submitAge({preventDefault(){}});
+  assert.equal(h.calls.length,0);
+  h.ids['hot-age-confirm'].checked=true;
+  h.handle(url => url.endsWith('/age/giga') ? {running:true} : {can_check:true,sources:[],job:{}});
+  await h.api.submitAge({preventDefault(){}});
+  const call=h.calls.find(c=>c.options.method==='POST');
+  assert.equal(call.url,'/api/hot/age/giga');
+  assert.deepEqual(JSON.parse(call.options.body),{confirmed:true});
+  assert.equal(h.ids['hot-age-dialog'].open,false);
+});
+
+test('running age confirmation keeps connection polling and CookieCloud fallback', async () => {
+  const h=harness();
+  h.handle(url => url.includes('/connections') ? {can_check:true,sources:[{id:'giga',name:'GIGA',url:'https://www.giga-web.jp/',age:{supported:true,running:true},result:{state:'age_gate',message:'confirm'}}],job:{running:false,retry_after:0}} : data());
+  await h.enter();
+  assert.match(h.ids['hot-source-list'].innerHTML,/年龄确认中/);
+  assert.match(h.ids['hot-source-list'].innerHTML,/CookieCloud 备用同步/);
+  assert.ok([...h.timers.values()].some(t=>t.delay===2000));
 });

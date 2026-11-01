@@ -1,7 +1,7 @@
 """Authenticated read APIs; bounded outbound work only on explicit POSTs."""
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from . import hot
@@ -46,55 +46,17 @@ def refresh(body: RefreshBody, response: Response):
     return hot.refresh_films(body.category, body.sort)
 
 
-# Clash control is administrator-only and never accepts arbitrary target URLs.
-from . import hot_clash
-from fastapi import HTTPException
-from pydantic import Field
 
-
-class ClashStartBody(BaseModel):
+class AgeConfirmBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    controller_url: str = Field(max_length=1024)
-    secret: str = Field(default='', max_length=512)
-    proxy_url: str = Field(max_length=1024)
-    source_ids: list[str] = Field(min_length=1, max_length=3)
-    confirm_switch: bool = False
+    confirmed: bool = False
 
 
-class ClashExportBody(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    original_yaml: str = Field(max_length=1_000_000)
-    selected_nodes: list[str] = Field(min_length=1, max_length=100)
-    job_id: str = Field(max_length=64)
-
-
-@router.get('/clash')
-def clash_status(response: Response, _: dict = Depends(require_admin)):
-    response.headers['Cache-Control'] = 'no-store'
-    return hot_clash.status()
-
-
-@router.post('/clash', status_code=202)
-def clash_start(body: ClashStartBody, response: Response, _: dict = Depends(require_admin)):
+@router.post('/age/{source_id}', status_code=202)
+def confirm_age(source_id: str, body: AgeConfirmBody, response: Response,
+                _: dict = Depends(require_admin)):
     response.headers['Cache-Control'] = 'no-store'
     try:
-        return hot_clash.start(body.controller_url, body.secret, body.proxy_url,
-                               body.source_ids, body.confirm_switch)
-    except hot_clash.ClashError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from None
-
-
-@router.post('/clash/cancel')
-def clash_cancel(response: Response, _: dict = Depends(require_admin)):
-    response.headers['Cache-Control'] = 'no-store'
-    return hot_clash.cancel()
-
-
-@router.post('/clash/export')
-def clash_export(body: ClashExportBody, _: dict = Depends(require_admin)):
-    try:
-        result = hot_clash.export_yaml(body.original_yaml, body.selected_nodes, body.job_id)
-        return Response(result, media_type='application/yaml', headers={
-            'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="javsp-clash.yaml"'})
-    except hot_clash.ClashError as error:
+        return hot.confirm_age(source_id, body.confirmed)
+    except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from None

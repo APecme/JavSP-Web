@@ -77,12 +77,6 @@
 .hot-card-sources small { display:block; margin-top:5px; color:var(--text-muted); }
 .hot-card-sources a { color:var(--accent); }
 .hot-source-warnings { margin:12px 0; padding:12px; color:var(--warning); background:var(--warning-soft); border-radius:8px; font-size:12px; }
-.hot-warning { padding:12px; border-left:3px solid var(--warning); background:var(--warning-soft); color:var(--warning); font-size:13px; line-height:1.7; }
-.hot-clash-row { border:1px solid var(--border); padding:12px; margin-top:10px; border-radius:8px; font-size:12px; overflow-wrap:anywhere; }
-.hot-clash-row li { margin:6px 0; }
-.hot-export { margin-top:24px; border-top:1px solid var(--border); padding-top:18px; }
-.hot-export input { margin:10px 0; }
-#hot-clash-message[data-error="true"] { color:var(--danger); font-weight:700; }
 .cookiecloud-extensions { padding:12px; margin:12px 0; border:1px solid var(--border); background:var(--surface-subtle); border-radius:8px; }
 .cookiecloud-extensions a { color:var(--accent); line-height:2; }
-@media(max-width:600px) { .hot-dialog-heading,.hot-dialog-body {padding:14px;} .hot-dialog{width:calc(100vw - 16px);} .hot-clash-row label{overflow-wrap:anywhere;} }
+@media(max-width:600px) { .hot-dialog-heading,.hot-dialog-body {padding:14px;} .hot-dialog{width:calc(100vw - 16px);} }

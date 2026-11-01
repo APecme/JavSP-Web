@@ -4,11 +4,11 @@
   const LABELS = { unchecked: '未检测', ok: '可达', age_gate: '年龄确认', challenge: '验证拦截',
     region_blocked: '地区限制', maintenance: '维护中', parking: '疑似停放', js_shell: '前端空壳',
     denied: '拒绝访问', rate_limited: '请求受限', http_error: 'HTTP 错误', timeout: '超时',
-    dns_error: 'DNS 失败', tls_error: '证书错误', network_error: '连接失败', unsafe_redirect: '不安全跳转',
+    dns_error: 'DNS 失败', tls_error: '证书错误', network_error: '连接失败', unsafe_redirect: '跳转受阻', dns_blocked: '服务端 DNS 受限',
     redirect_error: '跳转失败', not_html: '非网页', too_large: '超出上限', error: '失败',
     not_loaded: '待获取', parse_error: '解析失败', cookiecloud_error: 'CookieCloud 同步失败' };
   const state = { category: 'all', sort: 'latest', films: null, connections: null,
-    generation: 0, connectionGeneration: 0, loading: false, checking: false, refreshPending: false, loaded: false,
+    generation: 0, connectionGeneration: 0, ageSource: null, agePosting: false, loading: false, checking: false, refreshPending: false, loaded: false,
     timer: null, checkingTimer: null, failedPolls: 0, checkFailedPolls: 0 };
   const $ = id => document.getElementById(id);
   const escape = value => String(value == null ? '' : value).replace(/[&<>"']/g, c =>
@@ -91,7 +91,7 @@
     $('hot-source-list').innerHTML = sources.map(source => {
       const r = source.result || {};
       const url = safeUrl(source.url);
-      return `<article class="hot-source" data-state="${escape(r.state)}"><div class="hot-source-heading">${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.name)} ↗</a>` : `<strong>${escape(source.name)}</strong>`}<span class="hot-state">${escape(LABELS[r.state] || '未知')}</span></div><p>${escape(r.message)}</p>${r.state === 'age_gate' || r.state === 'cookiecloud_error' ? '<p class="hot-hint">请在浏览器完成年龄确认，再通过 CookieCloud 同步该域名 Cookie。<button class="button secondary" type="button" data-hot-cookiecloud>打开设置</button></p>' : ''}${r.state === 'region_blocked' ? '<button class="button secondary" type="button" data-hot-clash>诊断 Clash 出口</button>' : ''}<small class="muted">${r.http_status ? `HTTP ${escape(r.http_status)} · ` : ''}${r.elapsed_ms != null ? `${escape(r.elapsed_ms)} ms · ` : ''}${escape(r.checked_at ? time(r.checked_at) : '未检测')}</small></article>`;
+      return `<article class="hot-source" data-state="${escape(r.state)}"><div class="hot-source-heading">${url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escape(source.name)} ↗</a>` : `<strong>${escape(source.name)}</strong>`}<span class="hot-state">${escape(LABELS[r.state] || '未知')}</span></div><p>${escape(r.message)}</p>${r.state === 'age_gate' ? `<div class="hot-hint">${source.age?.supported && data.can_check !== false ? `<button class="button secondary" type="button" data-hot-age="${escape(source.id)}" ${source.age?.running ? 'disabled' : ''}>${source.age?.running ? '年龄确认中…' : '确认年龄并重检'}</button>` : '此站请在原站完成确认。'}<button class="button secondary" type="button" data-hot-cookiecloud>CookieCloud 备用同步</button></div>` : r.state === 'cookiecloud_error' ? '<button class="button secondary" type="button" data-hot-cookiecloud>检查 CookieCloud</button>' : ''}${source.age?.running ? '<p>正在核对原站确认结果…</p>' : ''}<small class="muted">${r.http_status ? `HTTP ${escape(r.http_status)} · ` : ''}${r.elapsed_ms != null ? `${escape(r.elapsed_ms)} ms · ` : ''}${escape(r.checked_at ? time(r.checked_at) : '未检测')}</small></article>`;
     }).join('');
   }
   function active() { return document.querySelector('[data-panel="hot"]')?.classList.contains('active'); }
@@ -143,7 +143,7 @@
   }
   function scheduleConnections() {
     clearTimeout(state.checkingTimer);
-    if (active() && (state.connections?.job?.running || state.connections?.job?.retry_after > 0))
+    if (active() && (state.connections?.job?.running || state.connections?.job?.retry_after > 0 || state.connections?.sources?.some(source => source.age?.running)))
       state.checkingTimer = setTimeout(() => loadConnections(), 2000);
   }
   async function loadConnections() {
@@ -196,6 +196,27 @@
     const panel = $('cookiecloud-panel');
     if (panel) { panel.open = true; panel.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   }
+  function openAge(id) {
+    const source = state.connections?.sources?.find(item => item.id === id);
+    if (!source || !source.age?.supported || state.connections?.can_check === false) return;
+    state.ageSource = id;
+    $('hot-age-site').textContent = `站点：${source.name}。提交后将重检原站，未通过不会显示为可达。`;
+    $('hot-age-confirm').checked = false;
+    $('hot-age-message').textContent = '';
+    openDialog('hot-age-dialog');
+  }
+  async function submitAge(event) {
+    event.preventDefault();
+    if (state.agePosting || !state.ageSource || !$('hot-age-confirm').checked) return;
+    state.agePosting = true;
+    $('hot-age-submit').disabled = true;
+    try {
+      await api('/age/' + encodeURIComponent(state.ageSource), { method: 'POST', body: JSON.stringify({ confirmed: true }) });
+      $('hot-age-dialog').close();
+      await loadConnections();
+    } catch (error) { $('hot-age-message').textContent = error.message; }
+    finally { state.agePosting = false; $('hot-age-submit').disabled = false; }
+  }
   function syncControls() {
     document.querySelectorAll('[data-hot-category]').forEach(tab => {
       const selected = tab.dataset.hotCategory === state.category;
@@ -247,10 +268,13 @@
     $('hot-refresh').addEventListener('click', refreshFilms);
     $('hot-check').addEventListener('click', checkConnections);
     $('hot-show-connections').addEventListener('click', () => { openDialog('hot-connections'); loadConnections(); });
+    $('hot-age-close').addEventListener('click', () => $('hot-age-dialog').close());
+    $('hot-age-form').addEventListener('submit', submitAge);
     $('hot-connections-close').addEventListener('click', () => $('hot-connections').close());
     $('hot-connections').addEventListener('click', event => {
       if (event.target.closest('[data-hot-cookiecloud]')) cookieSettings();
-      if (event.target.closest('[data-hot-clash]')) window.JavspHotClash?.open();
+      const button = event.target.closest('[data-hot-age]');
+      if (button) openAge(button.dataset.hotAge);
     });
     $('hot-connections').addEventListener('close', () => $('hot-check').focus());
     const view = document.querySelector('[data-panel="hot"]');
@@ -262,7 +286,7 @@
     new MutationObserver(enter).observe(view, { attributes: true, attributeFilter: ['class'] });
     if (active()) enter();
   }
-  window.JavspHot = { init, api, safeUrl, escape, openDialog, state, select, loadFilms, refreshFilms, loadConnections, checkConnections };
+  window.JavspHot = { init, openAge, submitAge, api, safeUrl, escape, openDialog, state, select, loadFilms, refreshFilms, loadConnections, checkConnections };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

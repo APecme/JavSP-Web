@@ -15,7 +15,7 @@ DOCS = ROOT / 'docs'
 
 
 def build():
-    assets = ['theme.css', 'theme.js', 'icons.js', 'navigation.js', 'navigation.css', 'directory-watch.js', 'directory-watch.css', 'hot.js', 'hot-clash.js', 'hot.css', 'page-layouts.css', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js', 'markdown-it.min.js', 'markdown-it.LICENSE', 'comment-markdown.js']
+    assets = ['theme.css', 'theme.js', 'icons.js', 'navigation.js', 'navigation.css', 'directory-watch.js', 'directory-watch.css', 'hot.js', 'hot.css', 'page-layouts.css', 'community.js', 'app.js', 'app.css', 'overrides.css', 'cinema.css', 'play.svg', 'ai.js', 'ai-markdown.js', 'markdown-it.min.js', 'markdown-it.LICENSE', 'comment-markdown.js']
     inputs = [ROOT / 'VERSION', WEB / 'index.html', WEB / 'assets' / 'avatar-catalog.json', *(WEB / 'assets' / name for name in assets), ROOT / 'javsp_web' / 'ai.py',
               ROOT / 'vendor' / 'JavSP' / 'config.yml', ROOT / 'javsp_web' / 'hot_sources.py', DOCS / 'demo-mock.js', DOCS / 'demo.css',
               Path(__file__), *sorted((ROOT / 'javsp_web' / 'skills').glob('*/SKILL.md'))]

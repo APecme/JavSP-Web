@@ -69,8 +69,8 @@
   const hotConnections = () => ({ can_check: true, network_mode: 'demo',
     job: { running: false, completed: hotChecked ? 30 : 0, total: 30, retry_after: 0,
       finished_at: hotChecked ? now() : '' },
-    sources: (seed.hot_sources || []).map(source => ({ ...source, result: {
-      state: hotChecked ? 'ok' : 'unchecked', message: hotChecked ? '演示结果，未连接此站点' : '尚未检测（演示）',
+    sources: (seed.hot_sources || []).map(source => ({ ...source, age: {supported: source.id === 'giga', running:false}, result: {
+      state: hotChecked ? (source.id === 'giga' ? 'age_gate' : 'ok') : 'unchecked', message: hotChecked ? '演示结果，未连接此站点' : '尚未检测（演示）',
       checked_at: hotChecked ? now() : '', http_status: hotChecked ? 200 : null,
       elapsed_ms: hotChecked ? 80 : null, responded: hotChecked,
     } })),
@@ -99,8 +99,7 @@
     try { body = JSON.parse(options.body || '{}'); } catch { return denied(); }
     if (url.origin === location.origin && path.endsWith('/assets/avatar-catalog.json') && assetFetch) return assetFetch(input, options);
     if (url.origin !== location.origin || !path.startsWith('/api/')) return denied();
-    if (path === '/api/hot/clash' && method === 'GET') return json({running:false,results:[],message:'离线演示不连接 Clash，也不切换真实节点。',restore_state:'not_needed'});
-    if (path.startsWith('/api/hot/clash')) return denied();
+    if (path.startsWith('/api/hot/age/')) return denied();
     if (path === '/api/hot/connections') {
       if (method === 'POST') hotChecked = true;
       return json(hotConnections(), method === 'POST' ? 202 : 200);

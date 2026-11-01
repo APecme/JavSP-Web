@@ -18,6 +18,7 @@ import lxml.html
 from .hot_network import NetworkError, classify, read_html
 from .hot_sources import BY_ID, FEEDS, SOURCES
 from .hot_catalog import merge_items
+from . import hot_age
 
 CHECK_COOLDOWN = 60
 FEED_COOLDOWN = 120
@@ -47,7 +48,7 @@ def _public_job(job, cooldown):
 def connections():
     with _LOCK:
         return {'job': _public_job(_check, CHECK_COOLDOWN), 'network_mode': 'direct_cookiecloud_optional',
-                'sources': [dict(BY_ID[id], result=copy.deepcopy(_checks.get(id, {
+                'sources': [dict(BY_ID[id], age=hot_age.status(id), result=copy.deepcopy(_checks.get(id, {
                     'state': 'unchecked', 'message': '尚未检测', 'checked_at': '', 'http_status': None,
                     'elapsed_ms': None, 'responded': False}))) for id, _, _ in SOURCES]}
 
@@ -56,7 +57,7 @@ def _probe(source):
     start = time.monotonic()
     result = {'checked_at': now(), 'http_status': None, 'responded': False}
     try:
-        code, url, text = _read_source(source['url'])
+        code, url, text = _read_source(source['url'], source['id'])
         state, message = classify(code, url, text)
         result.update(state=state, message=message, http_status=code, responded=True)
     except NetworkError as error:
@@ -225,24 +226,36 @@ def parse_feed(id, category, sort, page, url):
     return items[:MAX_ITEMS]
 
 
-def _read_source(url):
-    # Reuse only explicit CookieCloud consent in system settings; failure is
-    # reported, never silently bypassed, and cookies are never returned to UI.
+def _read_source(url, source_id=None):
     from .storage import get_cookiecloud_settings
     from .cookiecloud import get_synced_cookies, CookieCloudError
+    cookie_domains = None
     if get_cookiecloud_settings().get('enabled'):
         try:
-            cookies = get_synced_cookies()
+            cookie_domains = get_synced_cookies()
         except CookieCloudError:
             raise NetworkError('cookiecloud_error', 'CookieCloud 同步失败，请在系统设置测试连接并立即同步') from None
-        return read_html(url, cookie_domains=cookies)
-    return read_html(url)
+    jar = hot_age.cookies(source_id) if source_id else None
+    options = {'cookie_domains': cookie_domains} if cookie_domains is not None else {}
+    if jar:
+        import requests
+        with requests.Session() as session:
+            session.cookies.update(jar)
+            return read_html(url, session=session, **options)
+    return read_html(url, **options)
+
+
+def confirm_age(source_id, confirmed):
+    def record(id, result):
+        with _LOCK:
+            _checks[id] = result
+    return hot_age.start(source_id, confirmed, record)
 
 
 def _refresh_feed(feed):
     id, category, sort, url, label = feed
     try:
-        code, final_url, page = _read_source(url)
+        code, final_url, page = _read_source(url, id)
         state, message = classify(code, final_url, page)
         if state != 'ok':
             raise NetworkError(state, message)

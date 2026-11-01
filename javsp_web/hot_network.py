@@ -1,7 +1,7 @@
 """Anonymous, size/time-limited public HTML reads for fixed hot-page sources.
 
-No environment proxies or challenge solvers. Optional administrator-authorized
-proxy and domain-scoped CookieCloud cookies; redirects are checked and DNS pinned.
+No environment proxies or challenge solvers. Optional domain-scoped
+CookieCloud and explicitly confirmed age-session cookies; redirects are checked and DNS pinned.
 """
 from __future__ import annotations
 
@@ -34,9 +34,14 @@ def resolve_public(url):
                 or parsed.port not in (None, 443)):
             raise NetworkError('unsafe_redirect', '仅允许公开 HTTPS 网页，已阻止不安全跳转')
         addresses = socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
-        if not addresses or any(not ipaddress.ip_address(row[4][0]).is_global for row in addresses):
-            raise NetworkError('unsafe_redirect', '域名指向非公网地址，已阻止请求')
-        return parsed, addresses[0][4][0]
+        public = [row[4][0] for row in addresses if ipaddress.ip_address(row[4][0]).is_global
+                  and not ipaddress.ip_address(row[4][0]).is_multicast]
+        if not public:
+            raise NetworkError('dns_blocked', '服务端 DNS 未返回可连接的公网地址，请检查 DNS/代理设置；不代表网站无法在浏览器打开')
+        # Mixed DNS results can include unusable tunnel/fake IPv6. Connect only
+        # the validated public address, prefer IPv4; never fall back to LAN IPs.
+        public.sort(key=lambda address: ipaddress.ip_address(address).version)
+        return parsed, public[0]
     except socket.gaierror:
         raise NetworkError('dns_error', '域名解析失败') from None
     except ValueError:
@@ -81,16 +86,19 @@ class PublicAdapter(HTTPAdapter):
         super().close()
 
 
-def read_html(url, *, cookie_domains=None, proxy_url=None):
+def read_html(url, *, cookie_domains=None, session=None, request_method="GET", form_data=None, allowed_hosts=None):
     """Return (HTTP code, final URL, decoded HTML); errors contain no remote text."""
     deadline = time.monotonic() + MAX_SECONDS
+    from contextlib import nullcontext
     try:
-        with requests.Session() as session:
+        with (nullcontext(session) if session is not None else requests.Session()) as session:
             session.trust_env = False
-            session.mount('https://', PublicAdapter())
+            if not isinstance(session.get_adapter('https://'), PublicAdapter):
+                session.mount('https://', PublicAdapter())
             # An HTTPS -> HTTP redirect must not fall back to requests' default
             # unguarded HTTP transport. The same adapter rejects non-HTTPS.
-            session.mount('http://', PublicAdapter())
+            if not isinstance(session.get_adapter('http://'), PublicAdapter):
+                session.mount('http://', PublicAdapter())
             session.headers.update({'User-Agent': 'Mozilla/5.0 JavSP-Web/Hot-Connectivity',
                                     'Accept': 'text/html,application/xhtml+xml',
                                     'Accept-Encoding': 'gzip, deflate'})
@@ -98,23 +106,35 @@ def read_html(url, *, cookie_domains=None, proxy_url=None):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise NetworkError('timeout', '网页读取超时')
+                if allowed_hosts is not None and urlsplit(url).hostname not in allowed_hosts:
+                    raise NetworkError('unsafe_redirect', '原站确认跳转离开已适配域名，请在原站手动操作')
                 # PublicAdapter validates/pins EVERY hop, even with a hostile Location.
-                session.cookies.clear()
+                # Keep only scoped requests.CookieJar state for supplied sessions.
+                # New anonymous sessions have no persistent cookies.
                 host = (urlsplit(url).hostname or '').lower()
                 for domain, values in sorted((cookie_domains or {}).items(), key=lambda pair: len(pair[0])):
                     clean = domain.lstrip('.').lower()
                     if host == clean or host.endswith('.' + clean):
                         for name, value in values.items():
-                            session.cookies.set(name, value, domain=host, path='/', secure=True)
-                options = {'proxies': {'http': proxy_url, 'https': proxy_url}} if proxy_url else {}
-                with session.get(url, stream=True, allow_redirects=False,
-                                 timeout=(min(5, remaining), min(3, remaining)), **options) as response:
+                            if name not in session.cookies.get_dict(domain=host):
+                                session.cookies.set(name, value, domain=host, path='/', secure=True)
+                options = dict(stream=True, allow_redirects=False,
+                               timeout=(min(5, remaining), min(3, remaining)))
+                request = (session.post(url, data=form_data, **options) if request_method == 'POST'
+                           else session.get(url, **options))
+                with request as response:
                     code = response.status_code
                     if code in (301, 302, 303, 307, 308):
                         location = response.headers.get('Location')
                         if not location or hop == MAX_REDIRECTS:
                             raise NetworkError('redirect_error', '跳转无效或次数过多')
-                        url = urljoin(url, location)
+                        destination = urljoin(url, location)
+                        if request_method == 'POST' and code in (307, 308):
+                            if urlsplit(destination).netloc != urlsplit(url).netloc:
+                                raise NetworkError('unsafe_redirect', '已阻止跨站重放确认表单')
+                        elif request_method == 'POST':
+                            request_method, form_data = 'GET', None
+                        url = destination
                         continue
                     ctype = response.headers.get('Content-Type', '').lower()
                     if ctype and not any(t in ctype for t in ('text/html', 'application/xhtml+xml', 'text/plain')):
@@ -172,7 +192,7 @@ def classify(code, url, text):
         return 'maintenance', '站点维护中'
     if re.search(r'access to this site is prohibited in the country|not available in your (country|region)|禁止了你的網路所在國家', visible):
         return 'region_blocked', '已响应，但当前地区受限'
-    if (re.search(r'age[_-]?check|driver-verify|[?&]over18=', url, re.I)
+    if (re.search(r'age[_-]?check|driver-verify', url, re.I)
             or re.search(r'年齢認証|age verification', title)
             or (len(visible) < 1600 and re.search(r'あなたは18歳以上|18歳以上の方のみ|18歳未満の方は', visible))):
         return 'age_gate', '已响应，需在原站确认年龄'
