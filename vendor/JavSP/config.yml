@@ -128,6 +128,8 @@ summarizer:
     max_actress_count: 10
     # 是否用硬链接方式整理文件？硬链接可以节省空间，但不是所有文件系统都支持
     hard_link: false
+    # 是否用软链接（符号链接）方式整理文件？软链接可跨磁盘/跨文件系统，但源文件不可删除
+    soft_link: false
 
   #标题处理
   title:

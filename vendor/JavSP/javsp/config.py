@@ -202,6 +202,7 @@ class PathSummarize(BaseConfig):
     length_by_byte: bool
     max_actress_count: PositiveInt = 10
     hard_link: bool
+    soft_link: bool = False
 
 class TitleSummarize(BaseConfig):
     remove_trailing_actor_name: bool

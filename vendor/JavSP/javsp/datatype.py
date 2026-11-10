@@ -228,7 +228,7 @@ class Movie:
                 return False
         return True
 
-    def rename_files(self, use_hardlink: bool = False, policy: str = 'never') -> None:
+    def rename_files(self, use_hardlink: bool = False, policy: str = 'never', use_softlink: bool = False) -> None:
         """根据命名规则移动（重命名）影片文件"""
         def move_file(src:str, dst:str):
             """移动（重命名）文件并记录信息到日志"""
@@ -237,7 +237,10 @@ class Movie:
                 return
             if os.path.lexists(abs_dst):
                 raise FileExistsError(f'File exists: {abs_dst}')
-            if (use_hardlink):
+            if (use_softlink):
+                # 软链接可跨磁盘/跨文件系统；目标需为绝对路径，否则相对链接会从输出目录解析而错位
+                os.symlink(os.path.abspath(src), abs_dst)
+            elif (use_hardlink):
                 os.link(src, abs_dst)
             else:
                 shutil.move(src, abs_dst)
@@ -273,7 +276,8 @@ class Movie:
                 moved.append((fullpath, newpath))
         except Exception:
             for original, organized in reversed(moved):
-                if use_hardlink:
+                if use_hardlink or use_softlink:
+                    # 硬/软链接的源文件都未移动，回滚只需删除输出目录里新建的链接
                     os.unlink(organized)
                 else:
                     shutil.move(organized, original)
