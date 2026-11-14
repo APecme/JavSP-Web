@@ -1,4 +1,5 @@
 import os
+import time
 import sys
 import tempfile
 import threading
@@ -51,6 +52,8 @@ class AssetVersionFunctionTests(unittest.TestCase):
         replacement = old.replace(b'o', b'0')
         self.assertEqual(len(replacement), len(old))
         stat = path.stat()
+        # Separate edits across coarse filesystem ctime ticks (Docker/WSL).
+        time.sleep(0.02)
         with open(path, 'r+b') as handle:
             handle.write(replacement)
         os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))

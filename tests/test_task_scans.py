@@ -99,14 +99,14 @@ class ScanTests(unittest.TestCase):
         mount = files[0].parent
         entered, release = threading.Event(), threading.Event()
         workers = []
-        original_rglob = Path.rglob
+        original_walk = os.walk
 
-        def rglob(path, *args, **kwargs):
+        def walk(path, *args, **kwargs):
             if path == mount:
                 entered.set()
                 if not release.wait(5):
                     raise TimeoutError('test scan was not released')
-            return original_rglob(path, *args, **kwargs)
+            return original_walk(path, *args, **kwargs)
 
         def enqueue(task):
             if task.get('task_type') == 'scan':
@@ -115,7 +115,7 @@ class ScanTests(unittest.TestCase):
                 worker.start()
 
         self.enqueue.side_effect = enqueue
-        self.enterContext(patch.object(Path, 'rglob', rglob))
+        self.enterContext(patch('javsp.scan_rules.os.walk', walk))
 
         def cleanup():
             release.set()
@@ -365,7 +365,7 @@ class ScanTests(unittest.TestCase):
     def test_network_enumeration_error_is_recorded_without_partial_batch(self):
         video = self.files('ABC-123.mp4')[0]
         scan = self.submit(video.parent)
-        with patch.object(Path, 'rglob', side_effect=OSError('network disconnected')):
+        with patch('javsp.scan_rules.os.walk', side_effect=OSError('network disconnected')):
             tasks._run_task(scan)
         self.assertIn('network disconnected', storage.get_task_record(scan['id'])['error'])
         self.assertEqual(self.children(scan), [])

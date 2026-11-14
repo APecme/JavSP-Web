@@ -4,7 +4,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '..');
-const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 const app = () => read('javsp_web/web/assets/app.js');
 const css = () => read('javsp_web/web/assets/page-layouts.css');
 

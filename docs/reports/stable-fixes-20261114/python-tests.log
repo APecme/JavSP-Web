@@ -1,0 +1,22 @@
+C:\Users\apecm\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+影片刮削失败: AI 翻译失败：译文缺少字段，未应用结果
+影片刮削失败: poster write failed
+下载封面图片失败，已跳过封面处理并继续整理影片
+下载封面图片失败，已跳过封面处理并继续整理影片
+下载封面图片失败，已跳过封面处理并继续整理影片
+下载封面图片失败，已跳过封面处理并继续整理影片
+下载封面图片失败，已跳过封面处理并继续整理影片
+下载封面图片失败，已跳过封面处理并继续整理影片
+下载封面图片失败，已跳过封面处理并继续整理影片
+mirror.test 证书验证失败，改用官网 official.test
+mirror.test 证书验证失败，改用官网 official.test
+影片刮削失败: 资料汇总失败：所有数据源均未取得必需字段：封面、标题。请检查数据源及预设中的“抓取成功必需字段”
+影片刮削失败: 资料汇总失败：所有数据源均未取得必需字段：封面。请检查数据源及预设中的“抓取成功必需字段”
+影片刮削失败: 影片信息翻译失败，请检查预设中的翻译服务配置及网络连接
+
+OpenAI 标题翻译结果异常，保留原文标题: 重复文本
+----------------------------------------------------------------------
+Ran 348 tests in 27.309s
+
+OK (skipped=1)
