@@ -83,7 +83,7 @@ class PolicyPipelineTests(unittest.TestCase):
                 existing_file_policy=policy, move_files=True,
                 extra_fanarts=SimpleNamespace(enabled=False),
                 cover=SimpleNamespace(highres=False),
-                path=SimpleNamespace(hard_link=False)))
+                path=SimpleNamespace(hard_link=False, soft_link=False)))
         namespace = dict(
             Cfg=lambda: config, os=os, time=time, Duration=timedelta,
             logger=logging.getLogger('dify-policy-pipeline'),

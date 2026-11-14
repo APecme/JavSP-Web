@@ -1,5 +1,6 @@
 import io
 import os
+import time
 import sys
 import tempfile
 import time
@@ -97,6 +98,8 @@ class ImageResponseTests(unittest.TestCase):
         etag_before = before.headers['etag']
         pixel_before = self.pixel(before.body)
         stat = self.path.stat()
+        # Separate edits across coarse filesystem ctime ticks (Docker/WSL).
+        time.sleep(0.02)
         with open(self.path, 'r+b') as handle:
             handle.write(blue)
         os.utime(self.path, ns=(stat.st_atime_ns, stat.st_mtime_ns))

@@ -69,7 +69,7 @@ function verifyPresets() {
   const changeStart = app.lastIndexOf("document.addEventListener('change',", app.indexOf("const select = event.target.closest('[data-translator-engine]')"));
   vm.runInContext(app.slice(changeStart, app.indexOf("$('#task-delete-form')", changeStart)), context);
 
-  const engine = { name: 'openai', url: 'https://translate.example/v1/chat/completions', api_key: 'saved-secret', model: 'translation-model' };
+  const engine = { name: 'openai', url: 'https://translate.example/v1/chat/completions', api_key: 'saved-secret', model: 'translation-model', temperature: 0.1 };
   state.formValues = { translator: { engine: { ...engine }, fields: { title: true, plot: false }, ai_enabled: false } };
   const syncControls = () => { controls = formControls([...containers.values()].map(element => element.innerHTML).join('')); };
   const render = () => {
@@ -90,6 +90,12 @@ function verifyPresets() {
   };
   assert.equal(toggle().disabled, false, 'the shared AI scraping switch makes preset translation available');
   assert.equal(toggle().checked, false, 'existing presets remain off');
+  const temperature = controls.find(control => control.dataset.configPath === 'translator.engine.temperature');
+  assert.equal(temperature.type, 'number');
+  temperature.value = '0';
+  assert.equal(read().engine.temperature, 0, 'zero temperature survives preset round trip');
+  temperature.value = '0.1';
+
   switchAi(true);
   assert.ok(controls.filter(control => control.dataset.configPath?.startsWith('translator.engine.')).every(control => control.disabled), 'AI disables engine credentials');
   assert.match(elements('#preset-fields-translator').innerHTML, /data-translator-engine disabled/);
@@ -121,6 +127,15 @@ function verifyPresets() {
   assert.equal(saved.engine, null, 'AI does not replace an explicit null engine');
   assert.equal(saved.fields.title, false);
   assert.equal(saved.fields.plot, false);
+
+  state.formValues = { summarizer: { move_files: true, path: { hard_link: false, soft_link: false } } };
+  render();
+  const softLink = controls.find(control => control.dataset.configPath === 'summarizer.path.soft_link');
+  assert.equal(softLink.type, 'select-one');
+  softLink.value = 'true';
+  const linkPreset = JSON.parse(JSON.stringify(context.readConfigFields()));
+  assert.equal(linkPreset.summarizer.path.soft_link, true);
+  assert.equal(linkPreset.summarizer.path.hard_link, false);
 
   const mediaTypes = [{ id: 'normal', name: '普通影片', priority: 0, detector: 'fallback', identifier_kind: 'dvdid', fallback: true }];
   state.formValues = {

@@ -1,0 +1,8 @@
+test_cross_device_link_rerun_and_restore (__main__.LinuxSymlinks.test_cross_device_link_rerun_and_restore) ... ok
+test_overwrite_link_never_touches_old_target_and_handles_dangling (__main__.LinuxSymlinks.test_overwrite_link_never_touches_old_target_and_handles_dangling) ... ok
+test_second_part_failure_restores_previous_links (__main__.LinuxSymlinks.test_second_part_failure_restores_previous_links) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.031s
+
+OK

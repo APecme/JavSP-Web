@@ -202,6 +202,13 @@ class PathSummarize(BaseConfig):
     length_by_byte: bool
     max_actress_count: PositiveInt = 10
     hard_link: bool
+    soft_link: bool = False
+
+    @model_validator(mode='after')
+    def exclusive_link_mode(self):
+        if self.hard_link and self.soft_link:
+            raise ValueError('硬链接和软链接不能同时启用')
+        return self
 
 class TitleSummarize(BaseConfig):
     remove_trailing_actor_name: bool
@@ -259,6 +266,7 @@ class ClaudeTranslateEngine(BaseConfig):
     api_key: str
 
 class OpenAITranslateEngine(BaseConfig):
+    temperature: float = Field(default=0.1, ge=0, le=2, allow_inf_nan=False)
     name: Literal['openai']
     url: Url
     api_key: str
