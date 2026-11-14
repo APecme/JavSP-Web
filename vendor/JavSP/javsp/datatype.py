@@ -196,13 +196,15 @@ class Movie:
             self.organization_preexisting = os.path.isdir(self.save_dir) and bool(os.listdir(self.save_dir))
         for src, dst in zip(self.files, destinations):
             for existing_path in self.organization_conflicts(dst):
-                if not os.path.isfile(existing_path) or os.path.islink(existing_path):
-                    raise FileExistsError(f'File exists: {os.path.abspath(existing_path)}')
-                if os.path.samefile(src, existing_path):
+                if os.path.isfile(existing_path) and os.path.samefile(src, existing_path):
                     continue
-                incoming, existing = os.stat(src), os.stat(existing_path)
-                replace = (policy == 'always' or (policy == 'larger' and incoming.st_size > existing.st_size)
-                           or (policy == 'newer' and incoming.st_mtime_ns > existing.st_mtime_ns))
+                if not os.path.isfile(existing_path) and not os.path.islink(existing_path):
+                    raise FileExistsError(f'File exists: {os.path.abspath(existing_path)}')
+                incoming = os.stat(src)
+                # A dangling destination link can only be replaced explicitly.
+                existing = os.stat(existing_path) if os.path.exists(existing_path) else None
+                replace = (policy == 'always' or (policy == 'larger' and existing is not None and incoming.st_size > existing.st_size)
+                           or (policy == 'newer' and existing is not None and incoming.st_mtime_ns > existing.st_mtime_ns))
                 if not replace:
                     self.new_paths = destinations
                     logger.info(f'保留已有影片，跳过本次整理（{policy}）: {existing_path}')
@@ -228,8 +230,10 @@ class Movie:
                 return False
         return True
 
-    def rename_files(self, use_hardlink: bool = False, policy: str = 'never') -> None:
+    def rename_files(self, use_hardlink: bool = False, policy: str = 'never', *, use_symlink: bool = False) -> None:
         """根据命名规则移动（重命名）影片文件"""
+        if use_hardlink and use_symlink:
+            raise ValueError('硬链接和软链接不能同时启用')
         def move_file(src:str, dst:str):
             """移动（重命名）文件并记录信息到日志"""
             abs_dst = os.path.abspath(dst)
@@ -237,7 +241,12 @@ class Movie:
                 return
             if os.path.lexists(abs_dst):
                 raise FileExistsError(f'File exists: {abs_dst}')
-            if (use_hardlink):
+            if use_symlink:
+                try:
+                    os.symlink(os.path.abspath(src), abs_dst)
+                except OSError as exc:
+                    raise OSError(f'创建软链接失败，请检查文件系统支持及权限（Windows 需开发者模式或管理员权限）: {exc}') from exc
+            elif use_hardlink:
                 os.link(src, abs_dst)
             else:
                 shutil.move(src, abs_dst)
@@ -263,7 +272,7 @@ class Movie:
                 if os.path.exists(newpath) and os.path.samefile(fullpath, newpath):
                     continue
                 for existing_path in self.organization_conflicts(newpath):
-                    if os.path.samefile(fullpath, existing_path):
+                    if os.path.exists(existing_path) and os.path.samefile(fullpath, existing_path):
                         continue
                     fd, backup = tempfile.mkstemp(prefix='.javsp-backup-', dir=self.save_dir)
                     os.close(fd)
@@ -273,7 +282,7 @@ class Movie:
                 moved.append((fullpath, newpath))
         except Exception:
             for original, organized in reversed(moved):
-                if use_hardlink:
+                if use_hardlink or use_symlink:
                     os.unlink(organized)
                 else:
                     shutil.move(organized, original)

@@ -407,6 +407,8 @@ def generate_names(movie: Movie):
             copyd['title'] = replace_illegal_chars(''.join(title_break[:sub_end]).strip())
             if Cfg().summarizer.move_files:
                 save_dir = os.path.normpath(Cfg().summarizer.path.output_folder_pattern.format(**copyd)).strip()
+                from javsp.organization import output_directory
+                save_dir = output_directory(movie.files[0], save_dir, Cfg().summarizer.path.output_folder_pattern, copyd['num'])
                 basename = os.path.normpath(Cfg().summarizer.path.basename_pattern.format(**copyd)).strip()
             else:
                 # 如果不整理文件，则保存抓取的数据到当前目录
@@ -435,6 +437,8 @@ def generate_names(movie: Movie):
             basename = filebasename.replace(ext, '')
         else:
             save_dir = os.path.normpath(Cfg().summarizer.path.output_folder_pattern.format(**copyd)).strip()
+            from javsp.organization import output_directory
+            save_dir = output_directory(movie.files[0], save_dir, Cfg().summarizer.path.output_folder_pattern, copyd['num'])
             basename = os.path.normpath(Cfg().summarizer.path.basename_pattern.format(**copyd)).strip()
         movie.save_dir = save_dir
         movie.basename = basename
@@ -668,7 +672,7 @@ def RunNormalMode(all_movies):
             check_step(True)
             if Cfg().summarizer.move_files:
                 inner_bar.set_description('移动影片文件')
-                movie.rename_files(Cfg().summarizer.path.hard_link, policy)
+                movie.rename_files(Cfg().summarizer.path.hard_link, policy, use_symlink=Cfg().summarizer.path.soft_link)
                 check_step(True)
                 progress_event('file_organizer', original_files=list(movie.files), organized_files=list(getattr(movie, 'new_paths', []) or []), generated_files=[movie.nfo_file, movie.fanart_file, movie.poster_file], preexisting_output=movie.organization_preexisting, replaced_existing=movie.organization_replaced, policy=policy)
                 logger.info(f'整理完成，相关文件已保存到: {movie.save_dir}\n')

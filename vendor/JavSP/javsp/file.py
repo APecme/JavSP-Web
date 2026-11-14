@@ -31,7 +31,6 @@ def scan_movies(root: str) -> List[Movie]:
     # 扫描所有影片文件并获取它们的番号
     dic = {}    # avid: [abspath1, abspath2...]
     small_videos = {}
-    ignore_folder_name_pattern = re.compile('|'.join(Cfg().scanner.ignored_folder_name_pattern))
     if Cfg().scanner.input_files is not None:
         # A Web task is an explicit file set, never a scan of sibling movies.
         selected = {}
@@ -44,17 +43,11 @@ def scan_movies(root: str) -> List[Movie]:
     elif os.path.isfile(root):
         scan_entries = [(os.path.dirname(root), [], [os.path.basename(root)])]
     else:
-        scan_entries = os.walk(root)
+        from javsp.scan_rules import scan_candidates
+        candidates = scan_candidates(root, Cfg().scanner)
+        scan_entries = ((directory, [], [path.name for path in paths])
+                        for directory, paths in itertools.groupby(candidates, key=lambda path: str(path.parent)))
     for dirpath, dirnames, filenames in scan_entries:
-        for name in dirnames.copy():
-            if ignore_folder_name_pattern.match(name):
-                dirnames.remove(name)
-            # 移除有nfo的文件夹
-            if Cfg().scanner.skip_nfo_dir:
-                if any(file.lower().endswith(".nfo") for file in os.listdir(os.path.join(dirpath, name)) if isinstance(file, str)):
-                    print(f"skip file {name}")
-                    dirnames.remove(name)
-
         for file in filenames:
             ext = os.path.splitext(file)[1].lower()
             if ext in Cfg().scanner.filename_extensions:

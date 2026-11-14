@@ -1,6 +1,8 @@
 """网页翻译接口"""
 # 由于翻译服务不走代理，而且需要自己的错误处理机制，因此不通过base.py来管理网络请求
 import time
+import re
+from collections import Counter
 from typing import Union
 import uuid
 import random
@@ -35,7 +37,7 @@ def translate_movie_info(info: MovieInfo):
         return True
     # 翻译标题
     if info.title and Cfg().translator.fields.title and info.ori_title is None:
-        result = translate(info.title, Cfg().translator.engine, info.actress)
+        result = translate(info.title, Cfg().translator.engine, info.actress, field='title')
         if 'trans' in result:
             info.ori_title = info.title
             info.title = result['trans']
@@ -44,12 +46,14 @@ def translate_movie_info(info: MovieInfo):
                 setattr(info, 'ori_title_break', result['orig_break'])
             if 'trans_break' in result:
                 setattr(info, 'title_break', result['trans_break'])
+        elif result.get('invalid_translation'):
+            logger.warning('OpenAI 标题翻译结果异常，保留原文标题: ' + result['error'])
         else:
             logger.error('翻译标题时出错: ' + result['error'])
             return False
     # 翻译简介
     if info.plot and Cfg().translator.fields.plot:
-        result = translate(info.plot, Cfg().translator.engine, info.actress)
+        result = translate(info.plot, Cfg().translator.engine, info.actress, field='plot')
         if 'trans' in result:
             # 只有翻译过plot的影片才可能需要ori_plot属性，因此在运行时动态添加，而不添加到类型定义里
             setattr(info, 'ori_plot', info.plot)
@@ -65,7 +69,7 @@ def translate(texts, engine: Union[
         ClaudeTranslateEngine,
         OpenAITranslateEngine,
         None
-    ], actress=[]):
+    ], actress=[], *, field='text'):
     """
     翻译入口：对错误进行处理并且统一返回格式
 
@@ -118,13 +122,15 @@ def translate(texts, engine: Union[
             err_msg = "{}: {}: Exception: {}".format(engine, -2, repr(e))
     elif engine.name == 'openai':
         try:
-            result = openai_translate(texts, engine.url, engine.api_key, engine.model)
+            result = openai_translate(texts, engine.url, engine.api_key, engine.model, temperature=engine.temperature, field=field)
             if 'error_code' not in result:
                 rtn = {'trans': result}
             else:
-                err_msg = "{}: {}: {}".format(engine, result['error_code'], result['error_msg'])
+                if result['error_code'] == 'invalid_translation':
+                    return {'error': result['error_msg'], 'invalid_translation': True}
+                err_msg = "openai: {}: {}".format(result['error_code'], result['error_msg'])
         except Exception as e:
-            err_msg = "{}: {}: Exception: {}".format(engine, -2, repr(e))
+            err_msg = "openai: Exception: {}".format(type(e).__name__)
     elif engine.name == 'google':
         try:
             result = google_trans(texts)
@@ -229,7 +235,7 @@ def claude_translate(texts, api_key, to="zh_CN"):
         }
     return result
 
-def openai_translate(texts, url: Url, api_key: str, model: str, to="zh_CN"):
+def openai_translate(texts, url: Url, api_key: str, model: str, to="zh_CN", *, temperature=0.1, field="text"):
     """使用 OpenAI 翻译文本（默认翻译为简体中文）"""
     api_url = str(url)
     headers = {
@@ -240,7 +246,7 @@ def openai_translate(texts, url: Url, api_key: str, model: str, to="zh_CN"):
          "messages": [
            {
              "role": "system",
-             "content": f"Translate the following Japanese paragraph into {to}, while leaving non-Japanese text, names, or text that does not look like Japanese untranslated. Reply with the translated text only, do not add any text that is not in the original content."
+             "content": f"你是专业翻译。输入是{'影视作品标题' if field == 'title' else '影视作品简介' if field == 'plot' else '待翻译文本'}，请翻译为{to}。仅输出原文的译文，保留番号、人名和非日文内容；不得回答原文、编造对话、续写、添加解释或省略内容。"
            },
            {
              "role": "user",
@@ -248,7 +254,7 @@ def openai_translate(texts, url: Url, api_key: str, model: str, to="zh_CN"):
            }
          ],
          "model": model,
-         "temperature": 0,
+         "temperature": temperature,
          "max_tokens": 1024,
     }
     r = requests.post(api_url, headers=headers, json=data)
@@ -259,7 +265,18 @@ def openai_translate(texts, url: Url, api_key: str, model: str, to="zh_CN"):
                 "error_msg": r.json().get("error", {}).get("message", ""),
             }
         else:
-            result = r.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            choices = r.json().get('choices') or []
+            choice = choices[0] if choices else {}
+            content = choice.get('message', {}).get('content')
+            result = content.strip() if isinstance(content, str) else ''
+            lines = [line.strip() for line in result.splitlines() if line.strip()]
+            repeated = max(Counter(lines).values(), default=0)
+            invalid = (not result or choice.get('finish_reason') in ('length', 'content_filter')
+                       or len(result) > max(200, len(texts) * 5)
+                       or repeated >= 5 or bool(re.search(r'(?:[.。…]\s*){12,}', result))
+                       or (field == 'title' and len(lines) > max(3, len(texts.splitlines()) + 2)))
+            if invalid:
+                result = {'error_code': 'invalid_translation', 'error_msg': '译文为空、截断、异常膨胀或重复，已拒绝写入'}
     else:
         result = {
             "error_code": r.status_code,

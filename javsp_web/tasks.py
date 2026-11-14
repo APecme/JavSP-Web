@@ -1154,7 +1154,8 @@ def _prepare_tasks(
         raise ValueError("输入路径不是目录或文件")
     video_files = []
     try:
-        candidates = (Path(os.path.abspath(os.path.expanduser(p.strip()))) for p in input_files) if input_files is not None else input_path.rglob("*")
+        from javsp.scan_rules import scan_candidates
+        candidates = (Path(os.path.abspath(os.path.expanduser(p.strip()))) for p in input_files) if input_files is not None else scan_candidates(input_path, scanner, lambda: progress(len(video_files), "正在检查扫描目录"))
         for item in candidates:
             progress(len(video_files), f"正在扫描，已发现 {len(video_files)} 个视频文件")
             # Check suffix first to avoid a remote stat for every non-video.

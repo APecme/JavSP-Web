@@ -1,0 +1,55 @@
+AI translation client checks passed: exclusive translation mode, disabled engine fields, explicit recovery, preset round trip and shared AI settings.
+✔ tests\test_ai_translation_client.cjs (71.5881ms)
+✔ comment Markdown supports formatting without executing HTML or unsafe links (6.062ms)
+✔ time labels resolve to seconds only in plain Markdown text (1.0192ms)
+✔ nested Markdown cannot forge time buttons or bypass link validation (0.9349ms)
+✔ same movie refresh preserves drafts; closing aborts requests and ignores stale responses (13.3004ms)
+✔ pagination replaces pages, retries safely and goes back without losing drafts (4.4395ms)
+✔ posting is single-flight, preserves failures, omits login credentials and handles pending review (2.1886ms)
+✔ disabled service or unidentified movie makes no external request (1.0626ms)
+✔ normal posting sends no proof and a challenge response triggers only one retry (1.7668ms)
+✔ unconfigured identity preserves comment draft and does not start a challenge or post (1.421ms)
+✔ reply selection preserves drafts, submits the parent and clears only after success (1.5755ms)
+✔ cancel reply preserves text and a new movie cannot inherit a reply target (1.4784ms)
+✔ reply references escape parent content and safely label unavailable comments (2.4499ms)
+✔ comments render Markdown and form help documents the 300 character cap (2.6687ms)
+✔ verification accepts only the matching origin, window, nonce and action (3.5339ms)
+✔ adaptive requests challenge only after 428 and retry once through the real verification flow (2.9851ms)
+✔ canceling verification rejects the action and allows a later attempt (1.0768ms)
+CookieCloud client checks passed: interval, status, saved-settings sync and connection test.
+✔ tests\test_cookiecloud_client.cjs (60.8808ms)
+✔ demo uses the current application assets and all documentation links resolve (73.5595ms)
+✔ task pagination, filtering and cancellation survive pending timers (6.9559ms)
+✔ old chapter bookmarks redirect to the matching topic page (18.0839ms)
+✔ AI conversation lifecycle and unsupported actions (3.3044ms)
+✔ settings and skills can be explored without storing credentials (5.2786ms)
+✔ AI translation follows the shared AI switch and preserves preset translation settings (2.5352ms)
+✔ preset forms, schedules, path mappings and demo exit (2.3886ms)
+✔ personal profile changes stay in the offline demo (1.5015ms)
+Library playback regression checks passed.
+✔ tests\test_library_playback.cjs (63.4197ms)
+PR #14 helper checks passed: batch manifests, queue locking, cancellation, legacy server rejection, targeted cleanup, pagination and aliases.
+✔ tests\test_mount_batch_client.cjs (73.2402ms)
+✔ actress range is sent to the server so counts and pagination cover the full catalog (1.2753ms)
+✔ full catalog pages render only server results and zero-film actresses can be opened (0.9808ms)
+Scan client checks passed: directory, single batch, edited paths, duplicate clicks, retry, native multiselect and progress rendering.
+✔ tests\test_scan_client.cjs (66.2035ms)
+✔ login, console and generated demo initialize the same theme before their first stylesheet (1.8242ms)
+✔ first paint follows system light or dark without a saved preference (2.3175ms)
+✔ valid saved preference overrides system and survives a new page (0.8189ms)
+✔ invalid preferences and denied storage safely fall back to the system (1.6166ms)
+✔ native button click switches theme, persists preference and exposes the pressed state (1.2716ms)
+✔ system changes follow live until a manual selection is made, including legacy matchMedia (1.4589ms)
+✔ another tab changes the theme, clearing its preference resumes system following (0.8646ms)
+✔ invalid API choices do not change the current theme or stored preference (0.76ms)
+✔ every migrated color token resolves and fixed artwork colors are explicitly marked (3.6723ms)
+Web client regression checks passed: version normalization, shared GET, ETag, timeout/retry, update overlay.
+✔ tests\test_web_client.cjs (65.1271ms)
+ℹ tests 41
+ℹ suites 0
+ℹ pass 41
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 214.3433

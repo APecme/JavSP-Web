@@ -42,13 +42,14 @@ const NAMING_RULE_VARIABLES = [
   ['date', '发行日期'], ['year', '发行年份'], ['label', '番号前缀'], ['genre', '类型'],
 ];
 const TRANSLATOR_ENGINES = {
-  google: [], bing: ['api_key'], baidu: ['app_id', 'api_key'], claude: ['api_key'], openai: ['url', 'api_key', 'model'],
+  google: [], bing: ['api_key'], baidu: ['app_id', 'api_key'], claude: ['api_key'], openai: ['url', 'api_key', 'model', 'temperature'],
 };
 const FIELD_LABELS = {
   'scanner.ignored_id_pattern': '番号识别忽略规则', 'scanner.input_directory': '扫描目录', 'scanner.filename_extensions': '影片文件扩展名', 'scanner.ignored_folder_name_pattern': '忽略目录规则', 'scanner.minimum_size': '最小匹配文件大小', 'scanner.only_match_media_types': '仅扫描匹配影片分类', 'scanner.skip_nfo_dir': '跳过已有 NFO 的目录', 'scanner.manual': '手动确认扫描结果',
   'network.proxy_server': '代理服务器地址', 'network.proxy_free': '网站备用地址', 'network.proxy_free.avsox': 'Avsox 免代理地址', 'network.proxy_free.javbus': 'JavBus 免代理地址', 'network.proxy_free.javdb': 'JavDB 免代理地址', 'network.proxy_free.javlib': 'JavLib 免代理地址', 'network.retry': '网络重试次数', 'network.timeout': '网络请求超时',
   'crawler.selection.normal': '普通影片爬虫列表', 'crawler.selection.fc2': 'FC2 影片爬虫列表', 'crawler.selection.cid': 'CID 影片爬虫列表', 'crawler.selection.getchu': 'Getchu 影片爬虫列表', 'crawler.selection.gyutto': 'Gyutto 影片爬虫列表', 'crawler.required_keys': '必须取得的资料', 'crawler.hardworking': '深度抓取', 'crawler.respect_site_avid': '使用网站返回的番号', 'crawler.fc2fan_local_path': 'FC2Fan 本地镜像目录', 'crawler.sleep_after_scraping': '每部影片刮削后等待时间', 'crawler.use_javdb_cover': 'JavDB 封面优先级', 'crawler.normalize_actress_name': '统一女优艺名',
-  'summarizer.move_files': '移动文件到整理目录', 'summarizer.path.output_folder_pattern': '整理输出目录模板', 'summarizer.path.basename_pattern': '影片文件名', 'summarizer.path.length_maximum': '最大文件路径长度', 'summarizer.path.length_by_byte': '按字节计算路径长度', 'summarizer.path.max_actress_count': '路径中最多包含的女优数', 'summarizer.path.hard_link': '使用硬链接整理文件', 'summarizer.title.remove_trailing_actor_name': '移除标题末尾女优名', 'summarizer.default.title': '标题为空时显示', 'summarizer.default.actress': '演员为空时显示', 'summarizer.default.series': '系列为空时显示', 'summarizer.default.director': '导演为空时显示', 'summarizer.default.producer': '制作商为空时显示', 'summarizer.default.publisher': '发行商为空时显示', 'summarizer.nfo.basename_pattern': 'NFO 文件名', 'summarizer.nfo.title_pattern': 'NFO 影片标题模板', 'summarizer.nfo.custom_genres_fields': '自定义分类字段', 'summarizer.nfo.custom_tags_fields': '自定义标签字段', 'summarizer.censor_options_representation': '有码 / 无码显示文字', 'summarizer.cover.basename_pattern': '封面文件名', 'summarizer.cover.highres': '优先下载高清封面', 'summarizer.cover.add_label': '在封面添加水印标签', 'summarizer.cover.crop.on_id_pattern': '启用封面裁剪的番号规则', 'summarizer.cover.crop.engine': '封面裁剪识别引擎', 'summarizer.fanart.basename_pattern': '横版封面文件名', 'summarizer.extra_fanarts.enabled': '下载剧照', 'summarizer.extra_fanarts.scrap_interval': '剧照请求间隔',
+  'summarizer.path.soft_link': '使用软链接整理文件',
+  'summarizer.move_files': '整理文件到输出目录', 'summarizer.path.output_folder_pattern': '整理输出目录模板', 'summarizer.path.basename_pattern': '影片文件名', 'summarizer.path.length_maximum': '最大文件路径长度', 'summarizer.path.length_by_byte': '按字节计算路径长度', 'summarizer.path.max_actress_count': '路径中最多包含的女优数', 'summarizer.path.hard_link': '使用硬链接整理文件', 'summarizer.title.remove_trailing_actor_name': '移除标题末尾女优名', 'summarizer.default.title': '标题为空时显示', 'summarizer.default.actress': '演员为空时显示', 'summarizer.default.series': '系列为空时显示', 'summarizer.default.director': '导演为空时显示', 'summarizer.default.producer': '制作商为空时显示', 'summarizer.default.publisher': '发行商为空时显示', 'summarizer.nfo.basename_pattern': 'NFO 文件名', 'summarizer.nfo.title_pattern': 'NFO 影片标题模板', 'summarizer.nfo.custom_genres_fields': '自定义分类字段', 'summarizer.nfo.custom_tags_fields': '自定义标签字段', 'summarizer.censor_options_representation': '有码 / 无码显示文字', 'summarizer.cover.basename_pattern': '封面文件名', 'summarizer.cover.highres': '优先下载高清封面', 'summarizer.cover.add_label': '在封面添加水印标签', 'summarizer.cover.crop.on_id_pattern': '启用封面裁剪的番号规则', 'summarizer.cover.crop.engine': '封面裁剪识别引擎', 'summarizer.fanart.basename_pattern': '横版封面文件名', 'summarizer.extra_fanarts.enabled': '下载剧照', 'summarizer.extra_fanarts.scrap_interval': '剧照请求间隔',
   'translator.engine': '翻译引擎', 'translator.fields.title': '翻译标题', 'translator.fields.plot': '翻译剧情简介', 'translator.engine.name': '翻译引擎名称', 'translator.engine.app_id': '翻译服务应用 ID', 'translator.engine.api_key': '翻译服务 API 密钥', 'translator.engine.url': 'OpenAI 兼容接口地址', 'translator.engine.model': '翻译模型名称',
   'other.interactive': '终端交互模式', 'other.check_update': '检查 JavSP 更新', 'other.auto_update': '自动下载新版本',
   ignored_id_pattern: '忽略番号规则', input_directory: '输入目录', filename_extensions: '文件扩展名', ignored_folder_name_pattern: '忽略目录规则', minimum_size: '最小文件大小', skip_nfo_dir: '跳过 NFO 目录', manual: '手动确认',
@@ -110,6 +111,7 @@ const FIELD_DESCRIPTIONS = {
   'summarizer.path.length_maximum': '路径超长时，会缩短标题。',
   'summarizer.path.length_by_byte': '开启后，一个中文字符按多个字节计算。',
   'summarizer.path.max_actress_count': '{actress} 中最多保留几位演员的名字。',
+  'summarizer.path.soft_link': '保留源视频，支持跨盘。与硬链接互斥；源路径必须一直可访问。Docker 播放器须挂载相同源路径，Windows 需开发者模式或管理员权限。',
   'summarizer.path.hard_link': '保留原视频，通过硬链接整理。源文件和输出目录必须在同一文件系统。',
   'summarizer.nfo.basename_pattern': '不需要填写 .nfo 后缀。',
   'summarizer.nfo.title_pattern': 'Emby、Jellyfin 等媒体库中显示的标题。',
@@ -338,9 +340,9 @@ function translatorEngineControl(value) {
   const disabled = state.formValues?.translator?.ai_enabled === true ? ' disabled' : '';
   const options = [['', '不翻译'], ['google', 'Google 翻译'], ['bing', '必应翻译'], ['baidu', '百度翻译'], ['claude', 'Claude'], ['openai', 'OpenAI 兼容接口']]
     .map(([key, label]) => `<option value="${key}"${name === key ? ' selected' : ''}>${label}</option>`).join('');
-  const labels = { app_id: '应用 ID', api_key: 'API 密钥', url: '接口地址', model: '模型名称' };
+  const labels = { app_id: '应用 ID', api_key: 'API 密钥', url: '接口地址', model: '模型名称', temperature: '温度（0–2，默认 0.1）' };
   const placeholders = { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' };
-  const fields = (TRANSLATOR_ENGINES[name] || []).map((key) => `<label class="translator-engine-field">${labels[key]}<input class="config-field-input" data-config-path="translator.engine.${key}" value="${escapeHtml(engine[key] || '')}"${disabled}${placeholders[key] ? ` placeholder="${placeholders[key]}"` : ''}${key === 'api_key' ? ' type="password" autocomplete="off"' : ''}></label>`).join('');
+  const fields = (TRANSLATOR_ENGINES[name] || []).map((key) => `<label class="translator-engine-field">${labels[key]}<input class="config-field-input" data-config-path="translator.engine.${key}" value="${escapeHtml(engine[key] ?? (key === 'temperature' ? 0.1 : ''))}"${disabled}${placeholders[key] ? ` placeholder="${placeholders[key]}"` : ''}${key === 'temperature' ? ' type="number" min="0" max="2" step="0.1"' : ''}${key === 'api_key' ? ' type="password" autocomplete="off"' : ''}></label>`).join('');
   return `<div class="translator-engine-control"><select aria-label="翻译引擎" class="config-field-input" data-translator-engine${disabled}>${options}</select>${fields ? `<div class="translator-engine-fields">${fields}</div>` : ''}${disabled ? '<small class="config-description">已停用，当前使用 AI 翻译。</small>' : ''}</div>`;
 }
 
@@ -445,7 +447,7 @@ function readConfigFields() {
     // translation engine). Leave YAML and invalid input for server validation.
     if (control.type !== 'checkbox') {
       if (typeof previous === 'boolean' && ['true', 'false'].includes(value)) value = value === 'true';
-      else if (typeof previous === 'number' && value.trim() && Number.isFinite(Number(value))) value = Number(value);
+      else if ((typeof previous === 'number' || path === 'translator.engine.temperature') && value.trim() && Number.isFinite(Number(value))) value = Number(value);
       else if (previous === null && ['', 'null', '~'].includes(value.trim())) value = null;
       else if (previous && typeof previous === 'object') {
         try {

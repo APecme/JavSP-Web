@@ -128,6 +128,8 @@ summarizer:
     max_actress_count: 10
     # 是否用硬链接方式整理文件？硬链接可以节省空间，但不是所有文件系统都支持
     hard_link: false
+    # 软链接可跨盘，保留源视频；与硬链接互斥。Docker 中播放器也必须能访问链接目标路径
+    soft_link: false
 
   #标题处理
   title:
@@ -220,6 +222,7 @@ translator:
   ## 使用OpenAI翻译: {{{
   # engine: 
   #   name: openai
+  #   temperature: 0.1
   #   # OpenAI API（默认使用 Groq，可替换成任何兼容 OpenAI 的第三方 API）
   #   url: 'https://api.groq.com/openai/v1/chat/completions'
   #   api_key: ''

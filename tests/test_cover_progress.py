@@ -31,7 +31,7 @@ class CoverProgressTests(unittest.TestCase):
         config = SimpleNamespace(translator=SimpleNamespace(engine=None),
                                  summarizer=SimpleNamespace(cover=SimpleNamespace(highres=False),
                                      extra_fanarts=SimpleNamespace(enabled=False), move_files=move_files, existing_file_policy='never',
-                                     path=SimpleNamespace(hard_link=False)),
+                                     path=SimpleNamespace(hard_link=False, soft_link=False)),
                                  crawler=SimpleNamespace(selection={'normal': []}))
         events = []
         def download_cover(*args, **kwargs):
